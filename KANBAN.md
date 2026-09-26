@@ -56,14 +56,16 @@ graph TD
 
 ## Next
 
-- **T3 — Spec line coding and bit rate.** WS2812-style PWM vs
-  comparator-friendly alternatives; analyze per-node re-timing and
-  jitter accumulation around the ring. Also covers the addressing /
-  node-ID strategy (Bela lesson: hardware node-ID via solder bridges vs
-  provisioning — docs/bela-lessons-2026-09-26.md §2) and whether node
-  telemetry is timestamped/slotted in the ring frame rather than polled
-  (§1). Recorded in DESIGN.md §2. **Blocked by:** — · **Unblocks:**
-  T5, T11
+- **T3 — Spec line coding and bit rate.** PHY baseline settled
+  2026-09-26 (DESIGN.md §2): duty-coded PWM, 800 kbit/s anchor, OPA →
+  TIM2 PWM-input capture + DMA RX, TIM1 PWM (or SPI) + DMA TX, per-node
+  re-timing; node time base = HSI, no crystal (DESIGN.md §5). Remaining
+  scope: fix the final bit rate and break length against T5 simulation;
+  spec the frame format — header, CRC, addressing / node-ID strategy
+  (Bela lesson: hardware node-ID via solder bridges vs provisioning —
+  docs/bela-lessons-2026-09-26.md §2); decide whether node telemetry is
+  timestamped/slotted in the ring frame rather than polled (§1).
+  **Blocked by:** — · **Unblocks:** T5, T11
 - **T4 — Explore node watchdog/bypass circuits.** The two candidates in
   DESIGN.md §4 — normally-on analog switch held open by MCU-driven
   charge pump vs window-watchdog supervisor IC — each captured as a
