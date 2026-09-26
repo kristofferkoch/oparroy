@@ -25,6 +25,24 @@ real work — **move**, don't copy. Reference, don't duplicate.
   measurement circuit (drive weakly, time the RC with TIM capture?),
   resolution vs. cable-length granularity, interaction with the bypass
   switches' on-capacitance.
+- **Impedance probing as fault detection** (2026-09-26) — during the
+  frame gap (line-low break, §2 vsync — the line is guaranteed idle), a
+  node briefly drives its segment high then low (weak pull, or the TX
+  pin itself) and watches via the comparator whether the line follows.
+  Probe source needs no parts: the CH32V003 pads have both weak pull-up
+  and pull-down, 35–55 kΩ (datasheets/CH32V003/notes/facts.md,
+  gpio-pinout.md) — weak enough that a live far-end driver always wins,
+  so no false triggers. Caveat: ring RX pins sit in floating-input mode
+  for the OPA path (RM §7.2.10), so probing flips the pin mode
+  momentarily — another reason to probe only inside the frame gap.
+  A line that floats or responds sluggishly ⇒ far end open / connector
+  dead — distinguishes "neighbor silent because bypassed" from
+  "neighbor gone". Same family as the capacitance survey above — the
+  probe pulse's edge rate *is* a charge-time measurement, so one
+  circuit likely serves both. Open questions: probe strength vs
+  false-triggering the neighbor's comparator, who probes whom on the
+  dual ring (each direction's segment testable independently — §3),
+  whether probing fits between frames without stealing ring bandwidth.
 
 ## Hardware
 
