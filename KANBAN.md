@@ -34,7 +34,6 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T5[T5 ngspice PHY sim] --> T13[T13 intermittent-fault strategy]
-    T2[T2 bypass topology decision] --> T10[T10 test board design]
     T19 --> T10
     T6[T6 python scaffold] --> T7[T7 DSL v0: IR + KiCad emitter]
     T7 --> T8[T8 DSL constraint checks]
@@ -51,12 +50,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T2 — Choose bypass topology.** *Shape: decision.* Counter-rotating
-  dual ring vs skip-one wires vs per-node switch only (IDEAS.md
-  §Fault tolerance). Recorded in DESIGN.md §3. The watchdog mechanism
-  is settled (DESIGN.md §4): per-node charge-pump + analog switch,
-  powered from the always-on ring rail, RX tap stays connected in
-  bypass. **Blocked by:** — · **Unblocks:** T10
 - **T5 — ngspice simulation of the PHY.** Line drivers, comparator RX,
   bypass switches, connector-fault cases. Now concrete from T3
   (DESIGN.md §2): validate the no-analog-hysteresis baseline under
@@ -122,7 +115,7 @@ ______________________________________________________________________
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  **Blocked by:** T2, T19 · **Unblocks:** T12
+  **Blocked by:** T19 · **Unblocks:** T12
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Per-bit cut-through forwarding with on-the-fly slot rewrite

@@ -14,13 +14,9 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Fault tolerance
 
-- Bypass wires so a single broken/intermittent connector does not
-  partition the ring. Candidate topologies:
-  - Counter-rotating dual ring
-  - Skip-one (node N → N+2) bypass wires
-  - Per-node relay/analog-switch bypass only
-- Intermittent connector failures: protocol-level retry/re-route, or
-  purely hardware bypass?
+- Bypass topology — settled 2026-09-26 (card T2): counter-rotating dual
+  ring with symmetric rebroadcast. See DESIGN.md §3. Intermittent-fault
+  policy stays open as card T13.
 - Capacitance characterization of data lines (2026-09-26) — a node
   measures line capacitance (e.g. charge-time / step-response via the
   comparator) to estimate cable length to its neighbor and to localize

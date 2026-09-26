@@ -27,6 +27,9 @@ Settled (2026-09-26):
 - Node time base (2026-09-26): **internal HSI RC, no crystal** — §5
 - PHY (2026-09-26, card T3): ratio-metric duty-coded PWM, 800 kbit/s
   anchor, comparator RX + DMA, per-bit cut-through re-timing — §2
+- Bypass topology (2026-09-26, card T2): **counter-rotating dual ring,
+  symmetric rebroadcast** — RX source select via the OPA's second
+  positive input, no per-node parts — §3
 - PCBA (2026-09-26, card T17): prototypes assembled by **JLCPCB**
   (Economic PCBA); fallback for unstocked parts is PCBWay
   partial-turnkey (§6)
@@ -175,22 +178,75 @@ exact frame format (T11).
 
 ## 3. Ring topology and bypass
 
-TBD — deliberately **no baseline yet**. Candidate topologies (see
-IDEAS.md): counter-rotating dual ring, skip-one bypass wires, per-node
-switch bypass. Requirement: **single fault ⇒ ring stays connected**
-(possibly degraded to a chain). The choice is expected to fall out of the
-watchdog circuit design (§4) and PHY simulation.
+Decided (2026-09-26, card T2): **counter-rotating dual ring with
+symmetric rebroadcast.** Every segment carries two data wires in the same
+cable/connector: ring A (primary, clockwise) and ring B
+(counter-rotating). The requirement holds with no per-node parts:
+**single fault ⇒ every node stays reachable** (FDDI wrap property).
 
-Failure modes to design against:
+Mechanism:
 
-- Permanent open at a connector
-- Intermittent open at a connector — **open question**: protocol-level
-  re-route, hardware auto-bypass, or both; deferred until PHY simulation
-  exists
-- Short to GND / VCC on a segment
-- Dead MCU (no clock, outputs floating)
-- Hung MCU (alive but not forwarding)
-- MCU transmitting garbage (babbling idiot)
+- The supervisor originates the same frame on both rings and drains
+  both; echo mismatch on either drain ⇒ fault (§2's closure discipline,
+  applied per direction).
+- Every node decodes its selected source and regenerates the stream
+  onto **both** TX directions (TX_A + TX_B: two TIM1 channels with
+  identical compare values), so ring B always carries a live copy of the
+  same logical frame, hop-delayed. Positional addressing, slot rewrite,
+  and the vsync latch (§2) are source-invariant — a node that flips
+  direction counts slots from the break exactly as before; no
+  per-direction ENUM.
+- **RX source select is firmware policy, not hardware.** The OPA's two
+  positive inputs (OPP0 = PA2 = ring A, OPP1 = PD7 = ring B; `OPA_PSEL`
+  in `R32_EXTEN_CTR` — datasheets/CH32V003/notes/opa.md) mux the
+  comparator. No edges for > 2 frame times ⇒ flip source. Firmware is
+  safe here because the node at the receiving end of a dead segment is
+  alive by definition — a dead MCU is §4's case. Flap/hysteresis policy
+  for intermittent opens is T13 scope.
+
+Per-node cost: no parts; +1 wire +1 connector contact per segment; +2
+GPIO per node (PD7 as RX_B — already an OPP input — plus one TX_B pin).
+The §5 pin budget lands at ~16–17 of 18, verified at pin-map time
+(T9/T11). Electrically neutral for the PHY: every driver still sees
+exactly one segment, so T5's drive/capacitance baseline and T15's reach
+budget are unchanged by the topology.
+
+Interaction with §4: the watchdog SPDT bypass stays, on ring A only —
+dual ring demotes it from sole defense to second layer. A dead MCU
+breaks ring B at that node (TX_B floats) while ring A bypasses it; a
+connector break severs both rings at one point and every node is still
+served from the live side. (The power loop already survives single
+breaks for free — it is driven as a loop, not a direction. The
+asymmetry the second data wire fixes is the data ring's
+directionality.)
+
+Failure modes, answered:
+
+- Permanent open at a connector — both rings severed at one point;
+  nodes past the break flip to the live direction; all nodes reachable.
+- Intermittent open at a connector — direction-flap policy deferred to
+  T13; the hardware substrate is now settled.
+- Short to GND / VCC on a segment — treated as an open of that wire;
+  the other direction covers. Rail shorts are the CI-board eFuse's
+  scope (§7).
+- Dead MCU (no clock, outputs floating) — §4 charge-pump bypass on
+  ring A; ring B lost at that node, coverage by A.
+- Hung MCU — same path: keep-alive stops, bypass engages.
+- MCU transmitting garbage (babbling idiot) — §2 containment
+  (illegal-cell stop, frame-length cap), TIM1 brake kills both TX
+  channels, §4 bypass follows.
+
+Rejected (2026-09-26):
+
+- **Per-node switch only** — a connector open darkens every node
+  downstream of the break back to the supervisor's drain; fails §1
+  driver 2 outright.
+- **Skip-one wires (N→N+2)** — whole-connector-yank coverage needs
+  physically separate skip assemblies leaping a node: 2× pitch halves
+  the T15 reach budget on the engaged path, and avoiding permanent
+  double drive-loading costs +1 SPDT per node. Sharing the connector
+  instead cuts coverage to single-contact faults. Equal-or-less
+  coverage for worse mechanics.
 
 ## 4. Node watchdog / bypass
 
@@ -257,7 +313,7 @@ disagrees.
 
 Power: bypass switch + watchdog run from the **always-on ring rail**,
 not the per-node switchable rail — the 1G3157 has no Ioff /
-partial-power-down spec. Constrains T2 and T10.
+partial-power-down spec. Shaped §3 (2026-09-26); still constrains T10.
 
 ### 4.1 Fault detection and serviceability
 
@@ -654,11 +710,9 @@ SDCC), so:
 Decided-to-be-decided problems that aren't yet work cards (the card that
 resolves each is in KANBAN.md):
 
-- **Bypass topology** (§3) — dual ring vs skip-one vs per-node switch;
-  watchdog mechanism settled (§4); waits on PHY simulation (T5).
-  Card: T2.
 - **Intermittent connector faults** (§3) — protocol re-route vs hardware
-  auto-bypass vs both; deferred until PHY simulation exists. Card: T13.
+  auto-bypass vs both; the dual-ring substrate is settled (§3), the
+  direction-flap policy is not. Card: T13.
 - **Debug transport** (§6) — per-node UART vs shared bus, connector
   style. Card: T10.
 - **Node-board stackup and thickness** (§6) — leaning 4-layer to keep
