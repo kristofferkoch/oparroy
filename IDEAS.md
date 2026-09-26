@@ -43,6 +43,15 @@ real work — **move**, don't copy. Reference, don't duplicate.
 - `zip` / `enumerate` views over `lib::irange`
   (`firmware/lib/range.hpp`), deferred 2026-09-26 — add when a consumer
   appears.
+- Narrow size fields (`uint8_t`/`uint16_t` vs `std::size_t`) in
+  datastructures to save RAM, raised 2026-09-26 — as a blanket policy,
+  no: one field per container instance saves only ~tens of bytes, struct
+  padding can eat it, and RV32 needs explicit zero-extension on every
+  byte load, which can *grow* flash in size-heavy loops. Keep
+  `std::size_t` in the generic library (`StaticVector`, `Span`).
+  Revisit only measurement-driven (`nm --print-size --size-sort`,
+  `-fstack-usage`) for hot, replicated structs with capacity ≤ 255 —
+  there the saving multiplies.
 
 ## Tooling
 
@@ -55,6 +64,28 @@ real work — **move**, don't copy. Reference, don't duplicate.
   test board?
 - Analog simulation of the PHY (line drivers, comparators, bypass
   switches) with ngspice or similar.
+- **Emulate the node in QEMU with custom peripheral models**
+  (2026-09-26). Feasibility analysis: the QingKe V2A core is plain
+  RV32EC — no custom ALU instructions (WCH's `XW` extension only
+  appears on the bigger V4 cores) — and upstream QEMU's riscv32 target
+  supports both E and C, so the CPU side is free; the peripherals are
+  the whole cost. No upstream CH32V003 machine in QEMU or Renode.
+  Tiers of effort:
+  - *Cheap:* stock qemu-system-riscv32 (virt machine) runs RV32EC code
+    — CPU-level unit tests of the host-testable protocol code (§8
+    factoring) with QEMU's gdb stub. No peripherals, so MMIO-touching
+    code stays out.
+  - *Expensive:* a real CH32V003 machine in hw/riscv — device models in
+    C for PFIC (non-standard, hardware interrupt stacking), RCC, GPIO,
+    TIM1/TIM2+DMA, USART, OPA, flash/ESIG. Weeks of QEMU-internals work
+    plus a maintenance burden pinned to QEMU releases. Still functional,
+    not cycle-accurate: cannot validate the 60-cycles/bit PHY budget
+    (§2), and the analog RX chain is outside digital sim entirely.
+  - *Middle path:* Renode — purpose-built for this: peripherals as C#
+    models, platform as a text .repl file, multi-node wired networks
+    natively (fits the ring topology), CI-oriented. No upstream CH32V003
+    support found yet either, but far cheaper per peripheral than QEMU.
+    HIL (§6) remains ground truth for anything timing-critical regardless.
 
 ## Related projects to mine
 
