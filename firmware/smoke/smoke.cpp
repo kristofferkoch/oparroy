@@ -16,6 +16,13 @@ enum class SlotState : uint8_t {
     Forwarding,
 };
 
+// Two-state choices are enum class too (code-std.md §4): at the call
+// site, RxEvent::FrameWaiting reads; a bare true doesn't.
+enum class RxEvent : uint8_t {
+    None,
+    FrameWaiting,
+};
+
 struct NodeConfig {
     uint8_t node_id;
     uint8_t slot_count;
@@ -41,14 +48,14 @@ constexpr uint32_t status_tx_empty = 1u << 0;
 }
 
 // Exhaustive switch over a closed enum, no default (code-std.md §3).
-[[nodiscard]] constexpr SlotState advance(SlotState state, bool frame_waiting) {
+[[nodiscard]] constexpr SlotState advance(SlotState state, RxEvent rx) {
     switch (state) {
     case SlotState::Idle:
-        return frame_waiting ? SlotState::Armed : SlotState::Idle;
+        return rx == RxEvent::FrameWaiting ? SlotState::Armed : SlotState::Idle;
     case SlotState::Armed:
         return SlotState::Forwarding;
     case SlotState::Forwarding:
-        return frame_waiting ? SlotState::Forwarding : SlotState::Idle;
+        return rx == RxEvent::FrameWaiting ? SlotState::Forwarding : SlotState::Idle;
     }
     // GCC doesn't treat an exhaustive enum switch as covering;
     // -Wswitch-enum still guards against a missed enumerator.
@@ -56,7 +63,7 @@ constexpr uint32_t status_tx_empty = 1u << 0;
 }
 
 static_assert(node_configs[0].supervisor);
-static_assert(advance(SlotState::Armed, false) == SlotState::Forwarding);
+static_assert(advance(SlotState::Armed, RxEvent::None) == SlotState::Forwarding);
 
 } // namespace
 
@@ -67,6 +74,7 @@ extern "C" int smoke_main() {
     alignas(UartRegisters) std::array<std::byte, sizeof(UartRegisters)> register_storage{};
     auto* uart = new (register_storage.data()) UartRegisters{};
     uart->status = status_tx_empty;
-    const SlotState next = advance(SlotState::Idle, tx_ready(*uart));
+    const SlotState next =
+        advance(SlotState::Idle, tx_ready(*uart) ? RxEvent::FrameWaiting : RxEvent::None);
     return next == SlotState::Armed ? 0 : 1;
 }

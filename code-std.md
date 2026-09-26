@@ -67,7 +67,22 @@ needs to earn its place every time it's touched.
 - No C-style casts. `static_cast` in normal code; `reinterpret_cast`
   only at the MMIO boundary, next to a comment naming the register
   block it maps.
-- `enum class` only, explicit underlying type.
+- `enum class` only, explicit underlying type. It improves readability
+  at zero cost — and combined with exhaustive switching (§3), adding a
+  state becomes a compile error at every site that doesn't handle it.
+- **`bool` arguments and returns are mostly a no-no** (2026-09-26): at
+  the call site `engage(true)` says nothing — use a two-state
+  `enum class` (`Bypass::Engaged` reads). Exceptions: predicate
+  functions named as questions (`tx_ready()`) may return `bool`, and
+  labeled struct/config fields (`supervisor = true`) may hold one.
+- **Make illegal states unrepresentable** (2026-09-26): choose types
+  so invalid states cannot be constructed, rather than checking for
+  them downstream. Establish invariants in the constructor (RAII, §5),
+  never a separate `init()` leaving a half-valid object; parse, don't
+  validate — decode unstructured input into a typed value once (a
+  decoded-frame type), so later code cannot re-encounter the invalid
+  case; strong types over bare primitives where two same-typed values
+  could be transposed (a slot index is not a byte count).
 - `auto` where the type is obvious from the right-hand side
   (iterators, factory calls, templates); spelled types where the type
   *is* the information (arithmetic, protocol fields).
@@ -146,3 +161,13 @@ what covers the defect class instead:
 Retained from all three without modification: no exceptions, no RTTI,
 no heap by default, no recursion, no `goto` — all already the §8
 freestanding contract.
+
+## 11. Tests
+
+- **Red/green, always** (2026-09-26): a test that was never watched
+  failing proves nothing — it may test nothing. See the test fail
+  first, then make it pass. Write the failing test first where
+  practical; otherwise break the code deliberately and watch the test
+  catch it. Applies to every harness layer (DESIGN.md §8): unit tests,
+  KLEE proofs (a violated assertion must be reachable), fuzz seeds,
+  ngspice subcircuit sims, HIL.
