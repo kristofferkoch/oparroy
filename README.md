@@ -55,8 +55,9 @@ infrastructure, by contrast, may cost freely.
   headers, and ngspice netlists. KiCad for layout only. Functional
   circuits live in subcircuit files, each with simulation unit tests.
 - **nix flake** provides everything non-Python (compilers, KLEE/clang,
-  ngspice, KiCad, uv itself); **uv** owns Python alone (3.13, ruff
-  strict, ty, pytest).
+  ngspice, KiCad, uv itself), pinned by `flake.lock` — `nix develop`
+  enters the shell (`.envrc` provided for direnv users); **uv** owns
+  Python alone (3.13, ruff strict, ty, pytest).
 
 ## Repository layout
 
@@ -67,6 +68,7 @@ infrastructure, by contrast, may cost freely.
 | `DESIGN.md`   | Settled design decisions + open design questions      |
 | `KANBAN.md`   | Single home for planned work (cards, Next/Backlog)    |
 | `README.md`   | This file                                             |
+| `flake.nix`   | Pinned dev shell: all non-Python tools (DESIGN.md §8) |
 | `docs/`       | Reference documents (research reports, sub-designs)   |
 | `LICENSE`     | MIT, copyright 2026 Kristoffer Koch                   |
 
