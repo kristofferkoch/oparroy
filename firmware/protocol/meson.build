@@ -18,6 +18,10 @@ if not meson.is_cross_build()
   klee_bitcode_flags = [
     '-std=c++23', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
   ] + freestanding_flags + repro_flags + [
+    # Marks the proof build for lib/verify.hpp: VERIFY becomes
+    # klee_report_error, so a reachable contract violation is a proof
+    # failure with a counterexample.
+    '-DOPARROY_KLEE',
     '-Xclang', '-disable-lifetime-markers',
     '-emit-llvm', '-c',
   ]
@@ -31,6 +35,7 @@ if not meson.is_cross_build()
       # hand or a header edit would rerun klee on stale bitcode.
       depend_files: [
         'bits.hpp', 'cell.hpp', 'node.hpp', 'klee' / 'klee.hpp',
+        '..' / 'lib' / 'range.hpp',
         '..' / 'lib' / 'span.hpp',
       ],
       command: meson.get_compiler('cpp').cmd_array() + klee_bitcode_flags + [

@@ -56,6 +56,11 @@ needs to earn its place every time it's touched.
 - Loops have bounded trip counts where feasible — friendlier to KLEE
   and to WCET reasoning. Unbounded loops need a stated reason (e.g.
   polling a status register with a timeout).
+- **Integer index loops are spelled `lib::irange`, never classical
+  `for (i = 0; i < n; ++i)`** (2026-09-26): boundary reasoning happens
+  once, in the type (`firmware/lib/range.hpp`) — half-open interval,
+  zero-trip on inverted ranges, no increment-past-max on any integer
+  width. `zip`/`enumerate` land when a consumer appears.
 - No `goto`. No recursion (bounded stack, and the prover thanks us).
   No exceptions, no RTTI — settled in §8, restated for completeness.
 
@@ -92,8 +97,10 @@ needs to earn its place every time it's touched.
 
 ## 5. Memory and ownership
 
-- Static storage or arena-backed, fixed-capacity containers with
-  `try_*` growth; nothing grows without asking (§8 foundation library).
+- Static storage or arena-backed, fixed-capacity containers; nothing
+  grows without asking (§8 foundation library). Growth comes in two
+  flavors (2026-09-26, §6): `try_*` for data-driven fills,
+  VERIFY-contract growth (`push_back`) for sized-by-construction ones.
 - **No raw pointers at interfaces** (2026-09-26): a view over a buffer
   is `Span<T>` (`firmware/lib/span.hpp`), never `T*` plus a separate
   length — the bound travels with the pointer or it gets lost. Raw
@@ -118,6 +125,15 @@ needs to earn its place every time it's touched.
   type. Unchecked errors are compile errors.
 - `TRY(...)` propagation (AK's idiom) is the one blessed control-flow
   macro — it reads like exceptions and compiles to branches.
+- **Offensive, not defensive** (2026-09-26): contract violations — a
+  capacity sized by construction, an "impossible" state — trap via
+  `VERIFY` (`firmware/lib/verify.hpp`); KLEE proves each trap
+  unreachable, and a reachable one is a proof failure with a
+  counterexample, not a hope. Error returns are for *environmental*
+  failure only (hostile input, a full arena), where the caller holds a
+  policy decision. A `try_*` failure branch no test can reach is dead
+  weight the coverage gate (§8, T16e) flags forever; a VERIFY in the
+  same spot is a proof obligation.
 - `VERIFY(...)` failures route through the project failure hook, which
   ties into the watchdog/bypass policy (§4): deliberate bypass-engage,
   not a hung loop.

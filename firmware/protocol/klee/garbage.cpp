@@ -8,6 +8,7 @@
 // (poisoned), not the node's own state() — an assertion that trusts the
 // implementation under test proves nothing (code-std.md §11).
 
+#include "../../lib/range.hpp"
 #include "../bits.hpp"
 #include "../cell.hpp"
 #include "../node.hpp"
@@ -82,7 +83,7 @@ extern "C" int klee_garbage() {
     prove_break_step(node, shadow);
 
     // Injected garbage stream: symbolic cells interleaved with breaks.
-    for (int step = 0; step < 5; ++step) {
+    for ([[maybe_unused]] const int step : lib::irange(5)) {
         uint8_t kind = 0;
         oparroy::CapturedCell cell{};
         klee_make_symbolic(&kind, sizeof kind, "kind");
@@ -100,7 +101,7 @@ extern "C" int klee_garbage() {
     // matters. Stamped slot bits may flip the emitted value, so the
     // invariant is forwarded-at-all, not forwarded-as-one.
     prove_break_step(node, shadow);
-    for (uint16_t i = 0; i < oparroy::frame_max_bits; ++i) {
+    for ([[maybe_unused]] const uint16_t i : lib::irange(oparroy::frame_max_bits)) {
         KLEE_PROVE(node.on_bit(oparroy::Bit::One) != oparroy::TxAction::Idle);
     }
     KLEE_PROVE(node.on_bit(oparroy::Bit::One) == oparroy::TxAction::Idle);

@@ -2,7 +2,9 @@
 // GCC cross build (rv32ec) and clang-tidy compiling the same headers the
 // KLEE bitcode targets include directly.
 
+#include "../lib/range.hpp"
 #include "../lib/span.hpp"
+#include "../lib/static_vector.hpp"
 #include "bits.hpp"
 #include "cell.hpp"
 #include "node.hpp"
@@ -44,7 +46,7 @@ namespace {
         if (node.on_break() != TxAction::Idle) {
             return false;
         }
-        for (uint16_t i = 0; i < frame_max_bits; ++i) {
+        for ([[maybe_unused]] const uint16_t i : lib::irange(frame_max_bits)) {
             if (node.on_bit(Bit::One) == TxAction::Idle) {
                 return false;
             }
@@ -59,5 +61,63 @@ namespace {
 } // namespace
 
 static_assert(frame_cap_mutes());
+
+// Foundation-library cells (firmware/lib/range.hpp, static_vector.hpp):
+// constexpr-proved here, the same TU that hosts Span's asserts.
+namespace {
+
+    constexpr int sum_of(lib::IntRange<int> range) {
+        int sum = 0;
+        for (const int i : range) {
+            sum += i;
+        }
+        return sum;
+    }
+
+    // Overflow canary: a uint8_t range near the type max counts exactly
+    // its half-open length — ++ past end is unreachable by construction
+    // (range.hpp).
+    constexpr uint32_t count_of(lib::IntRange<uint8_t> range) {
+        uint32_t count = 0;
+        for ([[maybe_unused]] const uint8_t i : range) {
+            ++count;
+        }
+        return count;
+    }
+
+    constexpr bool static_vector_behaves() {
+        lib::StaticVector<uint8_t, 3> vec;
+        if (!vec.is_empty() || vec.size() != 0 || vec.capacity() != 3) {
+            return false;
+        }
+        for (const uint8_t i : lib::irange(static_cast<uint8_t>(vec.capacity()))) {
+            vec.push_back(i);
+        }
+        // Bounded: growth past capacity asks, and is refused.
+        if (vec.try_push_back(9) != lib::GrowthResult::OutOfCapacity ||
+            vec.size() != vec.capacity()) {
+            return false;
+        }
+        uint32_t sum = 0;
+        for (const uint8_t value : vec) {
+            sum += value;
+        }
+        if (sum != 0 + 1 + 2 || vec[2] != 2) {
+            return false;
+        }
+        vec.clear();
+        return vec.is_empty() && vec.size() == 0;
+    }
+
+} // namespace
+
+static_assert(sum_of(lib::irange(5)) == 10);
+static_assert(sum_of(lib::irange(3, 7)) == 18);
+// Inverted and negative ranges clamp to empty — a zero-trip loop, never
+// UB (range.hpp).
+static_assert(sum_of(lib::irange(7, 3)) == 0);
+static_assert(sum_of(lib::irange(-4)) == 0);
+static_assert(count_of(lib::irange(uint8_t{200})) == 200);
+static_assert(static_vector_behaves());
 
 } // namespace oparroy

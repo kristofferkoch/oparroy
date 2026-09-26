@@ -4,6 +4,7 @@
 // bit-identical, every node forwards every legal bit, and the frame gap
 // latches exactly once per node (the vsync, §2).
 
+#include "../../lib/range.hpp"
 #include "../../lib/span.hpp"
 #include "../bits.hpp"
 #include "../node.hpp"
@@ -39,7 +40,7 @@ extern "C" int klee_echo() {
     for (oparroy::Node& node : nodes) {
         KLEE_PROVE(node.on_break() == oparroy::TxAction::Idle);
     }
-    for (uint32_t i = 0; i < frame_bits; ++i) {
+    for (const uint32_t i : lib::irange(frame_bits)) {
         oparroy::Bit line = oparroy::bit_at(frame, i);
         for (oparroy::Node& node : nodes) {
             const oparroy::TxAction action = node.on_bit(line);

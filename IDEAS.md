@@ -42,6 +42,12 @@ real work — **move**, don't copy. Reference, don't duplicate.
   or hangs off a node's local bus; noise/grounding interaction with
   the ring wiring.
 
+## Firmware library
+
+- `zip` / `enumerate` views over `lib::irange`
+  (`firmware/lib/range.hpp`), deferred 2026-09-26 — add when a consumer
+  appears.
+
 ## Tooling
 
 - Home-rolled DSL vs SKiDL for design capture. A home DSL could also do:

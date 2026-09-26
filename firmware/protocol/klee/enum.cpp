@@ -3,6 +3,7 @@
 // surface of the slot-boundary bit counter. A 2-node circulation must
 // stamp each slot with exactly that node's bits and touch nothing else.
 
+#include "../../lib/range.hpp"
 #include "../../lib/span.hpp"
 #include "../bits.hpp"
 #include "../node.hpp"
@@ -56,7 +57,7 @@ extern "C" int klee_enum() {
     KLEE_PROVE(node0.on_break() == oparroy::TxAction::Idle);
     KLEE_PROVE(node1.on_break() == oparroy::TxAction::Idle);
 
-    for (uint32_t i = 0; i < 2 * slot_bits; ++i) {
+    for (const uint32_t i : lib::irange<uint32_t>(2 * slot_bits)) {
         prove_enum_bit(node0, node1, oparroy::bit_at(frame, i), stamp0, stamp1, i);
     }
     return 0;

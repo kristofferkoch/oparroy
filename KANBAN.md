@@ -73,7 +73,10 @@ ______________________________________________________________________
 - **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
   §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
   fixed-capacity containers, ownership types over static arenas,
-  `VERIFY` hook wired to the watchdog policy (§4). Host-compilable so
+  `VERIFY` hook wired to the watchdog policy (§4). 2026-09-26: `Span`,
+  `irange`, `StaticVector`, and the `VERIFY` macro itself landed in
+  `firmware/lib/`; what remains is `ErrorOr`/`TRY`, arenas, and wiring
+  VERIFY's target failure hook to §4. Host-compilable so
   T16's KLEE/fuzz harnesses exercise it from day one. **Blocked by:**
   — · **Unblocks:** T11
 - **T16e — Coverage measured on the release build.** SQLite doctrine
