@@ -1,0 +1,20 @@
+#!/bin/sh
+# clang-tidy over the files pre-commit hands us, with the freestanding
+# flag set — same flags as the smoke build, no compile_commands.json
+# needed. Warm: about a second for a file or two.
+set -u
+. "$(dirname "$0")/../freestanding-flags.sh"
+
+# clang-tidy is the unwrapped LLVM binary: it neither finds clang's
+# resource dir nor the nix C++ headers on its own. Point it at both —
+# libc++ (same LLVM, flake-pinned) keeps the parse identical to the
+# wrapped clang's world instead of whatever GCC the host happens to have.
+: "${OPARROY_LIBCXX_INCLUDE:?run inside the nix dev shell (nix develop)}"
+
+status=0
+for f do
+    clang-tidy --quiet "$f" -- $FREESTANDING_FLAGS \
+        -resource-dir "$(clang -print-resource-dir)" \
+        -nostdinc++ -isystem "$OPARROY_LIBCXX_INCLUDE" || status=1
+done
+exit "$status"

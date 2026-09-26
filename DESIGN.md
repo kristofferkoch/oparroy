@@ -504,8 +504,12 @@ have modern C++ ergonomics without exceptions:
 
 Not copied from AK: anything POSIX-flavored, hidden allocation,
 infinite growth. The node library's spine is fixed-capacity containers
-with explicit `try_` growth. Rule set: **aviation-grade** (picked in
-T16 — candidates JSF AV C++, MISRA C++:2023, AUTOSAR C++14).
+with explicit `try_` growth. Rule set: **project-owned** (decided
+2026-09-26, T16b) — `code-std.md` at the repo root, borrowing the
+defect-preventing rules from JSF AV C++ / MISRA C++:2023 / AUTOSAR
+C++14 / CERT and dropping checker-driven superstition (single-exit,
+mandatory `default`, essential-type cast noise) that KLEE/fuzz/UBSan
+already cover. C++23 baseline tracking C++26.
 Practical consequences:
 
 - Firmware must stay **clang-compilable to LLVM bitcode** (KLEE's input)

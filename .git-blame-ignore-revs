@@ -1,0 +1,6 @@
+# Commits git blame should skip (mechanical reformatting, etc.).
+# Enable per clone: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub reads this file automatically.)
+
+# 2026-09-26: mdformat normalization of all tracked markdown (no content)
+2fdcd6630b67789fafe3ca5ff3277a7f4338fd2b

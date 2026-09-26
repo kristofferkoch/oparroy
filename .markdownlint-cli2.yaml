@@ -1,0 +1,17 @@
+config:
+  default: true
+  # mdformat owns layout; these rules conflict with GFM content or
+  # existing docs (same set as falcon-app's markdown pipeline).
+  MD013: false # Line length (including wide tables and URLs)
+  MD014: false # Shell prompts in examples
+  MD024: false # Repeated headings in separate sections
+  MD025: false # Multiple H1 headings in existing documents
+  MD026: false # Punctuation in headings
+  MD029: false # Ordered list numbering style
+  MD031: false # Fences inside list items
+  MD033: false # Inline HTML
+  MD034: false # GFM autolinks
+  MD038: false # Code spans with intentional spaces
+  MD040: false # Code fences without language tags
+  MD041: false # Files without a top-level heading
+  MD050: false # Emphasis style decided by mdformat

@@ -1,0 +1,11 @@
+# Link checking for markdown (pre-commit, T16b). Local links/anchors and
+# public URLs are checked; auth-gated, bot-blocking, or flaky URLs get
+# excluded here as they appear (same role as falcon-app's .lychee.toml).
+exclude = [
+  # 403 to non-browser clients (bot filter), fine in a browser.
+  '^https?://(www\.)?eevblog\.com/',
+]
+include_fragments = 'anchor-only'
+max_concurrency = 12
+max_retries = 1
+timeout = 10

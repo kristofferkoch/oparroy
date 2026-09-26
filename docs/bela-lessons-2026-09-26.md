@@ -21,7 +21,7 @@ Strict **split of responsibilities** on the BeagleBone's AM3358:
   the analog ADC/DAC and samples GPIOs, **aligned sample-by-sample with
   the audio clock** ([forum: PRU vs McASP](https://forum.bela.io/d/20-pru-vs-mcasp)).
 
-What it buys ([NIME-era paper](https://users.sussex.ac.uk/~thm21/ICLI_proceedings/2016/Practical/Workshops/129_Bela.pdf),
+What it buys ([ICLI 2016 paper](https://web.archive.org/web/20230924141757/http://users.sussex.ac.uk/~thm21/ICLI_proceedings/2016/Practical/Workshops/129_Bela.pdf) — original sussex.ac.uk link 404s, archived copy),
 [Hackaday 2016](https://hackaday.com/2016/04/13/bela-real-time-beaglebone-audioanalog-cape/)):
 
 - **Sensors at audio rate**: 8× 16-bit analog at 22.05–88.2 kHz, 16

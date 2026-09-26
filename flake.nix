@@ -31,6 +31,13 @@
           # Must match the LLVM that nixpkgs' klee is built against, or
           # klee rejects our bitcode (verified: klee 3.2 → LLVM 19).
           llvmPkgs = pkgs.llvmPackages_19;
+          # mdformat + GFM plugin as one tool env. A packaged tool, not a
+          # project Python dependency — uv's lane (project packages) is
+          # untouched (DESIGN.md §8).
+          mdformatGfm = pkgs.python3.withPackages (ps: [
+            ps.mdformat
+            ps.mdformat-gfm
+          ]);
         in
         {
           default = pkgs.mkShell {
@@ -50,8 +57,18 @@
               pkgs.ngspice
               # Python side is uv's alone; nix only supplies uv itself.
               pkgs.uv
+              # Pre-commit hooks (T16b) — the framework plus every tool the
+              # hooks call, all nix-pinned so `.pre-commit-config.yaml` can
+              # use `language: system` instead of downloading its own.
+              pkgs.pre-commit
+              mdformatGfm
+              pkgs.markdownlint-cli2
+              pkgs.lychee
             ];
             shellHook = ''
+              # clang-tidy (unwrapped) needs libc++'s freestanding headers
+              # pointed out; see scripts/pre-commit/clang-tidy-changed.
+              export OPARROY_LIBCXX_INCLUDE=${llvmPkgs.libcxx.dev}/include/c++/v1
               echo "== oparroy dev shell =="
               riscv64-none-elf-gcc --version | head -1
               arm-none-eabi-gcc --version | head -1
@@ -61,6 +78,8 @@
               afl-cc --version | head -1
               ngspice --version | grep -i ngspice | head -1
               uv --version
+              pre-commit --version
+              lychee --version
             '';
           };
         }

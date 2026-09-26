@@ -1,0 +1,51 @@
+---
+# oparroy static analysis — cherry-picked AUTOSAR/CERT/CppCoreGuidelines
+# surface (code-std.md §9). Warnings are errors; the deviations register
+# (code-std.md §10) is the authority for what we deliberately leave out.
+# Checks: cherry-picked AUTOSAR/CERT/CppCoreGuidelines surface
+# (code-std.md §9). Disabled below: magic-number policing, cast noise,
+# readability-identifier-length, trailing-return-type — see the
+# deviations register (code-std.md §10). Also disabled:
+# cppcoreguidelines-owning-memory (no GSL in freestanding code;
+# placement new over MMIO storage is our idiom, code-std.md §5, and
+# this check insists on gsl::owner<>).
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-identifier-length,
+  -readability-uppercase-literal-suffix,
+  -readability-avoid-const-params-in-decls,
+  -modernize-use-trailing-return-type,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-owning-memory
+WarningsAsErrors: '*'
+HeaderFilterRegex: '^firmware/'
+FormatStyle: file
+CheckOptions:
+  # code-std.md §8 naming: types PascalCase, functions/variables
+  # snake_case, macros SHOUTY.
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.UnionCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.ConceptCase: CamelCase
+  readability-identifier-naming.TemplateParameterCase: CamelCase
+  readability-identifier-naming.NamespaceCase: lower_case
+  readability-identifier-naming.FunctionCase: lower_case
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.ParameterCase: lower_case
+  readability-identifier-naming.MemberCase: lower_case
+  readability-identifier-naming.ConstantCase: lower_case
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
+...

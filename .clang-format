@@ -1,0 +1,18 @@
+---
+# oparroy C++ layout — the law for whitespace (code-std.md §8, §9).
+Language: Cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+AccessModifierOffset: -4
+PointerAlignment: Left
+ReferenceAlignment: Left
+# code-std.md §3: braces on all bodies, so never collapse them away.
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Empty
+BreakBeforeBraces: Attach
+NamespaceIndentation: Inner
+SortIncludes: CaseSensitive
+...

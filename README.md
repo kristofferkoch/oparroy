@@ -60,8 +60,8 @@ infrastructure, by contrast, may cost freely.
   fallible `try_*` APIs, `TRY` propagation, fixed-capacity containers.
 - **Verification from the first commit**, SQLite doctrine + symbolic
   execution: KLEE harnesses, libFuzzer/AFL++, fault-injection shims,
-  coverage on the release build, aviation-grade C++ rule set (JSF AV /
-  MISRA C++ / AUTOSAR candidates).
+  coverage on the release build, and the project-owned coding standard
+  in `code-std.md` (borrows from JSF AV / MISRA / AUTOSAR / CERT).
 
 ## Tooling
 
@@ -79,21 +79,30 @@ infrastructure, by contrast, may cost freely.
   `flake.lock` — `nix develop` enters the shell (`.envrc` provided for
   direnv users); **uv** owns Python alone (3.13, ruff strict, ty,
   pytest).
+- **Pre-commit hooks** (`pre-commit install`, T16b): clang-format,
+  clang-tidy with the freestanding flag set, and the markdown pipeline
+  (mdformat + markdownlint-cli2 + lychee link checks) — cheap checks
+  only, ~2 s warm. Hooks are `language: system` against the
+  nix-pinned tools, so the flake stays the single tool source.
 
 ## Repository layout
 
-| Path                       | Contents                                              |
-| -------------------------- | ----------------------------------------------------- |
-| `AGENTS.md`                | Doc-split and writing conventions for agents          |
-| `IDEAS.md`                 | Not-yet-planned ideas (append-only stash)             |
-| `DESIGN.md`                | Settled design decisions + open design questions      |
-| `KANBAN.md`                | Single home for planned work (cards, Next/Backlog)    |
-| `README.md`                | This file                                             |
-| `flake.nix` + `flake.lock` | Pinned dev shell: all non-Python tools (DESIGN.md §8) |
-| `.envrc`                   | direnv hook into the flake shell                      |
-| `docs/`                    | Reference documents (research reports, sub-designs)   |
-| `datasheets/`              | Vendor PDFs + extracted markdown sidecars per part    |
-| `LICENSE`                  | MIT, copyright 2026 Kristoffer Koch                   |
+| Path                       | Contents                                                |
+| -------------------------- | ------------------------------------------------------- |
+| `AGENTS.md`                | Doc-split and writing conventions for agents            |
+| `IDEAS.md`                 | Not-yet-planned ideas (append-only stash)               |
+| `DESIGN.md`                | Settled design decisions + open design questions        |
+| `KANBAN.md`                | Single home for planned work (cards, Next/Backlog)      |
+| `code-std.md`              | Project-owned C++ coding standard (living)              |
+| `README.md`                | This file                                               |
+| `flake.nix` + `flake.lock` | Pinned dev shell: all non-Python tools (DESIGN.md §8)   |
+| `.envrc`                   | direnv hook into the flake shell                        |
+| `.pre-commit-config.yaml`  | Hook wiring; tools nix-pinned, `language: system`       |
+| `firmware/`                | Node/supervisor firmware (toolchain smoke build so far) |
+| `scripts/`                 | Build + pre-commit scripts (POSIX sh)                   |
+| `docs/`                    | Reference documents (research reports, sub-designs)     |
+| `datasheets/`              | Vendor PDFs + extracted markdown sidecars per part      |
+| `LICENSE`                  | MIT, copyright 2026 Kristoffer Koch                     |
 
 Doc conventions follow the IDEAS → KANBAN/DESIGN graduation model:
 stray thoughts live in IDEAS.md, planned work in KANBAN.md cards,
