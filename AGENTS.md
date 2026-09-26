@@ -27,6 +27,22 @@ never a relative "recently" / "now" that rots. Cite doc sections with
 `§`. Link rather than duplicate; the linked doc stays the single source
 of truth.
 
+## Datasheets — extraction is mandatory
+
+- **`datasheets/<PART>/`** holds one part's canonical vendor PDFs
+  (version in the filename); **`datasheets/<PART>/notes/`** holds the
+  LLM-readable markdown sidecars: `facts.md` (index + overview), one
+  file per peripheral/topic (`opa.md`, `timers.md`, …), and
+  `quirks.md`. See `datasheets/README.md`.
+- **Standing instruction:** whenever you extract a fact from a datasheet
+  — a register, a pin function, an electrical limit — write it into the
+  part's matching `notes/<topic>.md` immediately, cited by document and
+  section (`(RM §17.2)`). Never leave a datasheet fact living only in
+  the conversation.
+- Silicon quirks, doc-vs-silicon mismatches, and tribal knowledge
+  (issue trackers, bench findings) go in `notes/quirks.md`, one
+  sourced bullet each, dated.
+
 ## Project shape
 
 Hardware + firmware + design-automation project. Design capture is a
