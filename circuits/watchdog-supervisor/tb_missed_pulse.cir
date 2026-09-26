@@ -1,0 +1,64 @@
+* tb_missed_pulse — response to one dropped strobe (DESIGN.md §7).
+*
+* Unlike candidate A, a window watchdog has NO missed-strobe
+* tolerance by design: dropping the 3.6 ms strobe lets the window
+* time out at ~4.1 ms and the bypass engages. The contract anchored
+* here is the actual behavior: the blip is BOUNDED — the next
+* (late) strobe at 4.6 ms restarts the ramp, the 5.6 ms strobe lands
+* in-window and clears the fault, so the node re-inserts ~1.5 ms
+* after the trip. This asymmetry vs the charge pump is recorded in
+* DESIGN.md §4.
+*
+* Assertions: a1 normal operation before the drop; a2 bypass engaged
+* at 4.2–4.5 ms (trip happened); a3 re-inserted by 6.0–6.5 ms
+* (bounded blip, self-recovering).
+
+.include ../lib/sn74lvc1g3157.spi
+.include watchdog-supervisor.cir
+.param vth=0.99
+
+Vdd vdd 0 3.3
+
+Vst stbi 0 PULSE(0 3.3 0.6m 1n 1n 10u 1m)
+Bgt gt 0 V={(time < 3m) || (time > 4m) ? 3.3 : 0}
+.model gtsw sw(ron=1 roff=1G vt=1.65 vh=0.1)
+Sst stbi wdi gt 0 gtsw
+Rst wdi wdif 50
+Cst wdif 0 220p
+
+Xwd wdif wdob vdd 0 wd_window
+Rpu vdd wdob 10k
+Xsw down up tx wdob vdd 0 sn74lvc1g3157 params: vth={vth}
+Bup upi 0 V={1.65 + 1.65*sgn(sin(6.2831853*400k*time))}
+Rup upi up 50
+Btx txi 0 V=0
+Rtx txi tx 50
+Rd down 0 100k
+Cd down 0 100p
+
+.control
+tran 100n 9m uic
+meas tran a1 avg v(wdob) from=3.0m to=3.4m
+meas tran a2 avg v(wdob) from=4.2m to=4.5m
+meas tran a3 avg v(wdob) from=6.0m to=6.5m
+if (a1 > 2.4) & (a2 < 0.5) & (a3 > 2.4)
+  echo "PASS vth=0.99"
+else
+  echo "FAIL vth=0.99"
+  quit 1
+end
+alterparam vth=2.31
+reset
+tran 100n 9m uic
+meas tran a1 avg v(wdob) from=3.0m to=3.4m
+meas tran a2 avg v(wdob) from=4.2m to=4.5m
+meas tran a3 avg v(wdob) from=6.0m to=6.5m
+if (a1 > 2.4) & (a2 < 0.5) & (a3 > 2.4)
+  echo "PASS vth=2.31"
+else
+  echo "FAIL vth=2.31"
+  quit 1
+end
+quit 0
+.endc
+.end

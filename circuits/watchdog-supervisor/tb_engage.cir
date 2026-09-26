@@ -1,0 +1,71 @@
+* tb_engage — bypass engages within T of strobe loss, and is the
+* default state at power-on (DESIGN.md §7 contract for §4).
+*
+* Bench as in candidate A: 400 kHz square upstream, node TX idle low,
+* 100p downstream load. WDI strobes: 10 us pulses every 1 ms from
+* 0.6 ms, stopped (dead MCU) after the 4.6 ms strobe. Window timeout
+* is ~1.48 ms, so the fault must latch at ~6.1 ms. Runs at both
+* select-threshold band edges (SCES424O §5.4).
+*
+* Assertions: a1 power-on default bypass (ring passes from t=0);
+* a2 node inserted while serviced; a3 sel still high 1.0–1.1 ms after
+* the last strobe (no instant trip); a4 sel low by 2.4 ms (engage
+* bound, link-level); a5 ring re-routed downstream after engage.
+
+.include ../lib/sn74lvc1g3157.spi
+.include watchdog-supervisor.cir
+.param vth=0.99
+
+Vdd vdd 0 3.3
+
+Vst stbi 0 PULSE(0 3.3 0.6m 1n 1n 10u 1m)
+Bgt gt 0 V={time < 4.8m ? 3.3 : 0}
+.model gtsw sw(ron=1 roff=1G vt=1.65 vh=0.1)
+Sst stbi wdi gt 0 gtsw
+Rst wdi wdif 50
+Cst wdif 0 220p
+
+Bup upi 0 V={1.65 + 1.65*sgn(sin(6.2831853*400k*time))}
+Rup upi up 50
+Cup up 0 220p
+
+Btx txi 0 V=0
+Rtx txi tx 50
+Ctx tx 0 220p
+
+Xwd wdif wdob vdd 0 wd_window
+Rpu vdd wdob 10k
+Xsw down up tx wdob vdd 0 sn74lvc1g3157 params: vth={vth}
+Rd down 0 100k
+Cd down 0 100p
+
+.control
+tran 100n 12m uic
+meas tran a1 avg v(down) from=10u to=100u
+meas tran a2 avg v(down) from=4m to=4.5m
+meas tran a3 avg v(wdob)  from=5.6m to=5.7m
+meas tran a4 avg v(wdob)  from=7m to=7.5m
+meas tran a5 avg v(down) from=9.5m to=10.5m
+if (a1 > 1.4) & (a2 < 0.5) & (a3 > 2.4) & (a4 < 0.5) & (a5 > 1.4)
+  echo "PASS vth=0.99"
+else
+  echo "FAIL vth=0.99"
+  quit 1
+end
+alterparam vth=2.31
+reset
+tran 100n 12m uic
+meas tran a1 avg v(down) from=10u to=100u
+meas tran a2 avg v(down) from=4m to=4.5m
+meas tran a3 avg v(wdob)  from=5.6m to=5.7m
+meas tran a4 avg v(wdob)  from=7m to=7.5m
+meas tran a5 avg v(down) from=9.5m to=10.5m
+if (a1 > 1.4) & (a2 < 0.5) & (a3 > 2.4) & (a4 < 0.5) & (a5 > 1.4)
+  echo "PASS vth=2.31"
+else
+  echo "FAIL vth=2.31"
+  quit 1
+end
+quit 0
+.endc
+.end

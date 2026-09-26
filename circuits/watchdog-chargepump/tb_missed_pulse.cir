@@ -1,0 +1,55 @@
+* tb_missed_pulse — one dropped keep-alive cycle must NOT engage the
+* bypass (DESIGN.md §7 contract for §4).
+*
+* Keep-alive: 20 kHz square with one full period held low at
+* 2.5–2.55 ms (timer hiccup). The ripple floor then droops to ~2.46 V
+* (see watchdog-chargepump.cir header), still above the 2.31 V VIH
+* band edge — the bypass must stay off with margin.
+*
+* Assertion: minimum sel over the hiccup window stays > 2.35 V.
+
+.include ../lib/sn74lvc1g3157.spi
+.include watchdog-chargepump.cir
+.param vth=0.99
+
+Vdd vdd 0 3.3
+
+Bka kai 0 V={(time > 2.5m) && (time < 2.55m) ? 0 : 1.65 + 1.65*sgn(sin(6.2831853*20k*time))}
+Rka kai ka 50
+Cka ka 0 220p
+
+* switch included so a false engage would be visible; ring side idle
+Bup upi 0 V={1.65 + 1.65*sgn(sin(6.2831853*400k*time))}
+Rup upi up 50
+Btx txi 0 V=0
+Rtx txi tx 50
+
+Xwd ka sel 0 wd_chargepump
+Xsw down up tx sel vdd 0 sn74lvc1g3157 params: vth={vth}
+Rd down 0 100k
+Cd down 0 100p
+
+.control
+tran 50n 5m uic
+meas tran smin min v(sel) from=2.4m to=3m
+meas tran davg avg v(down) from=3.5m to=4m
+if (smin > 2.35) & (davg < 0.5)
+  echo "PASS vth=0.99"
+else
+  echo "FAIL vth=0.99"
+  quit 1
+end
+alterparam vth=2.31
+reset
+tran 50n 5m uic
+meas tran smin min v(sel) from=2.4m to=3m
+meas tran davg avg v(down) from=3.5m to=4m
+if (smin > 2.35) & (davg < 0.5)
+  echo "PASS vth=2.31"
+else
+  echo "FAIL vth=2.31"
+  quit 1
+end
+quit 0
+.endc
+.end

@@ -1,0 +1,74 @@
+* tb_engage — bypass engages within T of keep-alive loss, and is the
+* default state at power-on (DESIGN.md §7 contract for §4).
+*
+* Bench: upstream ring segment carries a 400 kHz square (alternating
+* 800 kbit/s cells), node TX idles low, downstream segment is a 100p
+* load. Keep-alive: 20 kHz square, stuck low (dead MCU) from 5 ms.
+* The whole bench runs at both select-threshold band edges (SCES424O
+* §5.4: 0.99 V / 2.31 V) via alterparam.
+*
+* Assertions (windowed averages — always computable, so a broken
+* circuit can never slip past as an empty measurement):
+*   a1 power-on default: bypass engaged at t=0+ (ring passes,
+*      measured 100–500 ns in, before the pump's first edges)
+*   a2 healthy hold:     sel > 2.4 V with keep-alive running
+*   a3 node inserted:    downstream follows node TX (low) before death
+*   a4 no instant trip:  sel still > 2.4 V at 0.1 ms after death
+*   a5 engage bound:     sel < 0.5 V by 1.5 ms after death
+*   a6 ring re-routed:   downstream follows upstream after engage
+
+.include ../lib/sn74lvc1g3157.spi
+.include watchdog-chargepump.cir
+.param vth=0.99
+
+Vdd vdd 0 3.3
+
+Bka kai 0 V={time < 5m ? 1.65 + 1.65*sgn(sin(6.2831853*20k*time)) : 0}
+Rka kai ka 50
+Cka ka 0 220p
+
+Bup upi 0 V={1.65 + 1.65*sgn(sin(6.2831853*400k*time))}
+Rup upi up 50
+Cup up 0 220p
+
+Btx txi 0 V=0
+Rtx txi tx 50
+Ctx tx 0 220p
+
+Xwd ka sel 0 wd_chargepump
+Xsw down up tx sel vdd 0 sn74lvc1g3157 params: vth={vth}
+Rd down 0 100k
+Cd down 0 100p
+
+.control
+tran 50n 12m uic
+meas tran a1 avg v(down) from=100n to=500n
+meas tran a2 avg v(sel)  from=4m  to=4.9m
+meas tran a3 avg v(down) from=4.5m to=4.9m
+meas tran a4 avg v(sel)  from=5.02m to=5.05m
+meas tran a5 avg v(sel)  from=6.5m to=7.5m
+meas tran a6 avg v(down) from=9.5m to=10.5m
+if (a1 > 1.4) & (a2 > 2.4) & (a3 < 0.5) & (a4 > 2.4) & (a5 < 0.5) & (a6 > 1.4)
+  echo "PASS vth=0.99"
+else
+  echo "FAIL vth=0.99"
+  quit 1
+end
+alterparam vth=2.31
+reset
+tran 50n 12m uic
+meas tran a1 avg v(down) from=100n to=500n
+meas tran a2 avg v(sel)  from=4m  to=4.9m
+meas tran a3 avg v(down) from=4.5m to=4.9m
+meas tran a4 avg v(sel)  from=5.02m to=5.05m
+meas tran a5 avg v(sel)  from=6.5m to=7.5m
+meas tran a6 avg v(down) from=9.5m to=10.5m
+if (a1 > 1.4) & (a2 > 2.4) & (a3 < 0.5) & (a4 > 2.4) & (a5 < 0.5) & (a6 > 1.4)
+  echo "PASS vth=2.31"
+else
+  echo "FAIL vth=2.31"
+  quit 1
+end
+quit 0
+.endc
+.end

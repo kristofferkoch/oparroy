@@ -1,0 +1,77 @@
+* tb_glitch — window-violation and glitch-train behavior (DESIGN.md
+* §7 contract for §4). Two phases:
+*
+* Phase 1: an extra strobe 0.3 ms after the 2.6 ms one lands in the
+*   CLOSED window (too-early edge = MCU running fast / corrupt loop).
+*   The fault must latch (bypass engages at ~2.9 ms), then clear when
+*   the next in-window strobe arrives at ~3.6 ms.
+* Phase 2: MCU dead from 5 ms; a 3.3 kHz glitch train on WDI. Each
+*   glitch is an early edge in a fresh window, so the fault stays
+*   latched — out-of-band glitches cannot service the watchdog
+*   (contrast with candidate A's false-keep-alive hazard, anchored in
+*   its own tb_glitch).
+*
+* Assertions: a1 fault latched at 3.0–3.3 ms (violation caught);
+* a2 recovered by 4.0–4.5 ms; a3 bypass held at 8–9 ms despite the
+* glitch train.
+
+.include ../lib/sn74lvc1g3157.spi
+.include watchdog-supervisor.cir
+.param vth=0.99
+
+Vdd vdd 0 3.3
+
+* regular strobes 0.6..4.6 ms, then dead; one too-early extra strobe
+* merged in 0.3 ms after the 2.6 ms one (a second switched source
+* would fight the train through the 50 ohm legs and halve wdif)
+Vst stb 0 PULSE(0 3.3 0.6m 1n 1n 10u 1m)
+Bstb stbi 0 V={(V(stb) > 1.65) || ((time > 2.9m) && (time < 2.91m)) ? 3.3 : 0}
+Bgt gt 0 V={time < 5m ? 3.3 : 0}
+.model gtsw sw(ron=1 roff=1G vt=1.65 vh=0.1)
+Sst stbi wdi1 gt 0 gtsw
+Rst wdi1 wdif 50
+
+* 3.3 kHz glitch train from 6 ms
+Vgl gli 0 PULSE(0 3.3 6m 1n 1n 1u 0.3m)
+Bgg gg 0 V={time > 6m ? 3.3 : 0}
+Sgl gli wdi3 gg 0 gtsw
+Rgl wdi3 wdif 50
+
+Cst wdif 0 220p
+
+Xwd wdif wdob vdd 0 wd_window
+Rpu vdd wdob 10k
+Xsw down up tx wdob vdd 0 sn74lvc1g3157 params: vth={vth}
+Bup upi 0 V={1.65 + 1.65*sgn(sin(6.2831853*400k*time))}
+Rup upi up 50
+Btx txi 0 V=0
+Rtx txi tx 50
+Rd down 0 100k
+Cd down 0 100p
+
+.control
+tran 100n 11m uic
+meas tran a1 avg v(wdob) from=3.0m to=3.3m
+meas tran a2 avg v(wdob) from=4.0m to=4.5m
+meas tran a3 avg v(wdob) from=8m to=9m
+if (a1 < 0.5) & (a2 > 2.4) & (a3 < 0.5)
+  echo "PASS vth=0.99"
+else
+  echo "FAIL vth=0.99"
+  quit 1
+end
+alterparam vth=2.31
+reset
+tran 100n 11m uic
+meas tran a1 avg v(wdob) from=3.0m to=3.3m
+meas tran a2 avg v(wdob) from=4.0m to=4.5m
+meas tran a3 avg v(wdob) from=8m to=9m
+if (a1 < 0.5) & (a2 > 2.4) & (a3 < 0.5)
+  echo "PASS vth=2.31"
+else
+  echo "FAIL vth=2.31"
+  quit 1
+end
+quit 0
+.endc
+.end

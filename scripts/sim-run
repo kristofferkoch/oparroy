@@ -1,0 +1,24 @@
+#!/bin/sh
+# Run one ngspice subcircuit testbench (circuits/**/tb_*.cir, DESIGN.md
+# §7). The testbench's control block carries its own pass/fail
+# assertions and quits nonzero on violation; this wrapper provides a
+# clean work dir and surfaces the log on failure. Mirrors
+# klee-prove/fuzz-run's role for the firmware harnesses.
+# Usage: sim-run <work-dir> <testbench.cir>
+set -eu
+
+work=$1
+tb=$2
+
+rm -rf "$work"
+mkdir -p "$work"
+
+# ngspice resolves .include against the CWD, so run from the
+# testbench's own directory; the log lands in the work dir.
+dir=$(dirname "$tb")
+base=$(basename "$tb")
+if ! (cd "$dir" && ngspice -b "$base") > "$work/sim.log" 2>&1; then
+  cat "$work/sim.log"
+  exit 1
+fi
+grep -E 'PASS|FAIL' "$work/sim.log"

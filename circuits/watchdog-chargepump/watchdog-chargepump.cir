@@ -1,0 +1,45 @@
+* watchdog-chargepump — bypass watchdog, candidate A (DESIGN.md §4).
+*
+* Edge-sensitive charge pump: the MCU emits a free-running 20 kHz
+* keep-alive square (timer PWM, no per-pulse firmware). Only
+* *transitions* pump charge into the storage cap Cs, so a hung MCU
+* (keep-alive stuck high or low) stops pumping and the bleed Rb pulls
+* the switch select below VIL — the bypass is the default state.
+*
+* Pins: ka (keep-alive in), sel (to 74LVC1G3157 select), gnd.
+*
+* Values and margins (sim-verified by tb_*.cir):
+* - Pump impedance 1/(Cp*f) must sit well below Rb or sel sags under
+*   its own bleed — Cp = 22 nF gives sel ~2.9 V in equilibrium,
+*   ripple floor ~2.8 V (vs the 2.31 V VIH band edge, SCES424O §5.4).
+* - tau = Rb*Cs = 0.47 ms: engage (sel -> 0.99 V band edge) ~0.5 ms
+*   after the last keep-alive edge — inside one ~0.6 ms ring frame
+*   circulation (DESIGN.md §2). One missed 50 us cycle droops the
+*   ripple floor to ~2.5 V — single-missed-pulse tolerance.
+* - Rs (220 ohm) does double duty: limits MCU GPIO edge current into
+*   Cp (~15 mA peak) and, with Cp, forms a ~5 us filter that passes
+*   only ~2 % of a 100 ns glitch's charge — narrow glitches can't
+*   service the pump. False-keep-alive break-even sits at ~40 kHz
+*   glitch rate for 100 ns glitches (anchored by tb_glitch).
+*
+* d1/d2 are one BAT54S-class dual Schottky (Basic-class discrete);
+* Vf ~0.15 V at the ~60 uA bleed current. Bench confirms real margins.
+*
+* Known limit (recorded in DESIGN.md §4): the slow RC ramp violates
+* the switch's 10 ns/V select-input transition rate (SCES424O §5.4) —
+* the input buffer burns up to ~500 uA (ΔICC) while sel dwells in the
+* 0.99–2.31 V band (~0.4 ms per transition), and the exact flip point
+* inside the band is device-specific. One transition per fault event.
+*
+* Sim unit tests (ngspice testbenches tb_*.cir, DESIGN.md §7):
+* engage timing, single-missed-pulse tolerance, glitch behavior.
+
+.subckt wd_chargepump ka sel gnd
+.model dpump d(is=200n n=1.0 rs=5 tt=1n bv=30)
+Rs ka kap 220
+Cp kap x 22n
+D1 gnd x dpump
+D2 x sel dpump
+Cs sel gnd 10n
+Rb sel gnd 47k
+.ends wd_chargepump

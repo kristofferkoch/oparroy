@@ -1,0 +1,99 @@
+* watchdog-supervisor — bypass watchdog, candidate B (DESIGN.md §4).
+*
+* Behavioral model of a TPS3430-class window watchdog IC: the MCU
+* strobes WDI; a strobe must land in the open window 0.5–1.5 ms after
+* the previous one. Too early (MCU running fast / corrupted loop) is a
+* violation just like too late (hung). /WDO is open-drain, asserted
+* low on fault — wired straight to the bypass switch select, whose
+* default (unpowered / un-serviced) state is therefore bypass-engaged.
+* The fault latch powers up SET: bypass is the default state.
+*
+* Pins: wdi (strobe in), wdob (open-drain out = switch select, with
+* external pull-up), vdd, gnd. Window bounds are mapped onto the ramp
+* voltage: 220 nA into 100 pF = 2.2 V/ms, so vlo = 1.1 V = 0.5 ms,
+* vhi = 3.25 V ~ 1.48 ms.
+*
+* Internals (all behavioral): a differentiator turns strobe edges into
+* a short pf pulse; pf samples the ramp into th (ideal buffered
+* sample-and-hold — a switched cap dumps the ramp by charge sharing)
+* and fires a ~3 us one-shot (os); during os the fault latch is set
+* (early edge) or cleared (in-window edge) against the SAMPLED th, and
+* the ramp resets ~1 us later (RC-delayed, so the sample completes
+* first). Timeout (ramp over vhi) sets the latch asynchronously. The
+* latch is a current-steered state cap clamped to the rails.
+*
+* Unlike candidate A (charge pump), there is no slow ramp on the
+* switch select: wdob snaps rail-to-rail through the 10k pull-up /
+* 50 ohm open drain, so the 1G3157's 10 ns/V input-rate spec
+* (SCES424O §5.4) is honored. Also unlike A: a single missed strobe
+* engages the bypass (no missed-pulse tolerance — the window IS the
+* point), and out-of-band glitch edges keep the fault latched instead
+* of servicing the watchdog. tb_missed_pulse/tb_glitch anchor this.
+*
+* Sim-verified numbers (tb_*.cir, ngspice 45, both vth band edges):
+* - timeout trip 1.49 ms after the last strobe (ramp 1.48 ms + ~5 us
+*   reset-release dead time + reset-switch leakage); an early edge
+*   latches the fault ~0.2 us after the offending strobe, an in-window
+*   strobe clears it ~0.2 us after its edge.
+* - one dropped 1 ms strobe: bounded bypass blip of 1.51 ms (trip
+*   1.49 ms after the last good strobe, cleared by the next in-window
+*   strobe), then normal service resumes.
+* - a 3.3 kHz glitch train after MCU death cannot service the
+*   watchdog: the first glitch resets the ramp unjudged (th already
+*   over vhi), every later glitch is an early edge and re-sets the
+*   latch — engage 1.70 ms after the last real strobe, latch held
+*   through the train.
+*
+* Sim unit tests (ngspice testbenches tb_*.cir, DESIGN.md §7):
+* engage timing, single-missed-strobe response, glitch/window
+* violation behavior.
+
+.subckt wd_window wdi wdob vdd gnd params: vlo=1.1 vhi=3.25
+
+* rising-edge detect (differentiator, pf pulse ~0.7 us)
+Cd wdi e 10p
+Rd e gnd 100k
+Bp p gnd V={V(e) > 1.65 ? V(vdd) : 0}
+Rp p pf 1k
+Cp pf gnd 20p
+.model swf sw(ron=100 roff=1G vt=1.65 vh=0.1)
+
+* ramp sampled into th during pf (ideal buffered S/H — a switched cap
+* of comparable size would dump the ramp by charge sharing), held for
+* the judgment window
+Bsh gnd th I={V(pf) > 1.65 ? 5m*(V(tr)-V(th)) : 0}
+Cth th gnd 50p
+Rth th gnd 1G
+
+* one-shot: os charged instantly by pf, bleeds with tau ~4.7 us
+Sos vdd os pf gnd swf
+Cos os gnd 100p
+Ros os gnd 47k
+
+* window ramp; the reset is delayed ~1 us behind os (Rrd/Crd) so the
+* th sample completes before the ramp discharges
+Itr gnd tr DC 220n
+Ctr tr gnd 100p
+Rrd os ord 15k
+Crd ord gnd 100p
+Sr tr gnd ord gnd swf
+
+* fault judgment during the one-shot, against the sampled ramp;
+* timeout sets the latch asynchronously
+Bset setn gnd V={(V(tr) > vhi) || ((V(os) > 1.65) && (V(th) < vlo)) ? V(vdd) : 0}
+Bclr clrn gnd V={(V(os) > 1.65) && (V(th) > vlo) && (V(th) < vhi) ? V(vdd) : 0}
+
+* fault latch: current-steered state cap, clamped to the rails;
+* powers up SET (bypass is the default state). B-source current flows
+* n+ -> n-, so gnd/st with +10m charges st (set); -10m drains (clear).
+Bst gnd st I={V(setn) > 1.65 ? 10m : (V(clrn) > 1.65 ? -10m : 0)}
+Cst st gnd 1n ic=3.3
+.model dcl d(is=1n n=1)
+Dlo gnd st dcl
+Dhi st vdd dcl
+Rstp st gnd 1G
+
+* open-drain /WDO
+.model swo sw(ron=50 roff=1G vt=1.65 vh=0.1)
+Sod wdob gnd st gnd swo
+.ends wd_window

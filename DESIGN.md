@@ -194,23 +194,70 @@ Failure modes to design against:
 
 ## 4. Node watchdog / bypass
 
-TBD — **explore both** candidate mechanisms before picking:
+Decided (2026-09-26, card T4): an **edge-sensitive charge pump** holds a
+normally-on analog switch open; when the MCU stops strobing, the switch
+relaxes closed and RX→TX bypass engages. The window-watchdog supervisor
+IC candidate is rejected on cost/inventory (below). Both candidates
+live as standalone subcircuits with ngspice testbenches:
 
-- Normally-on analog switch (74LVC/TS5A-class) held open by MCU-driven
-  charge pump / periodic pulse train; RC timeout re-enables bypass
-- Window-watchdog supervisor IC driving the bypass mux
+- `circuits/watchdog-chargepump/` — **chosen**. BAT54S-class dual
+  Schottky pump (Cp=22n, Rs=220, Cs=10n, Rb=47k, τ=0.47 ms) driven by a
+  20 kHz MCU keep-alive; its `sel` output drives the switch select.
+- `circuits/watchdog-supervisor/` — the rejected TPS3430-class window
+  watchdog, kept as the quantified record of what the money would have
+  bought.
 
-Requirement: RX→TX bypass is the **default state**; the MCU must
-actively deassert it. Semi-passive: no firmware involvement in the
-bypass path itself. Design-space exploration in the DSL + ngspice
-simulation before committing.
+Switch: SN74LVC1G3157 SPDT (facts in
+`datasheets/SN74LVC1G3157/notes/`). COM = downstream, B1 = upstream —
+bypass is the default, sel low —, B2 = node TX. The node's RX tap stays
+connected in bypass: a dead node keeps listening (listen-only); bypass
+cuts TX only.
 
-Open questions:
+Requirement (unchanged): RX→TX bypass is the **default state**; the MCU
+must actively deassert it. Semi-passive — no firmware in the bypass
+path itself.
 
-- How fast must bypass engage/disengage? (Bit-level or link-level?)
-- Does bypass also cut the node off from *receiving*, or only from the
-  transmit path?
-- Window watchdog vs simple timeout?
+Measured (ngspice, swept across both select-threshold edges
+0.99/2.31 V):
+
+- **Engage speed**: bypass closes ~0.5 ms after the last keep-alive
+  edge — link-level, sub-frame. Bit-level bypass switching is neither
+  needed nor achievable with this class of circuit.
+- **Missed-pulse tolerance**: one dropped 50 µs keep-alive cycle droops
+  sel only to ~2.5 V, still above the 2.31 V VIH edge — no spurious
+  engage.
+- **Glitch immunity**: the Rs·Cp input filter makes narrow (100 ns)
+  glitches transfer nothing.
+- **Accepted hazard**: a µs-wide *periodic* waveform is a false
+  keep-alive (sel ~2.9 V with a Hi-Z dead driver, ~1.3 V mid-band with
+  a stuck-low driver). Anchored in tb_glitch phase 2.
+
+Window vs timeout — the window property is traded away on a
+cost/inventory argument (JLCPCB, 2026-09-26): window-watchdog ICs are
+not inventory-viable — TPS3430 $1.50 VSON-10, TPS3435 ≥$2.50, MAX6369
+$1.92, each more than the CH32V003 itself ($0.29, §1) — and the stocked
+timeout-only supervisors (TPS3823 $0.25, STWD100 $0.37) add nothing
+over discrete. Candidate A is ~$0.01 of Basic-class discretes. What the
+money would have bought, measured in candidate B's benches: one dropped
+strobe costs only a bounded 1.51 ms self-recovering bypass blip (A
+instead tolerates the drop silently and engages ~0.5 ms late when
+strobes stop for real; B's timeout engage is 1.49 ms after the last
+strobe); an early edge latches the fault ~0.2 µs after the offending
+edge, vs A's analog droop; a 3.3 kHz glitch train after MCU death
+cannot service the window (the first glitch resets the ramp unjudged —
+engage slips to 1.70 ms — every later glitch is an early edge that
+re-sets the latch); and the select output snaps rail-to-rail, with no
+10 ns/V input-rate violation.
+
+Known spec violation, accepted: A's slow sel ramp breaks the switch's
+10 ns/V input-rate spec (SCES424O §5.4) — ≤500 µA ΔICC while dwelling
+~0.4 ms in the 0.99–2.31 V band, once per fault event. A 74LVC1G17
+Schmitt buffer on sel fixes it for one Extended BOM line if the bench
+disagrees.
+
+Power: bypass switch + watchdog run from the **always-on ring rail**,
+not the per-node switchable rail — the 1G3157 has no Ioff /
+partial-power-down spec. Constrains T2 and T10.
 
 ### 4.1 Fault detection and serviceability
 
@@ -608,12 +655,10 @@ Decided-to-be-decided problems that aren't yet work cards (the card that
 resolves each is in KANBAN.md):
 
 - **Bypass topology** (§3) — dual ring vs skip-one vs per-node switch;
-  waits on the watchdog exploration (T4) and PHY simulation (T5).
+  watchdog mechanism settled (§4); waits on PHY simulation (T5).
   Card: T2.
 - **Intermittent connector faults** (§3) — protocol re-route vs hardware
   auto-bypass vs both; deferred until PHY simulation exists. Card: T13.
-- **Watchdog mechanism** (§4) — analog switch + charge pump vs
-  supervisor IC; explore both in simulation first. Card: T4.
 - **Debug transport** (§6) — per-node UART vs shared bus, connector
   style. Card: T10.
 - **Node-board stackup and thickness** (§6) — leaning 4-layer to keep

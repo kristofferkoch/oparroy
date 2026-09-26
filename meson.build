@@ -51,6 +51,7 @@ repro_flags = [
 add_project_arguments(freestanding_flags + repro_flags, language: 'cpp')
 
 subdir('firmware/protocol')
+subdir('circuits')
 
 # Reproducibility gate (DESIGN.md §8): builds every configuration twice
 # and compares artifact hashes — a mismatch is red like a failing test.

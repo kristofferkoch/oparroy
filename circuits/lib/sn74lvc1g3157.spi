@@ -1,0 +1,29 @@
+* SN74LVC1G3157 SPDT analog switch — behavioral ngspice model for
+* slow-speed (watchdog/bypass-control) studies. Facts from SCES424O,
+* extracted in datasheets/SN74LVC1G3157/notes/facts.md.
+*
+* Pins: A (common), B1 (S low), B2 (S high), S (select), VCC, GND.
+*
+* The select input is modeled as a single unknown threshold vth inside
+* the datasheet indeterminate band (0.3xVCC .. 0.7xVCC = 0.99 .. 2.31 V
+* at 3.3 V, SCES424O §5.4); testbenches run the band edges so results
+* hold for any real device. ron is the 3 V, 25 C typ (7 ohm, §5.5);
+* roff keeps off-leakage far below the ±1 uA spec. Slow-ramp
+* input-buffer current (ΔICC ≤ 500 uA, §5.5) is not modeled — the
+* candidate subcircuits call it out instead. vcc is a parameter (not
+* sensed) because .model thresholds must be constants; all benches run
+* at 3.3 V.
+
+.subckt sn74lvc1g3157 A B1 B2 S VCC GND
++ params: ron=7 roff=1G vth=1.65 vh=50m vcc=3.3
+
+* Inverted select for the low-active throw: B1 conducts when
+* V(VCC) - V(S) > vcc - vth, i.e. V(S) < vth.
+Es sinv GND value={V(VCC) - V(S)}
+
+.model sw_hi sw(ron={ron} roff={roff} vt={vth} vh={vh})
+.model sw_lo sw(ron={ron} roff={roff} vt={vcc-vth} vh={vh})
+
+S1 A B1 sinv GND sw_lo
+S2 A B2 S GND sw_hi
+.ends sn74lvc1g3157

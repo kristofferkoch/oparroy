@@ -1,0 +1,84 @@
+* tb_glitch — glitch behavior of the charge-pump watchdog (DESIGN.md
+* §7 contract for §4). Two phases:
+*
+* Phase 1 (5–12 ms): keep-alive dead, 100 ns / 1 kHz glitches on the
+*   ka line. Narrow glitches can't pump at all: the Rs*Cp filter
+*   (~5 us) keeps the x-swing below the pump diode's threshold, so no
+*   charge crosses — bypass must still engage, bounded.
+* Phase 2 (12–20 ms): 5 us-wide glitches at 50 kHz — wide enough to
+*   swing x past the diode threshold, fast enough that the charge
+*   beats the bleed. This is a documented hazard, not a contract: a
+*   sustained energetic periodic waveform is indistinguishable from a
+*   keep-alive to ANY passive pump. The test ANCHORS the actual
+*   behavior (sel held high = false keep-alive) so any future circuit
+*   change that alters it fails loudly here.
+* Phase 3 (20–26 ms): glitches cease; bypass must engage.
+*
+* Assertions: a1 engaged by 8 ms despite 1 kHz glitches;
+* a2 false-keep-alive hazard: sel held > 2.4 V at 15–16 ms;
+* a3 engaged again by 24 ms.
+
+.include ../lib/sn74lvc1g3157.spi
+.include watchdog-chargepump.cir
+.param vth=0.99
+
+Vdd vdd 0 3.3
+
+* keep-alive until 5 ms, then the MCU dies Hi-Z (its driver
+* disconnects; a stuck-low driver would divide the glitch amplitude
+* by two and park sel mid-band — the same hazard, weaker)
+Bka kai 0 V={1.65 + 1.65*sgn(sin(6.2831853*20k*time))}
+Bg0 g0g 0 V={time < 5m ? 3.3 : 0}
+.model gtsw sw(ron=1 roff=1G vt=1.65 vh=0.1)
+Sg0 kai kak g0g 0 gtsw
+Rka kak ka 50
+
+* glitch trains, each gated to its phase by an ideal switch
+Vg1 g1i 0 PULSE(0 3.3 5m 1n 1n 100n 1m)
+Bg1 g1g 0 V={(time > 5m) && (time < 12m) ? 3.3 : 0}
+Sg1 g1i kai2 g1g 0 gtsw
+Rg1 kai2 ka 50
+
+Vg2 g2i 0 PULSE(0 3.3 12m 1n 1n 5u 20u)
+Bg2 g2g 0 V={(time > 12m) && (time < 20m) ? 3.3 : 0}
+Sg2 g2i kai3 g2g 0 gtsw
+Rg2 kai3 ka 50
+
+Cka ka 0 220p
+
+Bup upi 0 V={1.65 + 1.65*sgn(sin(6.2831853*400k*time))}
+Rup upi up 50
+Btx txi 0 V=0
+Rtx txi tx 50
+
+Xwd ka sel 0 wd_chargepump
+Xsw down up tx sel vdd 0 sn74lvc1g3157 params: vth={vth}
+Rd down 0 100k
+Cd down 0 100p
+
+.control
+tran 50n 26m uic
+meas tran a1 avg v(sel) from=7.5m to=8m
+meas tran a2 avg v(sel) from=15m to=16m
+meas tran a3 avg v(sel) from=24m to=25m
+if (a1 < 0.5) & (a2 > 2.4) & (a3 < 0.5)
+  echo "PASS vth=0.99"
+else
+  echo "FAIL vth=0.99"
+  quit 1
+end
+alterparam vth=2.31
+reset
+tran 50n 26m uic
+meas tran a1 avg v(sel) from=7.5m to=8m
+meas tran a2 avg v(sel) from=15m to=16m
+meas tran a3 avg v(sel) from=24m to=25m
+if (a1 < 0.5) & (a2 > 2.4) & (a3 < 0.5)
+  echo "PASS vth=2.31"
+else
+  echo "FAIL vth=2.31"
+  quit 1
+end
+quit 0
+.endc
+.end

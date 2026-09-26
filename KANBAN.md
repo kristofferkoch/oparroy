@@ -34,9 +34,7 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T5[T5 ngspice PHY sim] --> T13[T13 intermittent-fault strategy]
-    T4[T4 watchdog/bypass exploration] --> T2[T2 bypass topology decision]
-    T2 --> T10[T10 test board design]
-    T4 --> T10
+    T2[T2 bypass topology decision] --> T10[T10 test board design]
     T19 --> T10
     T6[T6 python scaffold] --> T7[T7 DSL v0: IR + KiCad emitter]
     T7 --> T8[T8 DSL constraint checks]
@@ -53,14 +51,12 @@ ______________________________________________________________________
 
 ## Next
 
-- **T4 — Explore node watchdog/bypass circuits.** The two candidates in
-  DESIGN.md §4 — normally-on analog switch held open by MCU-driven
-  charge pump vs window-watchdog supervisor IC — each captured as a
-  **standalone subcircuit file with ngspice simulation unit tests**
-  (DESIGN.md §7: bypass-engage timing, single-missed-pulse tolerance,
-  glitch immunity). Output: subcircuits + passing sim tests + a
-  recommendation in DESIGN.md §4. **Blocked by:** — · **Unblocks:**
-  T2, T10
+- **T2 — Choose bypass topology.** *Shape: decision.* Counter-rotating
+  dual ring vs skip-one wires vs per-node switch only (IDEAS.md
+  §Fault tolerance). Recorded in DESIGN.md §3. The watchdog mechanism
+  is settled (DESIGN.md §4): per-node charge-pump + analog switch,
+  powered from the always-on ring rail, RX tap stays connected in
+  bypass. **Blocked by:** — · **Unblocks:** T10
 - **T5 — ngspice simulation of the PHY.** Line drivers, comparator RX,
   bypass switches, connector-fault cases. Now concrete from T3
   (DESIGN.md §2): validate the no-analog-hysteresis baseline under
@@ -86,10 +82,6 @@ ______________________________________________________________________
 
 ## Backlog
 
-- **T2 — Choose bypass topology.** *Shape: decision.* Counter-rotating
-  dual ring vs skip-one wires vs per-node switch only (IDEAS.md
-  §Fault tolerance). Recorded in DESIGN.md §3. **Blocked by:** T4 ·
-  **Unblocks:** T10
 - **T7 — DSL v0: parts/nets IR + KiCad netlist emitter.** The home-rolled
   design-capture core (DESIGN.md §7). Includes subcircuit composition
   (functional circuits as their own files/units) and a parts DB with
@@ -130,7 +122,7 @@ ______________________________________________________________________
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  **Blocked by:** T2, T4, T19 · **Unblocks:** T12
+  **Blocked by:** T2, T19 · **Unblocks:** T12
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Per-bit cut-through forwarding with on-the-fly slot rewrite

@@ -21,10 +21,6 @@ real work — **move**, don't copy. Reference, don't duplicate.
   - Per-node relay/analog-switch bypass only
 - Intermittent connector failures: protocol-level retry/re-route, or
   purely hardware bypass?
-- Per-node semi-passive watchdog: RX→TX bypass is *enabled by default*;
-  the MCU must actively hold it disabled. Dead/hung MCU ⇒ node becomes a
-  wire. Candidate implementations: normally-on analog switch discharged by
-  MCU, RC + comparator, supervisor IC.
 
 ## Hardware
 
