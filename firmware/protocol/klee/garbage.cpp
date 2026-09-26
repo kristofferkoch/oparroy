@@ -93,5 +93,19 @@ extern "C" int klee_garbage() {
             prove_break_step(node, shadow);
         }
     }
+
+    // Over-long frame: the cap contains an endless legal stream like
+    // an illegal cell — Mute until the next break (node.hpp,
+    // frame_max_bits). Concrete cells: one path; the count is what
+    // matters. Stamped slot bits may flip the emitted value, so the
+    // invariant is forwarded-at-all, not forwarded-as-one.
+    prove_break_step(node, shadow);
+    for (uint16_t i = 0; i < oparroy::frame_max_bits; ++i) {
+        KLEE_PROVE(node.on_bit(oparroy::Bit::One) != oparroy::TxAction::Idle);
+    }
+    KLEE_PROVE(node.on_bit(oparroy::Bit::One) == oparroy::TxAction::Idle);
+    KLEE_PROVE(node.state() == oparroy::NodeState::Mute);
+    prove_break_step(node, shadow);
+    KLEE_PROVE(node.on_bit(oparroy::Bit::One) != oparroy::TxAction::Idle);
     return 0;
 }

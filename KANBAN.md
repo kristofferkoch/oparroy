@@ -45,8 +45,7 @@ graph TD
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
     T5 --> T15[T15 cable reach limits]
-    T16d[T16d fuzzing + fault injection] --> T16e[T16e coverage on release]
-    T16e --> T11[T11 node firmware v0]
+    T16e[T16e coverage on release] --> T11[T11 node firmware v0]
     T18[T18 freestanding foundation library] --> T11
 ```
 
@@ -54,13 +53,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T16d — libFuzzer/AFL++ harnesses + fault-injection shims.** Fuzz
-  the frame parser and ring state machine (alongside, not instead of,
-  KLEE — fuzzing finds what the prover's assumptions miss, §8).
-  Fault-injection shims make every failure path reachable in test:
-  line errors, dropped/partial frames, timer glitches, watchdog
-  timeouts, brown-outs (SQLite's every-boundary doctrine).
-  **Blocked by:** — · **Unblocks:** T16e
 - **T4 — Explore node watchdog/bypass circuits.** The two candidates in
   DESIGN.md §4 — normally-on analog switch held open by MCU-driven
   charge pump vs window-watchdog supervisor IC — each captured as a
@@ -84,6 +76,10 @@ ______________________________________________________________________
   `VERIFY` hook wired to the watchdog policy (§4). Host-compilable so
   T16's KLEE/fuzz harnesses exercise it from day one. **Blocked by:**
   — · **Unblocks:** T11
+- **T16e — Coverage measured on the release build.** SQLite doctrine
+  (§8): branch coverage of the freestanding *release* configuration —
+  tests exercise what actually ships — wired as a script target in the
+  flake shell. **Blocked by:** — · **Unblocks:** T11
 
 ## Backlog
 
@@ -132,10 +128,6 @@ ______________________________________________________________________
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   **Blocked by:** T2, T4, T19 · **Unblocks:** T12
-- **T16e — Coverage measured on the release build.** SQLite doctrine
-  (§8): branch coverage of the freestanding *release* configuration —
-  tests exercise what actually ships — wired as a script target in the
-  flake shell. **Blocked by:** T16d · **Unblocks:** T11
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Per-bit cut-through forwarding with on-the-fly slot rewrite

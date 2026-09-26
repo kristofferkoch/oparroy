@@ -120,7 +120,11 @@ bench measurement.
   rewrite, never an insertion. The trade: per-hop frame filtering is
   lost — a corrupt frame is already downstream before a CRC could
   reject it — so containment moves to illegal-cell detection (period
-  outside 0.9–1.6 µs ⇒ stop regenerating, force the line idle), the
+  outside 0.9–1.6 µs ⇒ stop regenerating, force the line idle), a
+  **frame-length cap** (2026-09-26, T16d: a stream of legal cells past
+  `frame_max_bits` = 2048 without a break — 2× the pre-sized ENUM
+  maximum — is a babbling idiot too, contained the same way: Mute until
+  the next break), the
   TIM1-brake TX-kill and hardware bypass (§3, §4), and supervisor-side
   CRC/sequence checks (feeds T13). Fallback rung: if the per-bit loop
   doesn't close timing on-target, degrade to store-and-forward (T11

@@ -1,8 +1,9 @@
 # Protocol core: the host-testable cut-through logic of
-# DESIGN.md §2, KLEE-proved per §8. Header-only constexpr, so each KLEE
-# harness compiles to bitcode as a single TU; protocol.cpp is the
-# translation unit that keeps the GCC cross build (rv32ec) and
-# clang-tidy compiling the same headers.
+# DESIGN.md §2, KLEE-proved and fuzzed per §8. Header-only constexpr, so
+# each KLEE harness compiles to bitcode as a single TU; protocol.cpp is
+# the translation unit that keeps the GCC cross build (rv32ec) and
+# clang-tidy compiling the same headers. fuzz/ holds the libFuzzer
+# harnesses and fault-injection shims.
 
 static_library('protocol', 'protocol.cpp')
 
@@ -49,4 +50,30 @@ if not meson.is_cross_build()
 
   # ninja klee-proofs: run every KLEE proof of the protocol core.
   alias_target('klee-proofs', klee_proofs)
+
+  # Fuzz harnesses (DESIGN.md §8 — alongside KLEE, not instead of it):
+  # libFuzzer + ASan/UBSan over the same protocol core, driven by the
+  # fault-injection shims in fuzz/fuzz.hpp. -O1 because buildtype=plain
+  # injects no optimization and the fuzzer wants some. The entry point
+  # is the engine-agnostic LLVMFuzzerTestOneInput, so AFL++'s compat
+  # driver can reuse these harnesses unchanged.
+  fuzz_flags = ['-fsanitize=fuzzer,address,undefined', '-O1']
+  fuzz_runs = []
+  foreach harness : ['cell', 'node', 'ring']
+    fuzz_exe = executable('fuzz-' + harness, 'fuzz' / (harness + '.cpp'),
+      cpp_args: fuzz_flags,
+      link_args: fuzz_flags,
+    )
+    fuzz_runs += run_target('fuzz-' + harness,
+      command: [
+        files('../../scripts/fuzz-run'),
+        meson.current_build_dir() / ('fuzz-out-' + harness),
+        meson.current_source_dir() / 'fuzz' / 'corpus' / harness,
+        fuzz_exe,
+      ],
+    )
+  endforeach
+
+  # ninja fuzz: bounded regression runs of every fuzz harness.
+  alias_target('fuzz', fuzz_runs)
 endif

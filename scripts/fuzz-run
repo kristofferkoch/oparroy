@@ -1,0 +1,19 @@
+#!/bin/sh
+# Run one libFuzzer harness (firmware/protocol/fuzz/) as a bounded
+# regression run. libFuzzer mutates its corpus directory, so the seed
+# corpus is copied into a fresh work dir under the build dir — the
+# source tree stays clean, and crash artifacts land next to the work
+# corpus. Mirrors klee-prove's role for the KLEE harnesses.
+# Usage: fuzz-run <work-dir> <seed-corpus-dir> <fuzzer> [fuzzer args...]
+set -eu
+
+work=$1
+seeds=$2
+shift 2
+
+rm -rf "$work"
+mkdir -p "$work"
+cp -r "$seeds" "$work/corpus"
+# max_len covers the frame-over-cap seed (~10.5 KB, the bounded-frame
+# containment case) with headroom for mutation.
+"$@" -runs=200000 -max_len=16384 -print_final_stats=1 -artifact_prefix="$work/" "$work/corpus"

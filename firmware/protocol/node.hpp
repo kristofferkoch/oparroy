@@ -25,8 +25,16 @@ enum class TxAction : uint8_t {
 enum class NodeState : uint8_t {
     Hunt,    // no break seen yet: position unknown, forward nothing
     Forward, // counting bits from the frame gap; position = address
-    Mute,    // illegal cell seen: regeneration stopped until next break
+    Mute,    // fault contained (illegal cell, over-long frame): idle until next break
 };
+
+// Frames are bounded: the largest legal frame is the pre-sized ENUM —
+// 8 nodes × 104 bits (96-bit UNIID + type byte), DESIGN.md §2. A stream
+// of legal cells past frame_max_bits without a break is a babbling
+// idiot, not a frame: contain it like an illegal cell (Mute until the
+// next break). 2048 is ~2× the ENUM maximum with headroom, and keeps
+// the uint16_t bit counter far from wraparound.
+inline constexpr uint16_t frame_max_bits = 2048;
 
 struct NodeConfig {
     // Bit position of this node's slot, counted from the first bit after
@@ -100,6 +108,14 @@ public:
 
 private:
     constexpr TxAction forward_bit(Bit incoming) {
+        // Over-long frame: a babbling idiot, not a frame — contain it
+        // like an illegal cell, Mute until the next break
+        // (frame_max_bits above; also what keeps m_bit_count from
+        // ever wrapping).
+        if (m_bit_count >= frame_max_bits) {
+            m_state = NodeState::Mute;
+            return TxAction::Idle;
+        }
         // Subtraction form, so a parked slot_index near UINT16_MAX can
         // never overflow the boundary compare.
         const bool in_slot = m_bit_count >= m_config.slot_index &&
