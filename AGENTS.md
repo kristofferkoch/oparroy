@@ -39,9 +39,16 @@ of truth.
   part's matching `notes/<topic>.md` immediately, cited by document and
   section (`(RM §17.2)`). Never leave a datasheet fact living only in
   the conversation.
-- Silicon quirks, doc-vs-silicon mismatches, and tribal knowledge
-  (issue trackers, bench findings) go in `notes/quirks.md`, one
-  sourced bullet each, dated.
+- **Standing instruction:** cross-check the datasheet against the
+  vendor SDK, even though we don't use the SDK directly. Verify as you
+  document, not after: when writing up a peripheral (e.g. UART), read
+  the SDK's driver for it and confirm our understanding matches — init
+  sequences, register writes, bit orders, errata workarounds. Where the
+  SDK does something the datasheet doesn't explain, that's an
+  undocumented quirk: record it in `notes/quirks.md`.
+- Silicon quirks, doc-vs-silicon mismatches, SDK-vs-doc mismatches, and
+  tribal knowledge (issue trackers, bench findings) go in
+  `notes/quirks.md`, one sourced bullet each, dated.
 
 ## Project shape
 
