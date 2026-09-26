@@ -55,10 +55,12 @@ of truth.
 Hardware + firmware + design-automation project. Design capture is a
 home-rolled Python DSL (single source of truth) that emits KiCad
 netlists, constraint checks, firmware headers, and simulation netlists —
-KiCad is used for layout only. Firmware is freestanding C++ (no
-standard library; RAII, placement new on memory-mapped I/O) under an
-aviation-grade rule set, statically checked, KLEE-verified from the
-start (DESIGN.md §8).
+KiCad is used for layout only. DSL core (IR, validation pass, KiCad
+netlist emitter, dot dump) lives in `src/oparroy/dsl/`; circuit captures
+live in `design/` (DESIGN.md §7 DSL shape). Firmware is freestanding
+C++ (no standard library; RAII, placement new on memory-mapped I/O)
+under an aviation-grade rule set, statically checked, KLEE-verified
+from the start (DESIGN.md §8).
 Tool provisioning: nix flake for everything non-Python (compilers,
 provers, ngspice, KiCad, uv itself); uv owns Python alone — 3.13, ruff
 (strict), ty, pytest. Test philosophy: hands-off hardware-in-the-loop

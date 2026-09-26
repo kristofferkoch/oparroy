@@ -34,13 +34,8 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T7a[T7a DSL core: IR + KiCad emitter] --> T7b[T7b DSL subcircuit composition]
-    T7a --> T7c[T7c DSL parts DB]
-    T7a --> T7d[T7d DSL ngspice emitter]
-    T7d --> T7e[T7e port existing spice to DSL]
-    T7a --> T8[T8 DSL constraint checks]
-    T7a --> T9[T9 firmware header generation]
-    T7b --> T19[T19 layout property checker]
+    T7b[T7b DSL subcircuit composition] --> T19[T19 layout property checker]
+    T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
     T16e[T16e coverage on release] --> T11[T11 node firmware v0]
@@ -51,18 +46,33 @@ ______________________________________________________________________
 
 ## Next
 
-- **T7a — DSL core: parts/nets IR + KiCad netlist emitter.** The
-  design-capture spine (DESIGN.md §7): a separable, pretty-printable IR
-  behind a plain function-call capture API (HDL-instantiation flavor;
-  sugar deferred), emitting the netlist pcbnew ingests — symbol/
-  footprint references validated against KiCad's libraries, provisioned
-  via the flake. Flat capture only — hierarchy is T7b, the parts DB is
-  T7c; parts are declared ad hoc. Captures live in a new `design/`
-  tree. Proven by re-capturing `circuits/watchdog-chargepump/` flat and
-  golden-testing the emitted netlist; emission is byte-identical across
-  runs (§8 reproducibility). Includes a Graphviz dot dump as the
-  minimal human-review view. **Blocked by:** — · **Unblocks:** T7b,
-  T7c, T7d, T8, T9
+- **T7b — DSL subcircuit composition.** Functional circuits as instanced
+  units with declared port interfaces (§7): hierarchy carried into
+  refdes/net naming, refdes stability across source edits, multi-instance
+  capture — the test board's 8 identical node circuits as the proving
+  case. **Blocked by:** — · **Unblocks:** T19
+- **T7c — DSL parts DB with assembler-stock status.** One record per
+  part: LCSC number, JLCPCB Basic/Extended tier, stock count with as-of
+  date, KiCad symbol/footprint pair, spice model binding, datasheet
+  pointer into `datasheets/`. A freshness check flags stale stock
+  entries (§6: part selection is inventory-driven); feeds T8's
+  unsourcable-part check. The emitter resolves parts from the DB,
+  replacing the ad-hoc declarations of T7a. **Blocked by:** — ·
+  **Unblocks:** —
+- **T7d — DSL ngspice emitter.** Simulation-netlist backend over the
+  T7a IR: emits the DUT netlist (`.subckt` wrappers matching the
+  hand-written interfaces in `circuits/`), with spice model bindings
+  declared ad hoc until T7c's parts DB owns them. Boundary: stimulus
+  and `.meas` assertions stay in external bench decks — the DSL emits
+  the circuit, benches drive it — so today's benches run unmodified
+  against either capture. **Blocked by:** — · **Unblocks:** T7e
+- **T8 — DSL constraint checking / property verification.** Electrical
+  rules beyond KiCad ERC: bypass-path continuity under single-fault
+  models, watchdog default-state assertions. **Blocked by:** — ·
+  **Unblocks:** —
+- **T9 — Firmware header generation from the DSL.** Pin maps and
+  peripheral assignments emitted for the CH32V003 (DESIGN.md §5).
+  **Blocked by:** — · **Unblocks:** T11
 - **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
   §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
   fixed-capacity containers, ownership types over static arenas,
@@ -103,26 +113,6 @@ ______________________________________________________________________
 
 ## Backlog
 
-- **T7b — DSL subcircuit composition.** Functional circuits as instanced
-  units with declared port interfaces (§7): hierarchy carried into
-  refdes/net naming, refdes stability across source edits, multi-instance
-  capture — the test board's 8 identical node circuits as the proving
-  case. **Blocked by:** T7a · **Unblocks:** T19
-- **T7c — DSL parts DB with assembler-stock status.** One record per
-  part: LCSC number, JLCPCB Basic/Extended tier, stock count with as-of
-  date, KiCad symbol/footprint pair, spice model binding, datasheet
-  pointer into `datasheets/`. A freshness check flags stale stock
-  entries (§6: part selection is inventory-driven); feeds T8's
-  unsourcable-part check. The emitter resolves parts from the DB,
-  replacing T7a's ad-hoc declarations. **Blocked by:** T7a ·
-  **Unblocks:** —
-- **T7d — DSL ngspice emitter.** Simulation-netlist backend over the
-  T7a IR: emits the DUT netlist (`.subckt` wrappers matching the
-  hand-written interfaces in `circuits/`), with spice model bindings
-  declared ad hoc until T7c's parts DB owns them. Boundary: stimulus
-  and `.meas` assertions stay in external bench decks — the DSL emits
-  the circuit, benches drive it — so today's benches run unmodified
-  against either capture. **Blocked by:** T7a · **Unblocks:** T7e
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/`, `circuits/watchdog-chargepump/`,
   and `circuits/watchdog-supervisor/` in the DSL, with equivalence
@@ -132,10 +122,6 @@ ______________________________________________________________________
   shipping, the hand-written DUT `.cir` files retire — the DSL becomes
   the single source of truth (§7), not a second copy of it.
   **Blocked by:** T7d · **Unblocks:** —
-- **T8 — DSL constraint checking / property verification.** Electrical
-  rules beyond KiCad ERC: bypass-path continuity under single-fault
-  models, watchdog default-state assertions. **Blocked by:** T7a ·
-  **Unblocks:** —
 - **T19 — DSL layout property checker.** Parse `.kicad_pcb` and assert
   layout-level properties (DESIGN.md §7): bypass-path copper
   independence, LED-adjacent-to-connector placement contracts,
@@ -150,9 +136,6 @@ ______________________________________________________________________
   classes/keepouts into the
   `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
   **Blocked by:** T7b · **Unblocks:** T10
-- **T9 — Firmware header generation from the DSL.** Pin maps and
-  peripheral assignments emitted for the CH32V003 (DESIGN.md §5).
-  **Blocked by:** T7a · **Unblocks:** T11
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
   all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
