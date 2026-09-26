@@ -42,9 +42,11 @@ graph TD
     T2 --> T10
     T4 --> T10
     T17[T17 PCBA service selection] --> T10
+    T19 --> T10
     T6[T6 python scaffold] --> T7[T7 DSL v0: IR + KiCad emitter]
     T7 --> T8[T8 DSL constraint checks]
     T7 --> T9[T9 firmware header generation]
+    T7 --> T19[T19 layout property checker]
     T1 --> T9
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
@@ -119,6 +121,16 @@ graph TD
   rules beyond KiCad ERC: bypass-path continuity under single-fault
   models, watchdog default-state assertions. **Blocked by:** T7 ·
   **Unblocks:** —
+- **T19 — DSL layout property checker.** Parse `.kicad_pcb` and assert
+  layout-level properties (DESIGN.md §7): bypass-path copper
+  independence, LED-adjacent-to-connector placement contracts,
+  net-class width/clearance compliance, trace-length budgets (feeds
+  T15), mechanical contracts (min corner radius for handling,
+  standoff mounting holes + keepouts), board-level checklist
+  conformance (power LED present, protection subcircuit instantiated
+  where required). Includes emitting net classes/keepouts into the
+  `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
+  **Blocked by:** T7 · **Unblocks:** T10
 - **T9 — Firmware header generation from the DSL.** Pin maps and
   peripheral assignments emitted for the chosen MCU. **Blocked by:**
   T1, T7 · **Unblocks:** T11
@@ -128,7 +140,7 @@ graph TD
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  **Blocked by:** T1, T2, T4 · **Unblocks:** T12
+  **Blocked by:** T1, T2, T4, T17, T19 · **Unblocks:** T12
 - **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
   §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
   fixed-capacity containers, ownership types over static arenas,

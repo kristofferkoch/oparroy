@@ -196,9 +196,45 @@ every part chosen must exist in the prototype assembler's inventory
 (§6) — the DSL's parts DB should carry assembler-stock status per part
 so constraint checks (§8) can flag unsourcable parts early.
 
+Layout property checking (2026-09-26): the constraint role extends to
+the **physical layout**. Layout is drawn in KiCad, but the DSL *audits*
+it: parse the `.kicad_pcb` (S-expressions, friendly to Python) and
+assert layout-level properties the schematic can't express, e.g.:
+
+- **Bypass-path independence**: the watchdog bypass route must not
+  share copper/vias with node logic between RX and TX — the physical
+  embodiment of "no firmware in the bypass path" (§4)
+- **Placement contracts**: per-connector status LED adjacent to its
+  connector (§4.1); supervisor/debug connectors at board edge
+- **Mechanical contracts**: rounded board corners (non-painful
+  handling — checkable as min corner radius on the edge-cuts layer),
+  mounting holes for standoffs/"legs" with correct keepouts
+- **Electrical geometry**: net-class width/clearance compliance, max
+  segment trace length against the cable-reach budget (T15), keepout
+  respect
+- KiCad's own DRC stays authoritative for manufacturability; the DSL
+  checker covers *project semantics* DRC can't know about. The DSL can
+  also *push* constraints the other way — emitting net classes and
+  keepouts into the `.kicad_pcb` so the layout tool guides the human
+  toward compliance before the audit runs.
+
+Board-level checklist (grows as boards are designed; each item is
+either a layout-checker assertion or a subcircuit):
+
+- Power LED (§4.1) — every board, no exceptions
+- **Power input protection: eFuse/crowbar subcircuit** — its own
+  subcircuit file with sim unit tests (crowbar trip point, reverse
+  polarity behavior, eFuse current limit) per the §7 organization
+  above. *Cost tension flagged:* per-node protection fights the
+  central cost driver — likely full eFuse/crowbar on the test board
+  and supervisor, something cheaper (polyfuse? series diode? nothing?)
+  on nodes. Decided per board at design time.
+- Rounded corners, mounting holes for legs (layout checker, above)
+
 ## 8. Verification strategy
 
-Layers: DSL property checks, **subcircuit simulation unit tests**
+Layers: DSL property checks (schematic **and physical layout**, §7),
+**subcircuit simulation unit tests**
 (ngspice testbenches per subcircuit file, §7), analog simulation of
 integrated circuits, on-target
 hardware-in-the-loop testing with fault injection. **Local script first**
