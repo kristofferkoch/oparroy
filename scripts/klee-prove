@@ -1,0 +1,12 @@
+#!/bin/sh
+# Run one KLEE proof harness (firmware/protocol/klee/). klee
+# refuses an existing --output-dir, so clear the stale one first — it
+# holds only generated explorer state under the build dir.
+# Usage: klee-prove <output-dir> [klee args...] <harness.bc>
+set -eu
+
+out=$1
+shift
+
+rm -rf "$out"
+klee --output-dir="$out" "$@"

@@ -45,8 +45,7 @@ graph TD
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
     T5 --> T15[T15 cable reach limits]
-    T16c[T16c protocol logic + KLEE] --> T16d[T16d fuzzing + fault injection]
-    T16d --> T16e[T16e coverage on release]
+    T16d[T16d fuzzing + fault injection] --> T16e[T16e coverage on release]
     T16e --> T11[T11 node firmware v0]
     T18[T18 freestanding foundation library] --> T11
 ```
@@ -55,22 +54,13 @@ ______________________________________________________________________
 
 ## Next
 
-- **T16c — Host-testable protocol logic v0 + KLEE harnesses.** The
-  protocol core, factored host-testable from the first commit
-  (DESIGN.md §8): the T3-concrete surfaces — ratio-metric cell decode,
-  frame echo invariants, ENUM stamping, the slot-boundary bit-count
-  state machine (cut-through's off-by-one surface). Clang/LLVM-bitcode
-  build in the flake shell, KLEE harnesses proving frame round-trips
-  and ring state-machine invariants, including behavior under injected
-  garbage (the babbling-idiot case, §3). Build on the T20 meson
-  scaffold and T16b's plumbing: `code-std.md`, the `freestanding_flags`
-  set in `meson.build`, extern-`C`
-  `--entry-point` entries (no libc `main`), and
-  `-Xclang -disable-lifetime-markers` on bitcode builds (klee 3.2 lacks
-  the intrinsic). The flake's klee remains nixpkgs' partial-LLVM-19
-  build (see flake.nix comment); if a harness hits another unsupported
-  feature, revisit how klee is provisioned.
-  **Blocked by:** — · **Unblocks:** T16d
+- **T16d — libFuzzer/AFL++ harnesses + fault-injection shims.** Fuzz
+  the frame parser and ring state machine (alongside, not instead of,
+  KLEE — fuzzing finds what the prover's assumptions miss, §8).
+  Fault-injection shims make every failure path reachable in test:
+  line errors, dropped/partial frames, timer glitches, watchdog
+  timeouts, brown-outs (SQLite's every-boundary doctrine).
+  **Blocked by:** — · **Unblocks:** T16e
 - **T4 — Explore node watchdog/bypass circuits.** The two candidates in
   DESIGN.md §4 — normally-on analog switch held open by MCU-driven
   charge pump vs window-watchdog supervisor IC — each captured as a
@@ -142,13 +132,6 @@ ______________________________________________________________________
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   **Blocked by:** T2, T4, T19 · **Unblocks:** T12
-- **T16d — libFuzzer/AFL++ harnesses + fault-injection shims.** Fuzz
-  the frame parser and ring state machine (alongside, not instead of,
-  KLEE — fuzzing finds what the prover's assumptions miss, §8).
-  Fault-injection shims make every failure path reachable in test:
-  line errors, dropped/partial frames, timer glitches, watchdog
-  timeouts, brown-outs (SQLite's every-boundary doctrine).
-  **Blocked by:** T16c · **Unblocks:** T16e
 - **T16e — Coverage measured on the release build.** SQLite doctrine
   (§8): branch coverage of the freestanding *release* configuration —
   tests exercise what actually ships — wired as a script target in the
