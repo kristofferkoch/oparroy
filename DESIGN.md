@@ -170,6 +170,12 @@ Open: supervisor part, debug transport (UART per node? shared bus?),
 board interconnect style (connectors as deliberately fragile elements —
 they are the failure mode under test).
 
+Silkscreen documentation (2026-09-26): the CI board is self-documenting
+at the bench — **connector pinout voltages and test-point labels printed
+on the board** (e.g. `3V3`, `5V`, `GND`, `TP12 ring-seg-3`), so probing
+never requires the schematic open on a second screen. Layout-checkable
+(T19): every connector and test point carries a silkscreen label.
+
 ## 7. Design-capture DSL
 
 Decided: **home-rolled DSL** (not SKiDL). The DSL is the single source
@@ -225,11 +231,15 @@ either a layout-checker assertion or a subcircuit):
 - **Power input protection: eFuse/crowbar subcircuit** — its own
   subcircuit file with sim unit tests (crowbar trip point, reverse
   polarity behavior, eFuse current limit) per the §7 organization
-  above. *Cost tension flagged:* per-node protection fights the
-  central cost driver — likely full eFuse/crowbar on the test board
-  and supervisor, something cheaper (polyfuse? series diode? nothing?)
-  on nodes. Decided per board at design time.
+  above. Scope (decided 2026-09-26): **CI/test board only** — future
+  single-node cards stay cheap and carry no such protection (central
+  cost driver, §1).
 - Rounded corners, mounting holes for legs (layout checker, above)
+- **Board identification on silkscreen** (2026-09-26): every PCB
+  carries project name (`oparroy`), PCB name, author name, date, and
+  version number — checkable as required text fields on the fab/
+  silkscreen layers. Version number ties the physical board to a git
+  tag so HIL results are attributable to an exact design revision.
 
 ## 8. Verification strategy
 

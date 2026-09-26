@@ -127,8 +127,10 @@ graph TD
   net-class width/clearance compliance, trace-length budgets (feeds
   T15), mechanical contracts (min corner radius for handling,
   standoff mounting holes + keepouts), board-level checklist
-  conformance (power LED present, protection subcircuit instantiated
-  where required). Includes emitting net classes/keepouts into the
+  conformance (power LED present, silkscreen board-ID fields —
+  project/PCB name, author, date, version tied to git tag, CI-board
+  protection subcircuit instantiated). Includes emitting net
+  classes/keepouts into the
   `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
   **Blocked by:** T7 · **Unblocks:** T10
 - **T9 — Firmware header generation from the DSL.** Pin maps and
