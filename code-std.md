@@ -94,6 +94,14 @@ needs to earn its place every time it's touched.
 
 - Static storage or arena-backed, fixed-capacity containers with
   `try_*` growth; nothing grows without asking (§8 foundation library).
+- **No raw pointers at interfaces** (2026-09-26): a view over a buffer
+  is `Span<T>` (`firmware/lib/span.hpp`), never `T*` plus a separate
+  length — the bound travels with the pointer or it gets lost. Raw
+  `T*` stays inside span/container internals and at the MMIO boundary
+  (the `reinterpret_cast` rule below); function signatures and struct
+  fields don't carry one. Bounds are carried, not checked: KLEE's
+  out-of-bounds detection and fuzzing own the defect class (§1), with
+  the T18 `VERIFY` hook adding the target-side check.
 - RAII for every resource and lock; no paired acquire/release calls
   separated by user code.
 - MMIO register blocks are `volatile` structs via placement `new` —
