@@ -77,11 +77,6 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
-- Home-rolled DSL vs SKiDL for design capture. A home DSL could also do:
-  - Constraint checking / property verification
-  - Analog simulation netlist generation (ngspice?)
-  - Firmware header generation (pin maps, register defs)
-  - KiCad netlist / PCB input generation
 - Hardware-in-the-loop CI: self-hosted runner permanently attached to the
   test board?
 - Analog simulation of the PHY (line drivers, comparators, bypass

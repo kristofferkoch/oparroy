@@ -565,6 +565,25 @@ Rationale: owning the IR makes multi-target codegen and property
 verification straightforward; a KiCad/SKiDL-format emitter is just one
 backend. Package scaffold landed 2026-09-26 (T6, see §8 tooling).
 
+DSL shape (2026-09-26, from the T7a design interrogation):
+
+- **Separable, pretty-printable IR.** The IR is a real data structure,
+  dumpable and diffable; its printed form is for humans — it does not
+  need to round-trip back into DSL source.
+- **Checks run as a validation pass** over the finished IR
+  (capture → check → emit), not at connection time.
+- **Plain function-call API, HDL-instantiation flavor.** Named
+  connections, no operator overloading, no implicit global circuit.
+  Sugar only if the call style proves tedious in use.
+- **KiCad library integration is mandatory.** Symbol/footprint
+  references validate against KiCad's actual libraries (provisioned via
+  the flake) — without that, pcbnew ingest can't be trusted.
+- **Captures live in a new `design/` tree.** `circuits/` keeps benches
+  and device models until T7e's port retires the DUT `.cir` files.
+- **Human-review rendering:** a Graphviz dot dump is the minimal first
+  view (ugly, but a start); the goal is abstraction-level block views
+  in the Verilog-debugger sense — prior-art survey is card T21.
+
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one
 unit), composed into boards — not drawn flat into a board schematic.
