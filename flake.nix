@@ -62,6 +62,12 @@
               pkgs.aflplusplus
               # Subcircuit simulation unit tests (DESIGN.md §7).
               pkgs.ngspice
+              # KiCad symbol/footprint libraries — the DSL validates
+              # part references against these (DESIGN.md §7 DSL shape).
+              # Library data only; the KiCad application itself is for
+              # layout and joins when boards start.
+              pkgs.kicad.libraries.symbols
+              pkgs.kicad.libraries.footprints
               # Python side is uv's alone; nix only supplies uv itself.
               pkgs.uv
               # Pre-commit hooks — the framework plus every tool the
@@ -76,6 +82,9 @@
               # clang-tidy (unwrapped) needs libc++'s freestanding headers
               # pointed out; see scripts/pre-commit/clang-tidy-changed.
               export OPARROY_LIBCXX_INCLUDE=${llvmPkgs.libcxx.dev}/include/c++/v1
+              # Where the DSL finds KiCad's libraries (DESIGN.md §7).
+              export OPARROY_KICAD_SYMBOL_DIR=${pkgs.kicad.libraries.symbols}/share/kicad/symbols
+              export OPARROY_KICAD_FOOTPRINT_DIR=${pkgs.kicad.libraries.footprints}/share/kicad/footprints
               echo "== oparroy dev shell =="
               riscv64-none-elf-gcc --version | head -1
               arm-none-eabi-gcc --version | head -1

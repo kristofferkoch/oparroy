@@ -25,7 +25,9 @@ build-backend = "uv_build"
 
 [tool.ruff]
 target-version = "py313"
-src = ["src", "tests"]
+# Import roots: the package (src), the tests, and the repo root itself
+# so `design` resolves as first-party.
+src = ["src", "tests", "."]
 
 [tool.ruff.lint]
 # Strict: everything on, minus the rules ruff itself flags as conflicting
@@ -40,6 +42,15 @@ ignore = [
     "D213", # multi-line-summary-second-line
     # Copyright lives in LICENSE (MIT), like the firmware — no per-file headers.
     "CPY001", # missing-copyright-notice
+    # Exception-message style trio: inline f-string messages at the raise
+    # site read better than EM's assign-first ritual in a codebase this size.
+    "EM101", # raw-string-in-exception
+    "EM102", # f-string-in-exception
+    "TRY003", # long messages in raise
+    # The class docstring carries the contract; per-__init__ and per-dunder
+    # docstrings restate it.
+    "D105", # undocumented-magic-method
+    "D107", # undocumented-public-init
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -52,6 +63,8 @@ ignore = [
 # modules (code-std.md §12); tests/ holds the unit/property tests.
 testpaths = ["src", "tests"]
 addopts = ["-ra", "--strict-config", "--strict-markers", "--doctest-modules"]
+# Repo root on sys.path so tests can import the design/ captures.
+pythonpath = ["."]
 
 [tool.ty.environment]
 python-version = "3.13"

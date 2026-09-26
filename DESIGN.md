@@ -571,10 +571,18 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   dumpable and diffable; its printed form is for humans — it does not
   need to round-trip back into DSL source.
 - **Checks run as a validation pass** over the finished IR
-  (capture → check → emit), not at connection time.
+  (capture → check → emit), not at connection time. Structural
+  invariants (unique references, a pin on at most one net) still raise
+  at construction — they are not checks but what makes the IR
+  well-formed.
 - **Plain function-call API, HDL-instantiation flavor.** Named
   connections, no operator overloading, no implicit global circuit.
   Sugar only if the call style proves tedious in use.
+- **References are explicit instance names.** A part's refdes is given
+  at capture (`circuit.part("Rs", ...)`), like an HDL instance name —
+  no auto-assignment scrambling references when a part is inserted
+  (SKiDL's pain), so pcbnew's ref-matched netlist import stays stable
+  across source edits.
 - **KiCad library integration is mandatory.** Symbol/footprint
   references validate against KiCad's actual libraries (provisioned via
   the flake) — without that, pcbnew ingest can't be trusted.
@@ -583,6 +591,20 @@ DSL shape (2026-09-26, from the T7a design interrogation):
 - **Human-review rendering:** a Graphviz dot dump is the minimal first
   view (ugly, but a start); the goal is abstraction-level block views
   in the Verilog-debugger sense — prior-art survey is card T21.
+
+Landed (2026-09-26, card T7a): the DSL core in `src/oparroy/dsl/` —
+`ir.py` (parts/pins/nets/circuit + pretty-print), `check.py`
+(validation pass: connectivity, footprint existence and symbol
+footprint-filter match, power-driver rules), `kicad_emit.py` (the
+s-expression `.net` pcbnew imports; byte-identical emission —
+sorted iteration, content-derived UUID tstamps, no dates or paths),
+`dot.py` (Graphviz dump), `kicadlib.py` + `sexpr.py` (KiCad 10 library
+access, `extends`-aware). Proven by `design/watchdog_chargepump.py`:
+the §4 charge pump re-captured flat against the nix-provisioned KiCad
+libraries, golden netlist in `tests/golden/`, 43 pytest cases green.
+Not yet proven: a real pcbnew netlist *import* (no KiCad application in
+the flake yet — the golden format is pinned, the ingest is exercised
+when the first board enters layout).
 
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one
