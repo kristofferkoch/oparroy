@@ -1,0 +1,234 @@
+* tb_decode — decode margins of the PHY segment RX path (card T5,
+* DESIGN.md §2, docs/phy-analysis-2026-09-26.md §2): WS2812-style
+* duty-coded cells through switch + lumped segment + OPA comparator
+* must decode on the correct side of the cell midpoint with >= 100 ns
+* of high-time margin (the §2 budget is ±160 ns; the analog front end
+* must eat less than that).
+*
+* Bench: 15-cell stream, bits 0,1,0,1,1,0,0,1,1,1,0,0,0,1,0 (runs of
+* both; the last cell only supplies the closing edge for cell 13's
+* period measurement). Cell period 1.25 us, T0H = 395 ns, T1H = 792
+* ns. PWL 0/3.3 V source with 5 ns edges; the bypass input is driven
+* through 50 ohm (upstream TX pin stand-in), the inserted path's own
+* ch32v003_tx_pin model carries its 50 ohm internally.
+*
+* Slice levels: high-time measured at rxout with Schmitt-realistic
+* slicing — rising 1.30 V, falling 1.15 V (TIM2 input, ~150 mV
+* hysteresis band at 3.3 V). The pessimistic VDD/2 slice (1.65/1.65 V)
+* is measured alongside and echoed per run for honesty.
+*
+* Sweeps (alterparam + reset, house style), 24 combos:
+*   cseg in {47p, 220p, 470p, 1n}  — connector + cable + next-node C
+*   voff in {-13m, 0, +13m}        — OPA offset worst cases (DS0
+*                                    §3.3.15 T3-26)
+*   path:  psel=0 bypass (up driven), psel=3.3 inserted (txin driven)
+*
+* Assertions, per cell (14 cells x 24 combos):
+*   a1 '0' cell: high-time < period/2 - 100 ns
+*   a2 '1' cell: high-time > period/2 + 100 ns
+*   a3 every cell: period within 0.9..1.6 us (firmware legal-cell
+*      window, DESIGN.md §2)
+* a1/a2 are checked with sign (wrong-side decode fails even when far
+* from the midpoint); each run echoes its worst signed margin in ns.
+*
+* Results (2026-09-26, ngspice 45): all 24 combos PASS. Worst
+* high-time margin (already net of the 100 ns contract) per
+* (cseg, path), min over voff, Schmitt / VDD/2 slice:
+*   cseg=47p   bypass 78.5/46.9 ns   inserted 78.2/46.9 ns
+*   cseg=220p  bypass 79.0/46.2 ns   inserted 79.1/46.2 ns
+*   cseg=470p  bypass 79.2/44.7 ns   inserted 80.1/46.0 ns
+*   cseg=1n    bypass 82.0/43.6 ns   inserted 78.0/45.2 ns
+* Period observed 1244.7..1252.9 ns across all runs (nominal 1250).
+* Line 10-90% edges scale with cseg as 2.2*57ohm*C: 7.3 / 28 / 59 /
+* 125 ns for 47p..1n. voff moves margins by < 4 ns everywhere.
+* The binding effect is the comparator's 7.7 V/us slew, not cseg: the
+* output ramp does not settle between edges, so delays are
+* pattern-dependent (at 220p, inserted: falling-edge delay 184 ns
+* after a '0' cell vs 229 ns after a '1' cell). At the Schmitt slice
+* the stretch inflates '1'-cell margin and '0' cells bind (~78 ns);
+* at the VDD/2 slice '1' cells bind (~44 ns). Both are far inside the
+* ±160 ns budget of docs/phy-analysis-2026-09-26.md §2.
+
+.include phy-segment.cir
+.param cseg=220p voff=0 psel=0
+
+Vdd vdd 0 3.3
+
+* 15 cells at 1.25 us, first rising edge at 100 ns, 5 ns edges.
+Vst stim 0 PWL(
++ 0n 0
++ 95n 0 100n 3.3 495n 3.3 500n 0
++ 1.345u 0 1.35u 3.3 2.142u 3.3 2.147u 0
++ 2.595u 0 2.6u 3.3 2.995u 3.3 3u 0
++ 3.845u 0 3.85u 3.3 4.642u 3.3 4.647u 0
++ 5.095u 0 5.1u 3.3 5.892u 3.3 5.897u 0
++ 6.345u 0 6.35u 3.3 6.745u 3.3 6.75u 0
++ 7.595u 0 7.6u 3.3 7.995u 3.3 8u 0
++ 8.845u 0 8.85u 3.3 9.642u 3.3 9.647u 0
++ 10.095u 0 10.1u 3.3 10.892u 3.3 10.897u 0
++ 11.345u 0 11.35u 3.3 12.142u 3.3 12.147u 0
++ 12.595u 0 12.6u 3.3 12.995u 3.3 13u 0
++ 13.845u 0 13.85u 3.3 14.245u 3.3 14.25u 0
++ 15.095u 0 15.1u 3.3 15.495u 3.3 15.5u 0
++ 16.345u 0 16.35u 3.3 17.142u 3.3 17.147u 0
++ 17.595u 0 17.6u 3.3 17.995u 3.3 18u 0
++ 20u 0)
+
+Rup stim up 50
+Rtx stim txin 1m
+Bsel sel 0 V={psel}
+
+Xphy up txin sel line rxout vdd 0 phy_segment
++ params: cseg={cseg} voff={voff}
+
+.control
+let gmins = 1e9
+let gminb = 1e9
+foreach cs 47p 220p 470p 1n
+  foreach vo -13m 0 13m
+    foreach ps 0 3.3
+      alterparam cseg = $cs
+      alterparam voff = $vo
+      alterparam psel = $ps
+      reset
+      tran 50n 20u uic
+
+      * Schmitt slice: high-time per cell (rise 1.30 V, fall 1.15 V)
+      meas tran th0  trig v(rxout) val=1.3 rise=1  targ v(rxout) val=1.15 fall=1
+      meas tran th1  trig v(rxout) val=1.3 rise=2  targ v(rxout) val=1.15 fall=2
+      meas tran th2  trig v(rxout) val=1.3 rise=3  targ v(rxout) val=1.15 fall=3
+      meas tran th3  trig v(rxout) val=1.3 rise=4  targ v(rxout) val=1.15 fall=4
+      meas tran th4  trig v(rxout) val=1.3 rise=5  targ v(rxout) val=1.15 fall=5
+      meas tran th5  trig v(rxout) val=1.3 rise=6  targ v(rxout) val=1.15 fall=6
+      meas tran th6  trig v(rxout) val=1.3 rise=7  targ v(rxout) val=1.15 fall=7
+      meas tran th7  trig v(rxout) val=1.3 rise=8  targ v(rxout) val=1.15 fall=8
+      meas tran th8  trig v(rxout) val=1.3 rise=9  targ v(rxout) val=1.15 fall=9
+      meas tran th9  trig v(rxout) val=1.3 rise=10 targ v(rxout) val=1.15 fall=10
+      meas tran th10 trig v(rxout) val=1.3 rise=11 targ v(rxout) val=1.15 fall=11
+      meas tran th11 trig v(rxout) val=1.3 rise=12 targ v(rxout) val=1.15 fall=12
+      meas tran th12 trig v(rxout) val=1.3 rise=13 targ v(rxout) val=1.15 fall=13
+      meas tran th13 trig v(rxout) val=1.3 rise=14 targ v(rxout) val=1.15 fall=14
+
+      * pessimistic VDD/2 slice
+      meas tran tb0  trig v(rxout) val=1.65 rise=1  targ v(rxout) val=1.65 fall=1
+      meas tran tb1  trig v(rxout) val=1.65 rise=2  targ v(rxout) val=1.65 fall=2
+      meas tran tb2  trig v(rxout) val=1.65 rise=3  targ v(rxout) val=1.65 fall=3
+      meas tran tb3  trig v(rxout) val=1.65 rise=4  targ v(rxout) val=1.65 fall=4
+      meas tran tb4  trig v(rxout) val=1.65 rise=5  targ v(rxout) val=1.65 fall=5
+      meas tran tb5  trig v(rxout) val=1.65 rise=6  targ v(rxout) val=1.65 fall=6
+      meas tran tb6  trig v(rxout) val=1.65 rise=7  targ v(rxout) val=1.65 fall=7
+      meas tran tb7  trig v(rxout) val=1.65 rise=8  targ v(rxout) val=1.65 fall=8
+      meas tran tb8  trig v(rxout) val=1.65 rise=9  targ v(rxout) val=1.65 fall=9
+      meas tran tb9  trig v(rxout) val=1.65 rise=10 targ v(rxout) val=1.65 fall=10
+      meas tran tb10 trig v(rxout) val=1.65 rise=11 targ v(rxout) val=1.65 fall=11
+      meas tran tb11 trig v(rxout) val=1.65 rise=12 targ v(rxout) val=1.65 fall=12
+      meas tran tb12 trig v(rxout) val=1.65 rise=13 targ v(rxout) val=1.65 fall=13
+      meas tran tb13 trig v(rxout) val=1.65 rise=14 targ v(rxout) val=1.65 fall=14
+
+      * period per cell (rising edge to rising edge, Schmitt slice)
+      meas tran tp0  trig v(rxout) val=1.3 rise=1  targ v(rxout) val=1.3 rise=2
+      meas tran tp1  trig v(rxout) val=1.3 rise=2  targ v(rxout) val=1.3 rise=3
+      meas tran tp2  trig v(rxout) val=1.3 rise=3  targ v(rxout) val=1.3 rise=4
+      meas tran tp3  trig v(rxout) val=1.3 rise=4  targ v(rxout) val=1.3 rise=5
+      meas tran tp4  trig v(rxout) val=1.3 rise=5  targ v(rxout) val=1.3 rise=6
+      meas tran tp5  trig v(rxout) val=1.3 rise=6  targ v(rxout) val=1.3 rise=7
+      meas tran tp6  trig v(rxout) val=1.3 rise=7  targ v(rxout) val=1.3 rise=8
+      meas tran tp7  trig v(rxout) val=1.3 rise=8  targ v(rxout) val=1.3 rise=9
+      meas tran tp8  trig v(rxout) val=1.3 rise=9  targ v(rxout) val=1.3 rise=10
+      meas tran tp9  trig v(rxout) val=1.3 rise=10 targ v(rxout) val=1.3 rise=11
+      meas tran tp10 trig v(rxout) val=1.3 rise=11 targ v(rxout) val=1.3 rise=12
+      meas tran tp11 trig v(rxout) val=1.3 rise=12 targ v(rxout) val=1.3 rise=13
+      meas tran tp12 trig v(rxout) val=1.3 rise=13 targ v(rxout) val=1.3 rise=14
+      meas tran tp13 trig v(rxout) val=1.3 rise=14 targ v(rxout) val=1.3 rise=15
+
+      * line edge rates, 10-90% (second edge: past any startup)
+      meas tran trise trig v(line) val=0.33 rise=2 targ v(line) val=2.97 rise=2
+      meas tran tfall trig v(line) val=2.97 fall=2 targ v(line) val=0.33 fall=2
+
+      * worst signed margin vs the 100 ns contract (0 cells: tp/2-th;
+      * 1 cells: th-tp/2), Schmitt slice
+      let rmin = (tp0/2 - th0) - 100n
+      let rmin = min(rmin, (th1 - tp1/2) - 100n)
+      let rmin = min(rmin, (tp2/2 - th2) - 100n)
+      let rmin = min(rmin, (th3 - tp3/2) - 100n)
+      let rmin = min(rmin, (th4 - tp4/2) - 100n)
+      let rmin = min(rmin, (tp5/2 - th5) - 100n)
+      let rmin = min(rmin, (tp6/2 - th6) - 100n)
+      let rmin = min(rmin, (th7 - tp7/2) - 100n)
+      let rmin = min(rmin, (th8 - tp8/2) - 100n)
+      let rmin = min(rmin, (th9 - tp9/2) - 100n)
+      let rmin = min(rmin, (tp10/2 - th10) - 100n)
+      let rmin = min(rmin, (tp11/2 - th11) - 100n)
+      let rmin = min(rmin, (tp12/2 - th12) - 100n)
+      let rmin = min(rmin, (th13 - tp13/2) - 100n)
+
+      * same at the pessimistic VDD/2 slice
+      let rmb = (tp0/2 - tb0) - 100n
+      let rmb = min(rmb, (tb1 - tp1/2) - 100n)
+      let rmb = min(rmb, (tp2/2 - tb2) - 100n)
+      let rmb = min(rmb, (tb3 - tp3/2) - 100n)
+      let rmb = min(rmb, (tb4 - tp4/2) - 100n)
+      let rmb = min(rmb, (tp5/2 - tb5) - 100n)
+      let rmb = min(rmb, (tp6/2 - tb6) - 100n)
+      let rmb = min(rmb, (tb7 - tp7/2) - 100n)
+      let rmb = min(rmb, (tb8 - tp8/2) - 100n)
+      let rmb = min(rmb, (tb9 - tp9/2) - 100n)
+      let rmb = min(rmb, (tp10/2 - tb10) - 100n)
+      let rmb = min(rmb, (tp11/2 - tb11) - 100n)
+      let rmb = min(rmb, (tp12/2 - tb12) - 100n)
+      let rmb = min(rmb, (tb13 - tp13/2) - 100n)
+
+      let pmin = tp0
+      let pmin = min(pmin, tp1)
+      let pmin = min(pmin, tp2)
+      let pmin = min(pmin, tp3)
+      let pmin = min(pmin, tp4)
+      let pmin = min(pmin, tp5)
+      let pmin = min(pmin, tp6)
+      let pmin = min(pmin, tp7)
+      let pmin = min(pmin, tp8)
+      let pmin = min(pmin, tp9)
+      let pmin = min(pmin, tp10)
+      let pmin = min(pmin, tp11)
+      let pmin = min(pmin, tp12)
+      let pmin = min(pmin, tp13)
+      let pmax = tp0
+      let pmax = max(pmax, tp1)
+      let pmax = max(pmax, tp2)
+      let pmax = max(pmax, tp3)
+      let pmax = max(pmax, tp4)
+      let pmax = max(pmax, tp5)
+      let pmax = max(pmax, tp6)
+      let pmax = max(pmax, tp7)
+      let pmax = max(pmax, tp8)
+      let pmax = max(pmax, tp9)
+      let pmax = max(pmax, tp10)
+      let pmax = max(pmax, tp11)
+      let pmax = max(pmax, tp12)
+      let pmax = max(pmax, tp13)
+
+      let gmins = min(gmins, rmin)
+      let gminb = min(gminb, rmb)
+
+      let rns = rmin*1e9
+      let bns = rmb*1e9
+      let pn0 = pmin*1e9
+      let pn1 = pmax*1e9
+      let ecr = trise*1e9
+      let ecf = tfall*1e9
+
+      if (rmin > 0) & (pmin > 0.9e-6) & (pmax < 1.6e-6)
+        echo "PASS cseg=$cs voff=$vo psel=$ps margin_ns=$&rns margin_vdd2_ns=$&bns pmin_ns=$&pn0 pmax_ns=$&pn1 trise_ns=$&ecr tfall_ns=$&ecf"
+      else
+        echo "FAIL cseg=$cs voff=$vo psel=$ps margin_ns=$&rns pmin_ns=$&pn0 pmax_ns=$&pn1"
+        quit 1
+      end
+    end
+  end
+end
+let gns = gmins*1e9
+let gbs = gminb*1e9
+echo "PASS all 24 combos; worst schmitt margin $&gns ns; worst vdd2 margin $&gbs ns"
+quit 0
+.endc
+.end

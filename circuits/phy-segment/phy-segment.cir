@@ -1,0 +1,47 @@
+* phy-segment — one ring segment, node k to node k+1 (T5, DESIGN.md
+* §2, docs/phy-analysis-2026-09-26.md §2/§5): node TX pin ->
+* 74LVC1G3157 bypass/insert switch -> lumped segment -> next node's
+* OPA comparator RX. 3.3 V single-ended, 800 kbit/s WS2812-style
+* duty-coded cells: 1.25 us cell, T0H=395 ns, T1H=792 ns (48 MHz
+* timer quantization).
+*
+* Pins: up (upstream line — the bypass source), txin (node TX logic
+* in), sel (switch select: high = node inserted / B2, low = bypass /
+* B1), line (segment far end / next node's RX tap — the probe
+* point), rxout (comparator out, standing in for the internal
+* TIM2_CH1 route), vdd, gnd.
+*
+* params: cseg=220p — lumped segment capacitance to gnd at the RX
+* end. lseg=1n — series inductance for ringing studies; ~0 by
+* default (57 ohm source into 1n/220p is heavily overdamped).
+* voff=0 — comparator input offset, benches sweep ±13 m (DS0 §3.3.15
+* T3-26). vth=1.65, vcc=3.3 — passed through to the switch and the
+* device models.
+*
+* RX front-end: VDD/2 from two 10k into the OPA negative input (5k
+* Thevenin — stiff against the OPA's unmodeled input bias), line
+* into the positive input; the comparator output carries the 4 kohm /
+* 50 pF load of the datasheet wake-up test condition (T3-26).
+*
+* Include note: ngspice resolves .include against the CWD and
+* sim-run runs each bench from its own directory, so the ../lib/
+* paths below resolve for benches in this directory. Benches include
+* this file only — the lib models arrive through here.
+
+.include ../lib/sn74lvc1g3157.spi
+.include ../lib/ch32v003.spi
+
+.subckt phy_segment up txin sel line rxout vdd gnd
++ params: cseg=220p lseg=1n voff=0 vth=1.65 vcc=3.3
+
+Xtx txin tx vdd gnd ch32v003_tx_pin params: vcc={vcc}
+Xsw swa up tx sel vdd gnd sn74lvc1g3157 params: vth={vth} vcc={vcc}
+Lseg swa line {lseg}
+Cseg line gnd {cseg}
+
+Rth1 vdd th 10k
+Rth2 th gnd 10k
+Xcmp line th rxout vdd gnd ch32v003_opa_cmp params: voff={voff} vcc={vcc}
+Rld rxout gnd 4k
+Cld rxout gnd 50p
+.ends phy_segment

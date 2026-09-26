@@ -61,8 +61,10 @@ Design drivers, in priority order:
 Decided (2026-09-26, card T3, against the CH32V003's peripherals; full
 analysis:
 [docs/phy-analysis-2026-09-26.md](docs/phy-analysis-2026-09-26.md)).
-Final bit rate and break length to be confirmed by T5 simulation and
-bench measurement.
+800 kbit/s confirmed by T5 simulation (2026-09-26 — measured block
+below); bench confirmation lands with the test board. Break length is a
+firmware/timer decision: the analog side owes only fast, chatter-free
+settling to idle, which tb_fault shows.
 
 - **Line coding: WS2812-style duty-coded PWM cells with ratio-metric
   decode.** Fixed bit cell, high-then-low; `0` = short high pulse
@@ -85,8 +87,14 @@ bench measurement.
   idle low. RX threshold = VDD/2 divider on an OPA negative input. The
   OPA has no documented hysteresis: glitch rejection comes from the
   TIM2 input digital filter (ICxF) plus ratio-decode margins, not
-  analog feedback; T5's simulation either confirms this or adds one
-  feedback resistor (OPO = PD4 is free for it).
+  analog feedback. T5 simulation confirmed this (2026-09-26,
+  `circuits/phy-segment/tb_noise.cir`): zero spurious rxout edges
+  under ringing (lseg ≤ 1 µH × cseg ≤ 470 pF) and under ±250 mV-class
+  capacitive crosstalk at ±13 mV comparator offset; worst high-time
+  error ~1.2 ns against a ≥ 100 ns decode-margin budget. ICxF fCK_INT
+  N=8 is free insurance (its ~167 ns delay is edge-symmetric and
+  cancels in the ratio). The feedback-resistor fallback (OPO = PD4)
+  stays unpopulated.
 - **RX path:** OPA comparator routed *internally* to TIM2 CH1 — no
   GPIO spent on the comparator output. TIM2 PWM-input mode (CH1+CH2
   pair, hardware counter reset) captures per-bit period and high-time;
@@ -173,7 +181,30 @@ the transition rate, no benefit for comparator RX); USART-async (two
 HSI ends bust the async sampling budget — kept as fallback only if
 bench testing kills the comparator-RX path).
 
-Open: analog hysteresis need (T5 sim), drive strength vs cable (T15),
+Measured (ngspice, 2026-09-26, card T5 — benches in
+`circuits/phy-segment/`, models in `circuits/lib/ch32v003.spi`):
+
+- **Decode margins (tb_decode)** — 24 combos (segment capacitance
+  47 pF–1 nF × comparator offset ±13 mV × bypass/inserted switch
+  path): every cell lands ≥ 178 ns from the decode midpoint at the
+  TIM2 Schmitt slice (≥ 144 ns at the pessimistic VDD/2 slice), period
+  1245–1253 ns everywhere — a healthy segment never trips the
+  0.9–1.6 µs illegal-cell detector. Margins are flat vs capacitance
+  (±4 ns across 47 pF→1 nF) and vs offset (< 4 ns): the binding effect
+  is the comparator's 7.7 V/µs slew (~230 ns edge-symmetric delay,
+  ~50 ns pattern-dependent), not drive strength vs segment C.
+- **No analog hysteresis (tb_noise)** — see the signaling bullet
+  above; zero spurious edges under ringing and 250 mV-class crosstalk.
+- **Connector faults (tb_fault)** — short to GND/VCC parks the line
+  static and chatter-free (idle-high is distinguishable from a
+  dead-quiet segment). An open segment requires the MCU's internal
+  weak pull-down (35–55 kΩ, DS0 §3.3.9 T3-16) enabled on the OPA
+  inputs: the severed line then parks idle-low, comparator static
+  ≤ 33 µs even at 1 nF (~12× inside the 2-frame flip budget, §3), at
+  zero BOM cost. Without it the line floats to a leakage-decided state
+  — static in sim, but a chatter hazard on real silicon.
+
+Open: drive strength vs cable (T15),
 exact frame format (T11).
 
 ## 3. Ring topology and bypass
@@ -202,7 +233,10 @@ Mechanism:
   comparator. No edges for > 2 frame times ⇒ flip source. Firmware is
   safe here because the node at the receiving end of a dead segment is
   alive by definition — a dead MCU is §4's case. Flap/hysteresis policy
-  for intermittent opens is T13 scope.
+  for intermittent opens is T13 scope. **The internal weak pull-down
+  stays enabled on both OPP inputs** (2026-09-26, T5 tb_fault, §2
+  measured block): it parks a severed segment idle-low and
+  chatter-free, which the flip policy depends on.
 
 Per-node cost: no parts; +1 wire +1 connector contact per segment; +2
 GPIO per node (PD7 as RX_B — already an OPP input — plus one TX_B pin).

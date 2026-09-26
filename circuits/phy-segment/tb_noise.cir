@@ -1,0 +1,284 @@
+* tb_noise — analog-hysteresis verdict for the PHY RX (card T5,
+* DESIGN.md §2 open item: the OPA has no documented hysteresis; glitch
+* rejection is meant to come from the TIM2 ICxF digital filter plus
+* ratio-decode margins, not analog feedback. This bench either
+* confirms that or quantifies the failure that forces one feedback
+* resistor, OPO=PD4 -> OPPx).
+*
+* Stimulus (both phases): a mixed 0/1 WS2812 cell stream into txin,
+* sel high (node inserted, switch on B2), upstream idle low. 8 cells,
+* pattern 1 0 1 0 0 1 1 0 (alternating + repeated bits), T0H=395 ns /
+* T1H=792 ns / 1.25 us cell (48 MHz timer quantization, phy-analysis
+* §2). rxout is sliced at Schmitt-realistic levels — rise 1.30 V,
+* fall 1.15 V (TIM2 input buffer, not VDD/2) — with a 2-state machine,
+* so sub-slice wiggle can never fabricate an edge.
+*
+* Phase 1 (runs 0-5) — ringing: lseg swept 100n/330n/1u (connector +
+*   wiring discontinuity) x cseg 220p/470p, no noise, voff=0. Counts
+*   spurious rxout pulses per stream (pulses < 250 ns wide can't be
+*   cells — T0H=395 ns nominal) and measures the widest one.
+* Phase 2 (runs 6-11) — noise at threshold: lseg=1n (overdamped
+*   baseline), cseg 470p and 220p, voff swept +/-13 m (DS0 §3.3.15
+*   T3-26 max offset), noise on. Measures spurious count, widest
+*   spurious pulse, decode midpoint margin, and high-time error vs the
+*   same-cseg noise-free baseline (runs 6 and 9).
+*
+* Noise model: capacitive crosstalk from two adjacent digital
+* aggressors — a 20 kHz buzzer-class PWM (50% duty) and a ~1.1 MHz
+* comm/PWM line, 887 ns period so its phase walks through the 1.25 us
+* cells — 3.3 V swing, 2 ns edges, coupled through 12p + 6p. 18 pF of
+* coupling against cseg=220p..470p injects 3.3*18/(cseg+18) = 250 mV /
+* 116 mV worst-case line steps: the "tens of mV to ~+/-200 mV"
+* bounded-coupling case for node-to-node segments. Both aggressors
+* scale with the noisef param; a guard measurement (agpp) proves the
+* noise is live in noisy runs and dead in baselines, so a broken
+* stimulus can never slip through as a clean PASS.
+*
+* Assertions (every run; always computable — a dead circuit fails
+* cells!=8, never passes empty):
+*   cells = 8            — exactly one full-width pulse per cell
+*   maxspur < 160 ns     — widest spurious pulse absorbable by ICxF
+*                          fCK_INT N=8 (~167 ns rejection, RM §11.4.7)
+*   minmarg >= 100 ns    — every cell's high-time stays >= 100 ns from
+*                          the 625 ns decode midpoint
+*   agpp guard           — noise actually on (noisy) / off (baseline)
+* Phase-2 runs also echo maxerr (worst |high-time - baseline|) so
+* firmware can see the real duty distortion, not just the margin.
+
+.include phy-segment.cir
+
+.param cseg=470p lseg=1n voff=0 noisef=0
+
+Vdd vdd 0 3.3
+Vup up 0 0
+Vsel sel 0 3.3
+
+* mixed cell stream, 2 ns stimulus edges (the TX pin model adds its
+* own 5 ns shaping on top)
+Vtx txin 0 PWL(
++ 0 0
++ 498n 0 500n 3.3 1290n 3.3 1292n 0
++ 1748n 0 1750n 3.3 2143n 3.3 2145n 0
++ 2998n 0 3000n 3.3 3790n 3.3 3792n 0
++ 4248n 0 4250n 3.3 4643n 3.3 4645n 0
++ 5498n 0 5500n 3.3 5893n 3.3 5895n 0
++ 6748n 0 6750n 3.3 7540n 3.3 7542n 0
++ 7998n 0 8000n 3.3 8790n 3.3 8792n 0
++ 9248n 0 9250n 3.3 9643n 3.3 9645n 0
++ )
+
+Xseg up txin sel line rxout vdd 0 phy_segment
++ params: cseg={cseg} lseg={lseg} voff={voff}
+
+* crosstalk aggressors, capacitively coupled into the line node
+Vag1 ag1 0 PULSE(0 {3.3*noisef} 0 2n 2n 24.9u 50u)
+Vag2 ag2 0 PULSE(0 {3.3*noisef} 137n 2n 2n 371n 887n)
+Cag1 ag1 line 12p
+Cag2 ag2 line 6p
+
+.control
+* run table: lseg, cseg, voff, noisef per run
+let lsg = vector(12)
+let csg = vector(12)
+let vof = vector(12)
+let noi = vector(12)
+* phase 1: ringing sweep (vector(N) is a ramp, not zeros: assign ALL)
+let vof[0]=0
+let noi[0]=0
+let vof[1]=0
+let noi[1]=0
+let vof[2]=0
+let noi[2]=0
+let vof[3]=0
+let noi[3]=0
+let vof[4]=0
+let noi[4]=0
+let vof[5]=0
+let noi[5]=0
+let lsg[0]=100n
+let csg[0]=220p
+let lsg[1]=100n
+let csg[1]=470p
+let lsg[2]=330n
+let csg[2]=220p
+let lsg[3]=330n
+let csg[3]=470p
+let lsg[4]=1u
+let csg[4]=220p
+let lsg[5]=1u
+let csg[5]=470p
+* phase 2: noise at threshold (6 = 470p baseline, 9 = 220p baseline)
+let vof[6]=0
+let noi[6]=0
+let lsg[6]=1n
+let csg[6]=470p
+let lsg[7]=1n
+let csg[7]=470p
+let vof[7]=13m
+let noi[7]=1
+let lsg[8]=1n
+let csg[8]=470p
+let vof[8]=-13m
+let noi[8]=1
+let vof[9]=0
+let noi[9]=0
+let lsg[9]=1n
+let csg[9]=220p
+let lsg[10]=1n
+let csg[10]=220p
+let vof[10]=13m
+let noi[10]=1
+let lsg[11]=1n
+let csg[11]=220p
+let vof[11]=-13m
+let noi[11]=1
+
+* nominal high-times of the pattern (for baseline distortion echo)
+let htn = vector(8)
+let htn[0]=792n
+let htn[1]=395n
+let htn[2]=792n
+let htn[3]=395n
+let htn[4]=395n
+let htn[5]=792n
+let htn[6]=792n
+let htn[7]=395n
+
+let ht = vector(8)
+let htbA = vector(8)
+let htbB = vector(8)
+let fails = 0
+let k = 0
+while k < 12
+  let a = lsg[k]
+  alterparam lseg = $&a
+  let a = csg[k]
+  alterparam cseg = $&a
+  let a = vof[k]
+  alterparam voff = $&a
+  let a = noi[k]
+  alterparam noisef = $&a
+  reset
+  tran 500p 12u uic
+  meas tran agpp pp v(ag1)
+
+  * slice rxout through a 1.30/1.15 V Schmitt state machine; classify
+  * pulses: >= 250 ns wide = cell, narrower = spurious
+  let v = v(rxout)
+  let tt = time
+  let n = length(v)
+  let state = 0
+  let cellcnt = 0
+  let spurcnt = 0
+  let cur_rise = 0
+  let maxspur = 0
+  let minmarg = 1
+  let i = 1
+  while i < n
+    if (state = 0) & (v[i] > 1.3)
+      let state = 1
+      let cur_rise = tt[i]
+    end
+    if (state = 1) & (v[i] < 1.15)
+      let state = 0
+      let w = tt[i] - cur_rise
+      if w ge 250n
+        if cellcnt < 8
+          let ht[cellcnt] = w
+        end
+        let cellcnt = cellcnt + 1
+        let mrg = abs(w - 625n)
+        if mrg < minmarg
+          let minmarg = mrg
+        end
+      else
+        let spurcnt = spurcnt + 1
+        if w > maxspur
+          let maxspur = w
+        end
+      end
+    end
+    let i = i + 1
+  end
+
+  * baselines and high-time error vs baseline
+  let maxerr = 0
+  if k = 6
+    let j = 0
+    while j < 8
+      let htbA[j] = ht[j]
+      let j = j + 1
+    end
+  end
+  if k = 9
+    let j = 0
+    while j < 8
+      let htbB[j] = ht[j]
+      let j = j + 1
+    end
+  end
+  if (k = 7) | (k = 8)
+    let j = 0
+    while j < 8
+      let d = abs(ht[j] - htbA[j])
+      if d > maxerr
+        let maxerr = d
+      end
+      let j = j + 1
+    end
+  end
+  if (k = 10) | (k = 11)
+    let j = 0
+    while j < 8
+      let d = abs(ht[j] - htbB[j])
+      if d > maxerr
+        let maxerr = d
+      end
+      let j = j + 1
+    end
+  end
+
+  let nz = noi[k]
+  let ok = 1
+  if cellcnt ne 8
+    let ok = 0
+  end
+  if maxspur ge 160n
+    let ok = 0
+  end
+  if minmarg lt 100n
+    let ok = 0
+  end
+  if nz > 0.5
+    if agpp < 1
+      let ok = 0
+    end
+  else
+    if agpp > 0.1
+      let ok = 0
+    end
+  end
+
+  let lsn = lsg[k]*1e9
+  let csp = csg[k]*1e12
+  let vfm = vof[k]*1e3
+  let spn = maxspur*1e9
+  let mmn = minmarg*1e9
+  let men = maxerr*1e9
+  if ok = 1
+    echo "PASS run=$&k lseg_nH=$&lsn cseg_pF=$&csp voff_mV=$&vfm noise=$&nz cells=$&cellcnt spurs=$&spurcnt maxspur_ns=$&spn minmarg_ns=$&mmn maxerr_ns=$&men"
+  else
+    echo "FAIL run=$&k lseg_nH=$&lsn cseg_pF=$&csp voff_mV=$&vfm noise=$&nz cells=$&cellcnt spurs=$&spurcnt maxspur_ns=$&spn minmarg_ns=$&mmn maxerr_ns=$&men"
+    let fails = fails + 1
+  end
+  let k = k + 1
+end
+if fails = 0
+  echo "PASS all"
+  quit 0
+else
+  echo "FAIL runs=$&fails"
+  quit 1
+end
+.endc
+.end

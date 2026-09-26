@@ -33,7 +33,6 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T5[T5 ngspice PHY sim] --> T13[T13 intermittent-fault strategy]
     T19 --> T10
     T6[T6 python scaffold] --> T7[T7 DSL v0: IR + KiCad emitter]
     T7 --> T8[T8 DSL constraint checks]
@@ -41,7 +40,6 @@ graph TD
     T7 --> T19[T19 layout property checker]
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
-    T5 --> T15[T15 cable reach limits]
     T16e[T16e coverage on release] --> T11[T11 node firmware v0]
     T18[T18 freestanding foundation library] --> T11
 ```
@@ -50,11 +48,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T5 — ngspice simulation of the PHY.** Line drivers, comparator RX,
-  bypass switches, connector-fault cases. Now concrete from T3
-  (DESIGN.md §2): validate the no-analog-hysteresis baseline under
-  noise/ringing, threshold tolerance, drive vs segment capacitance.
-  **Blocked by:** — · **Unblocks:** T13, T15
 - **T6 — Python package scaffold.** uv project, Python 3.13, ruff in
   strict rule selection, ty, pytest, `src/oparroy/` layout. No DSL code
   yet — just the harness it will grow in. *Shape: tooling.* **Blocked
@@ -72,6 +65,21 @@ ______________________________________________________________________
   (§8): branch coverage of the freestanding *release* configuration —
   tests exercise what actually ships — wired as a script target in the
   flake shell. **Blocked by:** — · **Unblocks:** T11
+- **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
+  re-route vs hardware auto-bypass vs both (DESIGN.md §3). T5's
+  detection hooks: supervisor frame-echo comparison, illegal-cell
+  detection, and the pull-down-parked idle-low segment (§2 measured
+  block). **Blocked by:** — · **Unblocks:** —
+- **T15 — Characterize cable reach.** *Shape: research.* Maximum
+  segment length unamplified, and with an amplifier/re-driver in the
+  segment (DESIGN.md §9). ngspice over cable models first (RLGC of a
+  candidate cable, capacitive load per node) — build on
+  `circuits/phy-segment/` (swap the lumped segment for the RLGC line;
+  T5's lumped-C baseline is benign: margins flat to 1 nF, but keep
+  far-end edge rates within what tb_noise covered or rerun it) — then
+  long-cable measurement on the test board. Output: numbers +
+  amplifier guidance in DESIGN.md §2. **Blocked by:** — ·
+  **Unblocks:** —
 
 ## Backlog
 
@@ -131,12 +139,3 @@ ______________________________________________________________________
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
   **Unblocks:** —
-- **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
-  re-route vs hardware auto-bypass vs both (DESIGN.md §3). **Blocked
-  by:** T5 · **Unblocks:** —
-- **T15 — Characterize cable reach.** *Shape: research.* Maximum
-  segment length unamplified, and with an amplifier/re-driver in the
-  segment (DESIGN.md §9). ngspice over cable models first (RLGC of a
-  candidate cable, capacitive load per node), then long-cable
-  measurement on the test board. Output: numbers + amplifier guidance
-  in DESIGN.md §2. **Blocked by:** T5 · **Unblocks:** —

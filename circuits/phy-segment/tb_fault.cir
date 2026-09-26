@@ -1,0 +1,244 @@
+* tb_fault — connector-fault behavior at the PHY comparator RX (T5,
+* DESIGN.md §3): on each faulted-segment case rxout must reach a
+* static, chatter-free state and hold it, else the chatter spams timer
+* captures and defeats the "no edges for > 2 frame times => flip RX
+* source" policy. A healthy 800 kbit/s preamble (1.25 us cells,
+* T0H=395n/T1H=792n) runs first on every variant so the contrast
+* live -> faulted is visible in the waveform.
+*
+* Fault is applied at tf = 6.5 us, mid-way through a final high pulse,
+* so the line starts the fault at 3.3 V (worst case for decay). The
+* post-settle observation window is [tf+100u, tf+300u] = 200 us.
+*
+* Fault modeling (params switched via alterparam):
+*   fault=1 upstream open: the upstream source resistor (Brs) steps
+*     50 -> 1e12 ohm at tf. The switch (incl. its 1 G off-leak to the
+*     TX pin) and cseg stay attached to line — only the drive is
+*     severed. What remains discharging cseg is the switch roff plus
+*     ngspice gmin (1e-12 S): unphysical determinism, since the real
+*     +-1 uA class pin leakage is unmodeled (ch32v003.spi header), so
+*     case 1a is report-only.
+*   fault=2 segment short to GND: 1 mS conductance line->gnd from tf
+*     (Bfg); upstream keeps driving into the short.
+*   fault=3 segment short to VCC: 1 mS conductance line->vdd from tf
+*     (Bfv); upstream keeps driving.
+*   pull=1: 45 kohm pull-down on line (CH32V003 internal weak
+*     pull-down, mid of 35..55 k, DS0 §3.3.9 T3-16), enabled from t=0
+*     as firmware would; 45k into the driven line costs ~73 uA and
+*     shifts levels <0.2%, negligible in the preamble.
+*
+* Assertions (PASS/FAIL per variant; quit 1 on first failure):
+*   all cases   preamble alive: >= 3 rxout rises before tf (else the
+*               bench itself is broken)
+*   1a open, no pull-down: report-only — echo where the floating line
+*               drifts, rxout state, edge counts. No assertion on the
+*               outcome (gmin decides it, real silicon may differ).
+*   1b open, 45k pull-down: rxout falls below threshold within 100 us
+*               of tf (tset), line < 0.5 V at tf+100u, then zero
+*               crossings and pp < 0.2 V over the 200 us window.
+*   2  short to GND: one rxout fall within 20 us of tf, then static
+*               low: zero crossings, avg < 0.5, pp < 0.2 in window.
+*   3  short to VCC: no edge at or after tf at all — the line is
+*               already high from the held final preamble pulse and
+*               the short freezes it there (the idle-high anomaly is
+*               visible against the idle-low convention earlier in the
+*               preamble, so firmware can tell it from a dead-but-quiet
+*               segment): rxout avg > 2.5 V across tf, zero crossings
+*               after tf, min > 2.5 in window.
+*
+* voff coverage: swept +-13 m (T3-26 max) for 1b where the line
+* decays through the threshold; held at +13 m elsewhere — in 1a/2/3
+* the line sits at a rail, far from threshold, so offset is
+* irrelevant. cseg swept 220p/1n everywhere.
+*
+* Log noise: "measure ... out of interval" errors are expected — they
+* are the zero-crossing probes coming back empty (no edge to find),
+* which the sentinel lets below turn into edge counts of 0.
+
+.include phy-segment.cir
+
+.param fault=1 pull=0 cseg=220p voff=13m
+
+Vdd vdd 0 3.3
+
+* upstream WS2812-style cells '0','1','1','0', idle low, then a final
+* high held into the fault; the 6.49/6.51 us points force solver
+* breakpoints around tf = 6.5 us
+Vup upi 0 PWL(
++ 0.000u 0   0.100u 0    0.105u 3.3  0.500u 3.3  0.505u 0
++ 1.250u 0   1.255u 3.3  2.047u 3.3  2.052u 0
++ 2.500u 0   2.505u 3.3  3.297u 3.3  3.302u 0
++ 3.750u 0   3.755u 3.3  4.150u 3.3  4.155u 0
++ 6.000u 0   6.005u 3.3  6.490u 3.3  6.510u 3.3
++ )
+
+* upstream source resistor: 50 ohm while connected, 1e12 (open) after
+* tf in the fault=1 case
+Brs upi up I={(v(upi)-v(up)) / (time < 6.5u ? 50 : (fault==1 ? 1e12 : 50))}
+
+* node TX idles low, bypass selected (sel < vth: B1 passes upstream)
+Vtx tx 0 0
+Vsel sel 0 0
+
+Xseg up tx sel line rxout vdd 0 phy_segment params: cseg={cseg} voff={voff}
+
+* firmware-enabled internal weak pull-down (case 1b)
+Bpd line 0 I={v(line) / (pull==1 ? 45k : 1e12)}
+
+* fault conductances, open before tf
+Bfg line 0 I={time < 6.5u ? 0 : (fault==2 ? v(line)*1k : 0)}
+Bfv line 0 I={time < 6.5u ? 0 : (fault==3 ? (v(line)-v(vdd))*1k : 0)}
+
+.control
+* ---------- case 1a: upstream open, no pull-down (report-only) ----------
+alterparam fault=1
+alterparam pull=0
+alterparam voff=13m
+foreach fc 220p 1n
+  alterparam cseg=$fc
+  reset
+  tran 5n 306.5u uic
+  meas tran pre3 when v(rxout)=1.65 rise=3
+  let spre = -1
+  let spre = $&pre3
+  if spre < 0
+    echo "FAIL 1a cseg=$fc: preamble dead, bench broken"
+    quit 1
+  end
+  meas tran pr1 when v(rxout)=1.65 rise=1 td=6.5u
+  meas tran pr2 when v(rxout)=1.65 rise=2 td=6.5u
+  meas tran pf1 when v(rxout)=1.65 fall=1 td=6.5u
+  meas tran pf2 when v(rxout)=1.65 fall=2 td=6.5u
+  let sr1 = -1
+  let sr2 = -1
+  let sf1 = -1
+  let sf2 = -1
+  let sr1 = $&pr1
+  let sr2 = $&pr2
+  let sf1 = $&pf1
+  let sf2 = $&pf2
+  let nrise = (sr1 >= 0) + (sr2 >= 0)
+  let nfall = (sf1 >= 0) + (sf2 >= 0)
+  meas tran wavg avg v(rxout) from=106.5u to=306.5u
+  meas tran wpp  pp  v(rxout) from=106.5u to=306.5u
+  meas tran wlin avg v(line)  from=106.5u to=306.5u
+  echo "INFO 1a cseg=$fc: line_late=$&wlin rxout_avg=$&wavg rxout_pp=$&wpp edges_postfault_rise=$&nrise fall=$&nfall"
+end
+
+* ---------- case 1b: upstream open, 45k pull-down ----------
+alterparam fault=1
+alterparam pull=1
+foreach fv -13m 13m
+  alterparam voff=$fv
+  foreach fc 220p 1n
+    alterparam cseg=$fc
+    reset
+    tran 5n 306.5u uic
+    meas tran pre3 when v(rxout)=1.65 rise=3
+    let spre = -1
+    let spre = $&pre3
+    if spre < 0
+      echo "FAIL 1b cseg=$fc voff=$fv: preamble dead, bench broken"
+      quit 1
+    end
+    meas tran tset  when v(rxout)=1.65 fall=LAST
+    meas tran tline when v(line)=0.33  fall=LAST
+    let sset = -1
+    let sline = -1
+    let sset = $&tset
+    let sline = $&tline
+    meas tran lr1 when v(rxout)=1.65 rise=1 td=106.5u
+    meas tran lf1 when v(rxout)=1.65 fall=1 td=106.5u
+    let slr = -1
+    let slf = -1
+    let slr = $&lr1
+    let slf = $&lf1
+    let nlate = (slr >= 0) + (slf >= 0)
+    meas tran wavg avg v(rxout) from=106.5u to=306.5u
+    meas tran wpp  pp  v(rxout) from=106.5u to=306.5u
+    meas tran vlat find v(line) at=106.5u
+    if (sset >= 6.5u) & (sset < 106.5u) & (nlate < 1) & (wavg < 0.5) & (wpp < 0.2) & (vlat < 0.5)
+      echo "PASS 1b cseg=$fc voff=$fv: rxout_static_low_at=$&tset line_10pct_at=$&tline late_edges=$&nlate"
+    else
+      echo "FAIL 1b cseg=$fc voff=$fv: sset=$&sset sline=$&sline nlate=$&nlate wavg=$&wavg wpp=$&wpp vlat=$&vlat"
+      quit 1
+    end
+  end
+end
+
+* ---------- case 2: segment short to GND ----------
+alterparam fault=2
+alterparam voff=13m
+foreach fc 220p 1n
+  alterparam cseg=$fc
+  reset
+  tran 5n 306.5u uic
+  meas tran pre3 when v(rxout)=1.65 rise=3
+  let spre = -1
+  let spre = $&pre3
+  if spre < 0
+    echo "FAIL 2 cseg=$fc: preamble dead, bench broken"
+    quit 1
+  end
+  meas tran ff when v(rxout)=1.65 fall=1 td=6.5u
+  let sff = -1
+  let sff = $&ff
+  meas tran lr1 when v(rxout)=1.65 rise=1 td=26.5u
+  meas tran lf1 when v(rxout)=1.65 fall=1 td=26.5u
+  let slr = -1
+  let slf = -1
+  let slr = $&lr1
+  let slf = $&lf1
+  let nlate = (slr >= 0) + (slf >= 0)
+  meas tran wavg avg v(rxout) from=26.5u to=306.5u
+  meas tran wpp  pp  v(rxout) from=26.5u to=306.5u
+  meas tran wlin avg v(line)  from=26.5u to=306.5u
+  if (sff >= 6.5u) & (sff < 26.5u) & (nlate < 1) & (wavg < 0.5) & (wpp < 0.2) & (wlin < 0.01)
+    echo "PASS 2 cseg=$fc: rxout_fell_at=$&ff line_late=$&wlin late_edges=$&nlate"
+  else
+    echo "FAIL 2 cseg=$fc: sff=$&sff nlate=$&nlate wavg=$&wavg wpp=$&wpp wlin=$&wlin"
+    quit 1
+  end
+end
+
+* ---------- case 3: segment short to VCC ----------
+alterparam fault=3
+alterparam voff=13m
+foreach fc 220p 1n
+  alterparam cseg=$fc
+  reset
+  tran 5n 306.5u uic
+  meas tran pre3 when v(rxout)=1.65 rise=3
+  let spre = -1
+  let spre = $&pre3
+  if spre < 0
+    echo "FAIL 3 cseg=$fc: preamble dead, bench broken"
+    quit 1
+  end
+  * the fault causes no edge (line is already high from the held final
+  * preamble pulse; the short freezes it there) — assert it stayed high
+  * across tf and no edge ever occurs after tf
+  meas tran fx when v(rxout)=1.65 fall=1 td=6.5u
+  let sfx = -1
+  let sfx = $&fx
+  meas tran wpre avg v(rxout) from=6.5u to=26.5u
+  meas tran lr1 when v(rxout)=1.65 rise=1 td=26.5u
+  meas tran lf1 when v(rxout)=1.65 fall=1 td=26.5u
+  let slr = -1
+  let slf = -1
+  let slr = $&lr1
+  let slf = $&lf1
+  let nlate = (slr >= 0) + (slf >= 0)
+  meas tran wmin min v(rxout) from=26.5u to=306.5u
+  meas tran wpp  pp  v(rxout) from=26.5u to=306.5u
+  meas tran wlin avg v(line)  from=26.5u to=306.5u
+  if (sfx < 0) & (wpre > 2.5) & (nlate < 1) & (wmin > 2.5) & (wpp < 0.2) & (wlin > 3.29)
+    echo "PASS 3 cseg=$fc: rxout_held_high_across_tf line_late=$&wlin edges_after_tf=$&nlate"
+  else
+    echo "FAIL 3 cseg=$fc: sfx=$&sfx wpre=$&wpre nlate=$&nlate wmin=$&wmin wpp=$&wpp wlin=$&wlin"
+    quit 1
+  end
+end
+quit 0
+.endc
+.end

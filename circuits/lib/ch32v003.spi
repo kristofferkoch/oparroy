@@ -1,0 +1,74 @@
+* CH32V003 behavioral models for the PHY segment benches (T5,
+* DESIGN.md §2, docs/phy-analysis-2026-09-26.md §5). Facts from DS0,
+* extracted in datasheets/CH32V003/notes/opa.md and .../facts.md.
+*
+* ------------------------------------------------------------------
+* ch32v003_opa_cmp inp inn out vdd gnd — the OPA run open-loop as the
+* ring RX comparator: line on inp (OPPx), VDD/2 divider on inn
+* (OPNx), output read internally by TIM2_CH1.
+*
+* params: voff=0 — input offset, subtracted at the input (positive
+* voff raises the apparent threshold on inn); benches sweep the
+* ±13 mV max (typ ±3 mV, DS0 §3.3.15 T3-26). vcc=3.3 — nominal
+* supply; the output rails are computed from it, not sensed (mirrors
+* sn74lvc1g3157.spi: all benches run at 3.3 V).
+*
+* Structure: a limited transconductance (gm = 1 A/V, ±102 mV linear
+* range) into the dominant-pole cap gives GBW = gm/2πCp = 12 MHz and
+* slew = ilim/Cp = 7.7 V/us (both T3-26), with DC gain gm*Rp = 1e4.
+* The output stage is an ideal 5 mV / VDD limiter behind 230 ohm:
+* into the 4 kohm spec load that drops 180 mV at the 0.78 mA load
+* current, reproducing the 5 mV / VDD-180 mV loaded swing (T3-26) —
+* the 180 mV is IR drop, not saturation headroom. No hysteresis —
+* none is documented (notes/opa.md). Diode clamps hold the pole node
+* ~55 mV past the output rails, so overload recovery costs ~8 ns per
+* edge; that number is a modeling choice, NOT a datasheet figure
+* (T3-26 gives only the 520 ns wake-up). Input bias and the 0..VDD
+* common-mode range are not modeled: the inputs are hi-Z and the PHY
+* keeps both pins in range by construction.
+*
+* ------------------------------------------------------------------
+* ch32v003_tx_pin in out vdd gnd — GPIO push-pull TX at the 30 MHz
+* output speed grade (DS0 §3.3.9 T3-18, MODE 11).
+*
+* params: rout=50 — per-side output resistance, from the ±8 mA drive
+* spec at VOL≤0.4 V / VOH≥VDD-0.4 V (0.4 V / 8 mA, T3-17). trf=5n —
+* 10-90% edge time; a behavioral choice, not a datasheet number: the
+* 30 MHz grade only guarantees toggling at 30 MHz (16.7 ns
+* half-periods), so ~5 ns edges leave most of the half-period flat,
+* and the PHY's 1.25 us cells are far slower still. vcc=3.3 — input
+* threshold vcc/2.
+*
+* Edges are first-order RC (tau = trf/2.1979), not slew-rate limited
+* — adequate at these timescales; revisit if ringing benches ever
+* need the true edge shape. in is a stimulus port: drive it with a
+* real PULSE/PWL source so ngspice gets breakpoints on the edges.
+
+.subckt ch32v003_opa_cmp inp inn out vdd gnd
++ params: voff=0 vcc=3.3
+
+Bgm gnd p1 I={min(max(v(inp)-v(inn)-voff, -0.102), 0.102)}
+Rp p1 gnd 10k
+Cp p1 gnd 13.263n
+
+* pole-node clamps, ~55 mV past the output rails (fast desaturation)
+Bchi chi gnd V={vcc+0.05}
+Bclo clo gnd V=-0.045
+Dh p1 chi dcl
+Dl clo p1 dcl
+.model dcl d(is=1f n=0.01 rs=0.1)
+
+* ideal 5 mV / VDD stage behind 230 ohm (loaded swing 5 mV / vcc-180 mV)
+Bout oi gnd V={min(max(v(p1), 0.005), vcc)}
+Ro oi out 230
+.ends ch32v003_opa_cmp
+
+.subckt ch32v003_tx_pin in out vdd gnd
++ params: rout=50 trf=5n vcc=3.3
+
+Bth g0 gnd V={v(in) > vcc/2 ? vcc : 0}
+Rsh g0 g1 1k
+Csh g1 gnd {trf/2.1979/1k}
+Bdrv oi gnd V={v(g1)}
+Ro oi out {rout}
+.ends ch32v003_tx_pin

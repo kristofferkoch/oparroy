@@ -162,10 +162,11 @@ What this changes elsewhere:
   (OPP0 = PA2 or OPP1 = PD7).
 - The OPA has **no documented hysteresis**. Baseline: no analog
   hysteresis; glitch rejection from the TIM2 input digital filter
-  (ICxF, RM §11.4.7) plus ratio-decode margins. T5's ngspice work
-  either confirms this on noisy/ringing segments or adds one feedback
-  resistor (OPO = PD4 is free for this — the internal TIM2_CH1 route
-  doesn't need the pin).
+  (ICxF, RM §11.4.7) plus ratio-decode margins. **Confirmed by T5
+  simulation (2026-09-26, `circuits/phy-segment/tb_noise.cir`)**: no
+  spurious edges under ringing or ±250 mV-class crosstalk, worst duty
+  error ~1.2 ns; the feedback-resistor fallback (OPO = PD4, the
+  internal TIM2_CH1 route doesn't need the pin) stays unpopulated.
 - OPCM (RM §3.2.2: OPA-high → system reset) is a hardware
   "line active" wake option — noted for the sleep story, not part of
   the PHY baseline.
