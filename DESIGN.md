@@ -25,8 +25,8 @@ Settled (2026-09-26):
   supervisor = **RP2040**; toolchains GCC riscv + GCC arm, clang host
   build retained for KLEE (§8)
 - Node time base (2026-09-26): **internal HSI RC, no crystal** — §5
-- PHY baseline (2026-09-26, card T3 in flight): duty-coded PWM, 800
-  kbit/s anchor, comparator RX + DMA, per-node re-timing — §2
+- PHY (2026-09-26, card T3): ratio-metric duty-coded PWM, 800 kbit/s
+  anchor, comparator RX + DMA, per-bit cut-through re-timing — §2
 - PCBA (2026-09-26, card T17): prototypes assembled by **JLCPCB**
   (Economic PCBA); fallback for unstocked parts is PCBWay
   partial-turnkey (§6)
@@ -54,45 +54,119 @@ Design drivers, in priority order:
 
 ## 2. Physical layer
 
-Baseline (2026-09-26, T3 analysis against the CH32V003's peripherals;
-final bit rate and break length to be confirmed by T5 simulation and
-bench measurement):
+Decided (2026-09-26, card T3, against the CH32V003's peripherals; full
+analysis:
+[docs/phy-analysis-2026-09-26.md](docs/phy-analysis-2026-09-26.md)).
+Final bit rate and break length to be confirmed by T5 simulation and
+bench measurement.
 
-- **Line coding: WS2812-style duty-coded PWM**, self-clocked. Fixed bit
-  cell; `0` = short high pulse (~1/3 cell), `1` = long high pulse (~2/3
-  cell). RX decides on high-time vs the cell midpoint — or ratiometric
-  against the measured cell period, which cancels node clock error
-  entirely on a per-hop basis (§5 time base).
-- **Bit rate: 800 kbit/s anchor** — 1.25 µs cell, T0H ≈ 0.4 µs /
-  T1H ≈ 0.8 µs, midpoint 0.6 µs. 60 timer ticks per cell at 48 MHz.
-  The rate is a free parameter: the ceiling is comparator response and
-  cable reach (T15), not the timers (20.8 ns resolution at 48 MHz).
-- **Signaling:** single-ended push-pull at VDD per segment, idle low.
-  Frames delimited by a line-low break (length TBD via T5; WS2812's
-  50 µs reset is the upper reference — MCU nodes can go shorter).
-- **RX path:** OPA comparator (threshold ≈ VDD/2) routed *internally* to
-  TIM2 CH1 — no GPIO spent on the comparator output. TIM2 PWM-input
-  mode (CH1+CH2 pair, hardware counter reset) captures per-bit period
-  and high-time; DMA streams captures into an SRAM ring buffer. Per-bit
+- **Line coding: WS2812-style duty-coded PWM cells with ratio-metric
+  decode.** Fixed bit cell, high-then-low; `0` = short high pulse
+  (~1/3 cell, T0H ≈ 0.40 µs), `1` = long high pulse (~2/3 cell,
+  T1H ≈ 0.80 µs). The spec is the *ratio* — high-time/period against
+  the cell midpoint — not absolute times: the coding tolerates ~±25 %
+  node-clock error, so HSI-only nodes (±2.2 % worst case, no crystal —
+  §5) sit an order of magnitude inside budget. The wire signal stays
+  WS2812-compatible, so COTS decoders, test gear, and RP2040 PIO
+  reference code work unmodified.
+- **Bit rate: 800 kbit/s anchor** (1.25 µs cell = 60 timer ticks at
+  48 MHz; capture resolution 20.8 ns). The rate is a free parameter —
+  the ceiling is comparator response and cable reach (T15), not the
+  timers — but at 800 k the OPA (12 MHz GBW, 7.7 V/µs) is nowhere near
+  the bottleneck and COTS WS2812 tooling applies. Frame/latch marker:
+  line-low break, ≥ 50 µs baseline (WS2812's reset is the upper
+  reference; MCU nodes may go shorter once T5/bench confirm — the
+  vsync semantics below ride on the break either way).
+- **Signaling: 3.3 V single-ended**, push-pull at VDD per segment,
+  idle low. RX threshold = VDD/2 divider on an OPA negative input. The
+  OPA has no documented hysteresis: glitch rejection comes from the
+  TIM2 input digital filter (ICxF) plus ratio-decode margins, not
+  analog feedback; T5's simulation either confirms this or adds one
+  feedback resistor (OPO = PD4 is free for it).
+- **RX path:** OPA comparator routed *internally* to TIM2 CH1 — no
+  GPIO spent on the comparator output. TIM2 PWM-input mode (CH1+CH2
+  pair, hardware counter reset) captures per-bit period and high-time;
+  DMA channels 5/7 stream captures into an SRAM ring buffer. Per-bit
   ISRs are ruled out: 60 cycles/bit at 800 kbit/s leaves nothing after
-  PFIC entry; decode runs per burst, amortized ~10 cycles/bit.
+  PFIC entry; decode runs per burst, amortized ~10 cycles/bit
+  (datasheets/CH32V003/notes: opa.md, timers.md, dma.md).
 - **TX path:** TIM1 PWM + DMA streaming compare values against a fixed
   cell period (fallback: SPI + DMA with bit-to-symbol encoding, which
   frees TIM1 for application PWM per §5's I/O complement). TIM1's
   brake input is reserved as a hardware TX-kill for the watchdog /
   babbling-idiot story (§3, §4).
-- **Re-timing:** every node decodes upstream bits and re-synthesizes the
-  TX waveform from its own timer. Jitter is per-hop (~one timer tick),
-  never cumulative around the ring — settling §2's old open question:
-  the ring beats a daisy chain here because re-timing is explicit and
-  firmware-controlled, not entrusted to a chip's internal reshaping.
+- **Re-timing: per-bit cut-through regeneration, slot rewrite on the
+  fly** (2026-09-26: user decision, superseding the initial
+  store-and-forward baseline). Every node decodes upstream bits and
+  re-synthesizes the TX waveform from its own timer — snapped to
+  nominal T0H/T1H — after a small, bounded pipeline delay, so decode
+  jitter is per-hop (~one timer tick), never cumulative
+  (*regeneration*, not topology, is what bounds jitter; WS2812 chains
+  reshape too, but oparroy's re-timing is explicit and
+  firmware-controlled, not entrusted to a chip's internal reshaping).
+  A node streams the frame through bit-by-bit and only intercepts its
+  own slot — reads command bits, substitutes telemetry bits — as it
+  passes: the WS2812/EtherCAT shape. Ring circulation ≈ one frame
+  time + N×pipeline delay (~0.6 ms, ~1.6 kHz full-ring update at
+  8 nodes) instead of N×frame-time. **Buffering policy** (2026-09-26):
+  the pipeline is deep enough to relax the CPU budget — order 8–16
+  cells, processed in bursts off DMA half-transfer interrupts — and
+  hard-bounded so ring DMA buffers stay **≤ 256 B of the 2 KB SRAM**,
+  statically allocated (≈8 B/cell RX + 2 B/cell TX): some buffering to
+  buy CPU slack, never enough to become a RAM problem. The node
+  locates its slot by counting bits from the frame gap (position =
+  address, below); ENUM frames are pre-sized so stamping is a slot
+  rewrite, never an insertion. The trade: per-hop frame filtering is
+  lost — a corrupt frame is already downstream before a CRC could
+  reject it — so containment moves to illegal-cell detection (period
+  outside 0.9–1.6 µs ⇒ stop regenerating, force the line idle), the
+  TIM1-brake TX-kill and hardware bypass (§3, §4), and supervisor-side
+  CRC/sequence checks (feeds T13). Fallback rung: if the per-bit loop
+  doesn't close timing on-target, degrade to store-and-forward (T11
+  decides with measurements). Closure discipline: the supervisor is
+  the only frame originator and drainer; echo mismatch ⇒ fault.
+- **Addressing: positional, discovered — no solder bridges, no
+  provisioning step.** Position in the ring *is* the address. The
+  supervisor enumerates with one circulation of an ENUM frame that
+  each node stamps with its factory 96-bit UNIID (ESIG — see
+  datasheets/CH32V003/notes/flash-option-bytes.md) plus a type byte;
+  the position ↔ UNIID map rebuilds automatically when a node is
+  replaced. Solder-bridge IDs (Trill-style, bela-lessons §2) lose on
+  pin budget (≥2 GPIO on an 18-GPIO part) and per-node parts — the §1
+  cost driver. One firmware image, personality by type byte in flash
+  (card T11).
+- **Telemetry: slotted in the circulating frame, not polled.** Each
+  node writes its own slot as the frame passes, with inputs sampled at
+  the vsync latch (below) — synchronous sampling in the ring's
+  timebase (bela-lessons §1), deterministic latency (~1.6 kHz
+  full-ring update at 8 nodes, cut-through — see re-timing above), no
+  poll round-trips. The frame sequence counter is the timestamp.
+  Frame format detail is T11 scope.
+- **Ring-wide latch: the frame gap is a vsync — WS2812's "global
+  shutter" in both directions** (2026-09-26). The line-low break that
+  marks frame start drives two synchronized actions at every node:
+  (a) **apply** the command outputs received in the previous frame,
+  from a double buffer — LED/buzzer state never changes mid-frame, so
+  patterns don't tear across positions; (b) **sample** inputs, so
+  every telemetry slot in frame k holds values from the same latch
+  instant L_k, tagged by the frame sequence counter. Effect is
+  simultaneous even though data delivery is positional: the break
+  itself propagates around the ring, so inter-node skew = accumulated
+  pipeline delay, ≤ N×depth ≈ 160 µs at the baseline — bounded,
+  sub-perceptual for human interface, tight enough for correlated
+  multi-node sensing (button chords, gestures, accelerometer arrays).
+  Cost: one double-buffer stage per node (bytes, inside the 256 B
+  ring-buffer cap); the break detector already exists to reset the bit
+  counter, so the latch event is free.
 
-Rejected codings (2026-09-26): Manchester (doubles transition rate, no
-benefit for comparator RX); USART-async (kept as fallback only if bench
-testing kills the comparator-RX path).
+Rejected codings (2026-09-26; analysis doc §1): pulse-distance
+(data-dependent slot timing, longer average cell); Manchester (doubles
+the transition rate, no benefit for comparator RX); USART-async (two
+HSI ends bust the async sampling budget — kept as fallback only if
+bench testing kills the comparator-RX path).
 
-Frame format (header, addressing / node-ID, CRC, telemetry slotting)
-remains open in T3.
+Open: analog hysteresis need (T5 sim), drive strength vs cable (T15),
+exact frame format (T11).
 
 ## 3. Ring topology and bypass
 
@@ -476,11 +550,6 @@ resolves each is in KANBAN.md):
   auto-bypass vs both; deferred until PHY simulation exists. Card: T13.
 - **Watchdog mechanism** (§4) — analog switch + charge pump vs
   supervisor IC; explore both in simulation first. Card: T4.
-- **Line coding and bit rate** (§2) — PHY baseline settled 2026-09-26
-  (duty-coded PWM, comparator RX + timer capture, DMA both ends,
-  per-node re-timing; time base = HSI, §5). Remaining: final bit rate
-  and break length against T5 simulation, frame format + node-ID
-  strategy, telemetry slotting. Card: T3.
 - **Debug transport** (§6) — per-node UART vs shared bus, connector
   style. Card: T10.
 - **Node-board stackup and thickness** (§6) — leaning 4-layer to keep
@@ -492,7 +561,8 @@ resolves each is in KANBAN.md):
   as a fab option; verify exact thicknesses/4-layer combos at quote
   time. Card: — (no card yet; lands with the first node-board design).
 - **Cable reach** (§2) — maximum segment length unamplified, and with
-  an amplifier/re-driver node in the segment; depends on line coding,
-  drive strength, comparator sensitivity, and cable characteristics.
+  an amplifier/re-driver node in the segment; line coding is settled
+  (§2), so this is drive strength, comparator sensitivity, and cable
+  characteristics.
   Answered by simulation first, then measured on the test board.
   Card: T15.

@@ -33,9 +33,7 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T3[T3 line coding + bit rate] --> T5[T5 ngspice PHY sim]
-    T3 --> T11[T11 node firmware v0]
-    T5 --> T13[T13 intermittent-fault strategy]
+    T5[T5 ngspice PHY sim] --> T13[T13 intermittent-fault strategy]
     T4[T4 watchdog/bypass exploration] --> T2[T2 bypass topology decision]
     T2 --> T10[T10 test board design]
     T4 --> T10
@@ -47,8 +45,7 @@ graph TD
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
     T5 --> T15[T15 cable reach limits]
-    T3 --> T16[T16 firmware verification harness]
-    T16 --> T11
+    T16[T16 firmware verification harness] --> T11[T11 node firmware v0]
     T18[T18 freestanding foundation library] --> T11
 ```
 
@@ -56,16 +53,24 @@ graph TD
 
 ## Next
 
-- **T3 — Spec line coding and bit rate.** PHY baseline settled
-  2026-09-26 (DESIGN.md §2): duty-coded PWM, 800 kbit/s anchor, OPA →
-  TIM2 PWM-input capture + DMA RX, TIM1 PWM (or SPI) + DMA TX, per-node
-  re-timing; node time base = HSI, no crystal (DESIGN.md §5). Remaining
-  scope: fix the final bit rate and break length against T5 simulation;
-  spec the frame format — header, CRC, addressing / node-ID strategy
-  (Bela lesson: hardware node-ID via solder bridges vs provisioning —
-  docs/bela-lessons-2026-09-26.md §2); decide whether node telemetry is
-  timestamped/slotted in the ring frame rather than polled (§1).
-  **Blocked by:** — · **Unblocks:** T5, T11
+- **T16 — Firmware verification harness.** *Shape: tooling.* The
+  verification stack, standing *before* firmware v0 (DESIGN.md §8):
+  clang/LLVM-bitcode build of the host-testable protocol logic, KLEE
+  harnesses for frame round-trips and ring state-machine invariants,
+  libFuzzer/AFL++ harnesses on the frame parser and ring state machine,
+  fault-injection shims (line errors, dropped frames, timer glitches,
+  watchdog timeouts), and coverage measured on the release
+  configuration — the SQLite doctrine plus symbolic verification
+  (DESIGN.md §8). Includes picking the aviation-grade C++ rule set
+  (candidates: JSF AV C++, MISRA C++:2023, AUTOSAR C++14) and its
+  enforcement (compiler flags, clang-tidy checks), the freestanding
+  build configuration (-ffreestanding, no exceptions/RTTI/stdlib), and
+  standing up the nix flake
+  (GCC/clang, KLEE, ngspice, uv — DESIGN.md §8). First harness targets
+  now concrete from T3: ratio-metric cell decode, frame echo
+  invariants, ENUM stamping, the slot-boundary bit-count state machine
+  (cut-through's off-by-one surface). **Blocked by:** — ·
+  **Unblocks:** T11
 - **T4 — Explore node watchdog/bypass circuits.** The two candidates in
   DESIGN.md §4 — normally-on analog switch held open by MCU-driven
   charge pump vs window-watchdog supervisor IC — each captured as a
@@ -74,6 +79,11 @@ graph TD
   glitch immunity). Output: subcircuits + passing sim tests + a
   recommendation in DESIGN.md §4. **Blocked by:** — · **Unblocks:**
   T2, T10
+- **T5 — ngspice simulation of the PHY.** Line drivers, comparator RX,
+  bypass switches, connector-fault cases. Now concrete from T3
+  (DESIGN.md §2): validate the no-analog-hysteresis baseline under
+  noise/ringing, threshold tolerance, drive vs segment capacitance.
+  **Blocked by:** — · **Unblocks:** T13, T15
 - **T6 — Python package scaffold.** uv project, Python 3.13, ruff in
   strict rule selection, ty, pytest, `src/oparroy/` layout. No DSL code
   yet — just the harness it will grow in. *Shape: tooling.* **Blocked
@@ -91,9 +101,6 @@ graph TD
   dual ring vs skip-one wires vs per-node switch only (IDEAS.md
   §Fault tolerance). Recorded in DESIGN.md §3. **Blocked by:** T4 ·
   **Unblocks:** T10
-- **T5 — ngspice simulation of the PHY.** Line drivers, comparator RX,
-  bypass switches, connector-fault cases. **Blocked by:** T3 ·
-  **Unblocks:** T13
 - **T7 — DSL v0: parts/nets IR + KiCad netlist emitter.** The home-rolled
   design-capture core (DESIGN.md §7). Includes subcircuit composition
   (functional circuits as their own files/units) and a parts DB with
@@ -132,10 +139,15 @@ graph TD
   **Blocked by:** T2, T4, T19 · **Unblocks:** T12
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
+  Per-bit cut-through forwarding with on-the-fly slot rewrite
+  (DESIGN.md §2); bring up store-and-forward first for correctness,
+  then switch to cut-through and measure timing closure. Gap-latched
+  (vsync) output apply and input sampling per §2's global-shutter
+  rule.
   Developed inside the verification harness (T16) from the first
   commit. Trill pattern (docs/bela-lessons-2026-09-26.md §2): aim for
   **one firmware image, personality by node-type ID** — a single HIL
-  target. **Blocked by:** T3, T16, T18 · **Unblocks:** T12
+  target. **Blocked by:** T16, T18 · **Unblocks:** T12
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
@@ -149,18 +161,3 @@ graph TD
   candidate cable, capacitive load per node), then long-cable
   measurement on the test board. Output: numbers + amplifier guidance
   in DESIGN.md §2. **Blocked by:** T5 · **Unblocks:** —
-- **T16 — Firmware verification harness.** *Shape: tooling.* The
-  verification stack, standing *before* firmware v0 (DESIGN.md §8):
-  clang/LLVM-bitcode build of the host-testable protocol logic, KLEE
-  harnesses for frame round-trips and ring state-machine invariants,
-  libFuzzer/AFL++ harnesses on the frame parser and ring state machine,
-  fault-injection shims (line errors, dropped frames, timer glitches,
-  watchdog timeouts), and coverage measured on the release
-  configuration — the SQLite doctrine plus symbolic verification
-  (DESIGN.md §8). Includes picking the aviation-grade C++ rule set
-  (candidates: JSF AV C++, MISRA C++:2023, AUTOSAR C++14) and its
-  enforcement (compiler flags, clang-tidy checks), the freestanding
-  build configuration (-ffreestanding, no exceptions/RTTI/stdlib), and
-  standing up the nix flake
-  (GCC/clang, KLEE, ngspice, uv — DESIGN.md §8). **Blocked by:**
-  T3 · **Unblocks:** T11

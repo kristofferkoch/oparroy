@@ -6,12 +6,11 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Protocol
 
-- WS2812-style self-clocked single-wire signaling, but closed into a ring
-  so every node can transmit and receive.
-- Line coding options: PWM (T0H/T1H like WS2812), pulse-distance, or
-  something comparator-friendly.
-- Frame format, addressing, arbitration: TBD. Ring gives a natural
-  token/slot structure.
+- WS2812-style self-clocked single-wire signaling, closed into a ring —
+  settled 2026-09-26 (card T3): ratio-metric PWM cells at 800 kbit/s,
+  positional slot addressing via UNIID enumeration, slotted telemetry.
+  See DESIGN.md §2 and docs/phy-analysis-2026-09-26.md. Frame format
+  detail: card T11.
 
 ## Fault tolerance
 
