@@ -21,6 +21,14 @@ real work — **move**, don't copy. Reference, don't duplicate.
   - Per-node relay/analog-switch bypass only
 - Intermittent connector failures: protocol-level retry/re-route, or
   purely hardware bypass?
+- Capacitance characterization of data lines (2026-09-26) — a node
+  measures line capacitance (e.g. charge-time / step-response via the
+  comparator) to estimate cable length to its neighbor and to localize
+  faults (open, short, water ingress shifts C). Doubles as a ring
+  self-survey: each node reports its segment length. Open questions:
+  measurement circuit (drive weakly, time the RC with TIM capture?),
+  resolution vs. cable-length granularity, interaction with the bypass
+  switches' on-capacitance.
 
 ## Hardware
 
