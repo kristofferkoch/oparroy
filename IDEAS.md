@@ -29,13 +29,7 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Hardware
 
-- Silabs 8051 (exact part TBD — was < 3 NOK, fast core, analog
-  comparators on-chip).
 - Comparators for RX: threshold selection, hysteresis, glitch filtering.
-- Test board: multiple nodes + on-board debug/supervision (a supervisor
-  MCU or SBC?) so tests run hands-off.
-- Fault-injection hardware on the test board (switches to open/short
-  links, kill MCUs) so CI can exercise the failure modes.
 
 ## Tooling
 

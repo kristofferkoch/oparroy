@@ -21,6 +21,12 @@ Settled (2026-09-26):
   deps — see §8
 - Python tooling: **3.13, uv, ruff (strict), ty, pytest** — package
   scaffold deferred until MCU choice and DSL shape settle
+- MCU (2026-09-26, card T1): node = **CH32V003F4P6** (TSSOP-20),
+  supervisor = **RP2040**; toolchains GCC riscv + GCC arm, clang host
+  build retained for KLEE (§8)
+- PCBA (2026-09-26, card T17): prototypes assembled by **JLCPCB**
+  (Economic PCBA); fallback for unstocked parts is PCBWay
+  partial-turnkey (§6)
 
 ## 1. Overview
 
@@ -116,25 +122,42 @@ product feature, not board-only debug.
 
 ## 5. MCU platform
 
-TBD — part **not yet chosen**. Full comparison:
-[docs/mcu-research-2026-09-26.md](docs/mcu-research-2026-09-26.md).
-Headline: **CH32V003** (48 MHz RISC-V, comparator routable to timer
-capture, ~$0.10–0.15) is the leading sub-3-NOK node candidate;
-**RP2040** ($0.70–1.00) is the leading supervisor/golden-reference
-candidate — its PIO is the ideal re-timing PHY engine but it can't be
-the per-node part at ~3× budget. The recalled Silabs part most
-plausibly was an **EFM8BB1** (25 MHz, 2 comparators) at launch-era
-pricing; no current listing is sub-3-NOK. Owner recollection still
-pending; card T1 decides.
+Decided (2026-09-26, card T1; PCBA verification under card T17):
 
-Requirements:
+- **Node MCU: CH32V003F4P6** (WCH RV32EC @ 48 MHz, **TSSOP-20**) —
+  ~$0.29 at prototype qty, $0.137 @4k (LCSC **C5187096**, JLCPCB
+  Extended, ~9k in stock 2026-09-26). Its OPA comparator routes to TIM2
+  CH1 capture; two capture-capable timers + DMA. TSSOP-20 over the
+  QFN-20 variant (F4U6): avoids JLCPCB's per-board X-ray fee for
+  leadless packages and stays hand-reworkable.
+- **Supervisor MCU: RP2040** ($0.70–1.00, LCSC **C2040**, JLCPCB
+  Extended) — PIO is the re-timing PHY engine and golden-reference
+  transceiver for characterizing the CH32V003's analog-RX path; also
+  ring supervisor on the test board (§6). Unavoidably QFN-56, so the
+  X-ray fee is budgeted. Explicitly **not** the node part at ~3× the
+  node budget (§1).
+- **Toolchains**: GCC riscv (ch32v003fun-class SDK) for the node, GCC
+  arm for the supervisor; clang/LLVM-bitcode host build retained for
+  KLEE (§8). All provisioned by the nix flake.
+- **8051-class ruled out**: the freestanding-C++ decision (§8) needs
+  GCC/clang and SDCC is C-only. The recalled sub-3-NOK Silabs part —
+  most plausibly EFM8BB1 at launch-era pricing, per
+  [docs/mcu-research-2026-09-26.md](docs/mcu-research-2026-09-26.md) —
+  is excluded on toolchain grounds, not price. No current Silabs
+  listing is sub-3-NOK anyway.
+
+Full comparison remains in
+[docs/mcu-research-2026-09-26.md](docs/mcu-research-2026-09-26.md).
+
+Requirements the chosen part satisfies (retained as the checklist for
+any future node-MCU revisit):
 
 - Analog comparator (RX) — or a PIO/programmable engine that makes a
   comparator unnecessary
 - Timer with capture or PCA for edge timing (RX decode / TX encode)
 - Fast enough core/peripherals for the target bit rate
 - Flash/RAM budget TBD
-- Toolchain: TBD (SDCC for 8051; decision deferred until part is chosen)
+- Toolchain: GCC/clang (freestanding C++, §8) — 8051/SDCC excluded
 
 Node I/O complement (2026-09-26) — peripherals a node may carry, and
 what each demands of the MCU:
@@ -159,14 +182,36 @@ that can power-cycle nodes, inject faults, collect debug UART).
 or relays), per-node power cut, clock kill — everything scriptable from
 the supervisor so test runs are fully hands-off.
 
-Prototype assembly (2026-09-26): the **first two prototype boards are
-assembled by a cheap PCBA service** (Seeed Fusion class — JLCPCB is the
-obvious alternative; card T17 picks). Consequence: **part selection is
+Board fabrication (2026-09-26): the CI/test board is **4-layer** — the
+fault-injection muxes and per-node debug plumbing want the routing room,
+and the §1 cost driver doesn't apply to test infrastructure. Node-board
+stackup is a separate question (§9).
+
+Prototype assembly (decided 2026-09-26, card T17): **JLCPCB Economic
+PCBA** for the first prototype boards. Research + inventory snapshot:
+[docs/pcba-research-2026-09-26.md](docs/pcba-research-2026-09-26.md).
+Facts that shape board design:
+
+- **Min 2 assembled boards**, ~$10 fixed (setup + stencil) +
+  **$3.07 per unique Extended BOM line** — all of CH32V003, RP2040, and
+  the 74LVC/TS5A-class switches are Extended, so the design rule is
+  **minimize unique BOM lines** and reuse parts across nodes.
+- **Single-side SMT** to stay on the Economic tier; actual WS2812-class
+  LEDs are "Standard PCBA only" (moisture bake) and would force the
+  pricier tier — use plain LEDs on the board.
+- QFN packages incur a per-board X-ray fee — TSSOP CH32V003 (§5);
+  RP2040 is unavoidably QFN.
+- PCB fab minimum is 5 even when assembling 2 — spare blanks come free.
+- VOEC-registered: Norwegian VAT settled at checkout.
+- Fallback for anything JLCPCB can't stock: **PCBWay partial-turnkey**
+  (1-pc MOQ, true consignment), at 2–4× the price.
+
+Consequence: **part selection is
 inventory-driven** — prefer parts the assembler stocks; anything
 outside their library costs setup fees or hand-soldering. The DSL
 parts DB tracks assembler-stock status (§7).
 
-Open: supervisor part, debug transport (UART per node? shared bus?),
+Open: debug transport (UART per node? shared bus?),
 board interconnect style (connectors as deliberately fragile elements —
 they are the failure mode under test).
 
@@ -366,12 +411,18 @@ resolves each is in KANBAN.md):
   auto-bypass vs both; deferred until PHY simulation exists. Card: T13.
 - **Watchdog mechanism** (§4) — analog switch + charge pump vs
   supervisor IC; explore both in simulation first. Card: T4.
-- **MCU part** (§5) — sub-3-NOK Silabs 8051 candidate to be recalled /
-  identified vs the field, RP2040 PIO in the running. Card: T1.
 - **Line coding and bit rate** (§2) — WS2812-style PWM vs alternatives;
   jitter accumulation under per-node re-timing. Card: T3.
-- **Supervisor and debug transport** (§6) — supervisor part, per-node
-  UART vs shared bus, connector style. Card: T10.
+- **Debug transport** (§6) — per-node UART vs shared bus, connector
+  style. Card: T10.
+- **Node-board stackup and thickness** (§6) — leaning 4-layer to keep
+  the node board small and good, but every extra layer is a per-node
+  fab cost and must argue against the central cost driver (§1); the CI
+  board's 4-layer decision doesn't automatically transfer. Also: node
+  boards should be **thinner than the standard 1.6 mm** (≤1.0 mm class)
+  so a small board doesn't feel chunky — JLCPCB offers thinner stackups
+  as a fab option; verify exact thicknesses/4-layer combos at quote
+  time. Card: — (no card yet; lands with the first node-board design).
 - **Cable reach** (§2) — maximum segment length unamplified, and with
   an amplifier/re-driver node in the segment; depends on line coding,
   drive strength, comparator sensitivity, and cable characteristics.

@@ -33,47 +33,37 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T1[T1 decide MCU part] --> T3[T3 line coding + bit rate]
-    T1 --> T11[T11 node firmware v0]
-    T3 --> T5[T5 ngspice PHY sim]
+    T3[T3 line coding + bit rate] --> T5[T5 ngspice PHY sim]
+    T3 --> T11[T11 node firmware v0]
     T5 --> T13[T13 intermittent-fault strategy]
     T4[T4 watchdog/bypass exploration] --> T2[T2 bypass topology decision]
-    T1 --> T10[T10 test board design]
-    T2 --> T10
+    T2 --> T10[T10 test board design]
     T4 --> T10
-    T17[T17 PCBA service selection] --> T10
     T19 --> T10
     T6[T6 python scaffold] --> T7[T7 DSL v0: IR + KiCad emitter]
     T7 --> T8[T8 DSL constraint checks]
     T7 --> T9[T9 firmware header generation]
     T7 --> T19[T19 layout property checker]
-    T1 --> T9
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
     T5 --> T15[T15 cable reach limits]
     T3 --> T16[T16 firmware verification harness]
     T16 --> T11
-    T1 --> T18[T18 freestanding foundation library]
-    T18 --> T11
+    T18[T18 freestanding foundation library] --> T11
 ```
 
 ---
 
 ## Next
 
-- **T1 — Decide the MCU part.** *Shape: decision.* Inputs:
-  docs/mcu-research-2026-09-26.md (CH32V003 leads at ~$0.10–0.15 with
-  comparator→timer-capture routing; RP2040 PIO ideal but ~3× budget —
-  likely supervisor instead; recalled Silabs part ≈ EFM8BB1 at
-  launch-era pricing), the owner's recollection of the sub-3-NOK Silabs
-  part, and §5 of DESIGN.md (requirements incl. the node I/O
-  complement: ADC, key-matrix GPIO, capsense, I2C, PWM). Note the §8
-  consequence: the freestanding-C++ decision needs GCC/clang, which all
-  but rules out 8051-class parts (SDCC is C-only) — the recalled Silabs
-  part only survives if the firmware language is revisited. Output:
-  node part + supervisor part recorded in DESIGN.md §5, toolchain
-  decision with them. **Blocked by:** — · **Unblocks:** T3, T9, T10,
-  T11
+- **T3 — Spec line coding and bit rate.** WS2812-style PWM vs
+  comparator-friendly alternatives; analyze per-node re-timing and
+  jitter accumulation around the ring. Also covers the addressing /
+  node-ID strategy (Bela lesson: hardware node-ID via solder bridges vs
+  provisioning — docs/bela-lessons-2026-09-26.md §2) and whether node
+  telemetry is timestamped/slotted in the ring frame rather than polled
+  (§1). Recorded in DESIGN.md §2. **Blocked by:** — · **Unblocks:**
+  T5, T11
 - **T4 — Explore node watchdog/bypass circuits.** The two candidates in
   DESIGN.md §4 — normally-on analog switch held open by MCU-driven
   charge pump vs window-watchdog supervisor IC — each captured as a
@@ -86,14 +76,12 @@ graph TD
   strict rule selection, ty, pytest, `src/oparroy/` layout. No DSL code
   yet — just the harness it will grow in. *Shape: tooling.* **Blocked
   by:** — · **Unblocks:** T7
-- **T17 — Select the prototype PCBA service and survey its inventory.**
-  *Shape: decision.* Seeed Fusion (owner's starting point) vs JLCPCB
-  and peers: assembly pricing for 2-off boards, parts-library coverage
-  for the cheap parts this project favors (CH32V003, analog switches,
-  connectors), setup fees for non-library parts. Output: assembler
-  recorded in DESIGN.md §6 + an inventory snapshot feeding the DSL
-  parts DB's stock-status field (§7). **Blocked by:** — ·
-  **Unblocks:** T10
+- **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
+  §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
+  fixed-capacity containers, ownership types over static arenas,
+  `VERIFY` hook wired to the watchdog policy (§4). Host-compilable so
+  T16's KLEE/fuzz harnesses exercise it from day one. **Blocked by:**
+  — · **Unblocks:** T11
 
 ## Backlog
 
@@ -101,14 +89,6 @@ graph TD
   dual ring vs skip-one wires vs per-node switch only (IDEAS.md
   §Fault tolerance). Recorded in DESIGN.md §3. **Blocked by:** T4 ·
   **Unblocks:** T10
-- **T3 — Spec line coding and bit rate.** WS2812-style PWM vs
-  comparator-friendly alternatives; analyze per-node re-timing and
-  jitter accumulation around the ring. Also covers the addressing /
-  node-ID strategy (Bela lesson: hardware node-ID via solder bridges vs
-  provisioning — docs/bela-lessons-2026-09-26.md §2) and whether node
-  telemetry is timestamped/slotted in the ring frame rather than polled
-  (§1). Recorded in DESIGN.md §2. **Blocked by:** T1 · **Unblocks:**
-  T5, T11
 - **T5 — ngspice simulation of the PHY.** Line drivers, comparator RX,
   bypass switches, connector-fault cases. **Blocked by:** T3 ·
   **Unblocks:** T13
@@ -126,7 +106,8 @@ graph TD
   independence, LED-adjacent-to-connector placement contracts,
   net-class width/clearance compliance, trace-length budgets (feeds
   T15), mechanical contracts (min corner radius for handling,
-  standoff mounting holes + keepouts), board-level checklist
+  standoff mounting holes + keepouts, stackup contract — layer count
+  and board thickness per §6/§9), board-level checklist
   conformance (power LED present, silkscreen board-ID fields —
   project/PCB name, author, date, version tied to git tag, CI-board
   protection subcircuit instantiated). Includes emitting net
@@ -134,27 +115,21 @@ graph TD
   `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
   **Blocked by:** T7 · **Unblocks:** T10
 - **T9 — Firmware header generation from the DSL.** Pin maps and
-  peripheral assignments emitted for the chosen MCU. **Blocked by:**
-  T1, T7 · **Unblocks:** T11
+  peripheral assignments emitted for the CH32V003 (DESIGN.md §5).
+  **Blocked by:** T7 · **Unblocks:** T11
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
   all scriptable (DESIGN.md §6). Captured in the DSL, layout in KiCad.
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  **Blocked by:** T1, T2, T4, T17, T19 · **Unblocks:** T12
-- **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
-  §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
-  fixed-capacity containers, ownership types over static arenas,
-  `VERIFY` hook wired to the watchdog policy (§4). Host-compilable so
-  T16's KLEE/fuzz harnesses exercise it from day one. **Blocked by:**
-  T1 · **Unblocks:** T11
+  **Blocked by:** T2, T4, T19 · **Unblocks:** T12
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
-  chosen MCU; the minimal slice that makes a multi-node ring pass bits.
+  CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Developed inside the verification harness (T16) from the first
   commit. Trill pattern (docs/bela-lessons-2026-09-26.md §2): aim for
   **one firmware image, personality by node-type ID** — a single HIL
-  target. **Blocked by:** T1, T3, T16, T18 · **Unblocks:** T12
+  target. **Blocked by:** T3, T16, T18 · **Unblocks:** T12
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
