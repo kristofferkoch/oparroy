@@ -34,6 +34,8 @@ Settled (2026-09-26):
   (Economic PCBA); fallback for unstocked parts is PCBWay
   partial-turnkey (§6)
 - Firmware build system (2026-09-26): **Meson + ninja** — §8
+- Ring power rail (2026-09-26): **3.3 V, one rail** for signaling and
+  node power; regulation is per-payload, never per-node — §2.1
 
 ## 1. Overview
 
@@ -206,6 +208,33 @@ Measured (ngspice, 2026-09-26, card T5 — benches in
 
 Open: drive strength vs cable (T15),
 exact frame format (T11).
+
+### 2.1 Ring power rail
+
+Decided (2026-09-26): **the ring distributes a single 3.3 V rail** — it
+is both the signaling rail (the §2 push-pull, VDD/2-threshold PHY) and
+node power. No per-node regulator: the CH32V003 runs 2.7–5.5 V straight
+off the rail (datasheets/CH32V003/notes/power-reset.md), and every T4/T5
+bench plus the §7 protection sizing is already characterized at 3.3 V.
+
+- **5 V rail rejected** (2026-09-26): the MCU could run at 5 V directly,
+  but nothing else follows. The always-on SN74LVC1G3157 at 5 V VCC has
+  VIH ≈ 0.7×VDD = 3.5 V — unreachable from a 3.3 V sel driver (§4) — and
+  §5's sensor payloads (I2C accelerometer class, 3.6 V max) need 3.3 V
+  regardless, so 5 V moves regulation onto the sensor instead of
+  removing it. WS2812 *electrical* compatibility isn't bought either: a
+  5 V-powered strip wants VIH ≈ 3.5 V, and §6 already rules WS2812 LEDs
+  off the board (Standard-PCBA tier); the wire stays WS2812-compatible
+  in coding regardless (§2).
+- **Power headroom**: node loads are tens of mA (MCU ~4 mA at 48 MHz,
+  GPIO-driven plain LEDs, small piezo), and the power loop is driven as
+  a loop (§3), so a 3.3 V rail holds ample margin against the MCU's
+  2.7 V floor. A future power-hungry payload carries its own regulator —
+  a per-payload cost, not a per-node tax (§1). If the loop drop budget
+  ever busts — check lands with T15's cable numbers, worst case a
+  connector break turning the loop into a long spur — the fix is
+  supervisor-side power injection at a second tap (§1: supervisors may
+  cost freely), not a higher rail.
 
 ## 3. Ring topology and bypass
 
