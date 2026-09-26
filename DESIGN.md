@@ -263,6 +263,23 @@ Open: debug transport (UART per node? shared bus?),
 board interconnect style (connectors as deliberately fragile elements —
 they are the failure mode under test).
 
+Instrumented boundary node (2026-09-26): the ring node adjacent to the
+supervisor — first/last, where the supervisor closes the ring — is
+**extra wired to the RP2040**. Both of its ring segments (the node's RX
+tap and its TX output) land on RP2040 GPIOs, so the supervisor's PIO
+runs as a **logic analyzer / bus debugger on that node**: at the
+125 MHz sysclock that's 8 ns resolution (~156 samples per 800 kbit/s
+cell), DMA'd into the RP2040's 264 KB SRAM for deep captures. The
+supervisor sees exactly what the node saw vs what it re-emitted —
+per-hop latency, re-timing fidelity, decode errors under fault
+injection — which is the measurement half of its golden-reference role
+(§5). The same PIO pins can drive crafted/glitch waveforms back as
+stimulus. Two further taps: the node's comparator-output GPIO and its
+working-LED line (§4.1), so observation stays truthful even when the
+node's MCU misbehaves. Taps must be short stubs — probing must not
+deform the segment under observation (layout contract for T19). The §1
+cost driver doesn't apply: this is test infrastructure.
+
 Silkscreen documentation (2026-09-26): the CI board is self-documenting
 at the bench — **connector pinout voltages and test-point labels printed
 on the board** (e.g. `3V3`, `5V`, `GND`, `TP12 ring-seg-3`), so probing

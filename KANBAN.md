@@ -121,7 +121,11 @@ graph TD
   **Blocked by:** T7 · **Unblocks:** T11
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
-  all scriptable (DESIGN.md §6). Captured in the DSL, layout in KiCad.
+  all scriptable (DESIGN.md §6). Includes the **instrumented boundary
+  node**: the supervisor-adjacent node's RX/TX ring segments (plus
+  comparator-output and working-LED taps) wired to RP2040 GPIOs for
+  PIO logic analysis and glitch stimulus (DESIGN.md §6). Captured in
+  the DSL, layout in KiCad.
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
