@@ -579,6 +579,28 @@ either a layout-checker assertion or a subcircuit):
   above. Scope (decided 2026-09-26): **CI/test board only** — future
   single-node cards stay cheap and carry no such protection (central
   cost driver, §1).
+- **I/O terminal protection: series R + optional TVS** (decided
+  2026-09-26): every terminal that leaves the board gets a series
+  resistor near the µC pin, sized against the CH32V003 injection
+  current (±4 mA/pin, Σ ±20 mA, DS0 §3.2 T3-1) — 470 Ω on ring
+  TX/RX (470 Ω × 50 pF ≈ 24 ns edge softening, far inside the §2
+  decode margins) and on user-facing outputs (7 mA into a shorted
+  pin, inside the ±8 mA spec'd drive), 1 kΩ on buttons, ADC sources
+  ≤ 10 kΩ total including the series R (adc.md, T3-24). The R also
+  caps phantom-power injection into a powered-down node (the §4/§6
+  power-cut fault). Prefer FT pins (PC1/PC2/PC5/PC6) for any
+  terminal that can see 5 V. Plus a **TVS footprint per external
+  terminal**, wired connector → TVS → R → µC so the R limits what
+  the internal clamp diodes absorb after the TVS clamps.
+  Low-capacitance bidirectional ESD parts (tens of pF, VRWM
+  ≥ 3.3 V) — not nF-class power-rail TVS. **Population rule: the CI
+  board ships fully populated** — test the superset, since DNP
+  strictly removes load and a passing CI with TVS covers the bare
+  variant; leave one CI node DNP to cover populated↔unpopulated
+  segments in the same run. Production nodes may ship DNP. The
+  power-rail TVS pairs with the eFuse/crowbar above and is *not*
+  optional. Layout-checkable (T19): TVS adjacent to its connector,
+  R between TVS and µC pin.
 - Rounded corners, mounting holes for legs (layout checker, above)
 - **Board identification on silkscreen** (2026-09-26): every PCB
   carries project name (`oparroy`), PCB name, author name, date, and
