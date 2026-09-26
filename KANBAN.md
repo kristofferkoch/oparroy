@@ -115,8 +115,9 @@ graph TD
   standoff mounting holes + keepouts, stackup contract — layer count
   and board thickness per §6/§9), board-level checklist
   conformance (power LED present, silkscreen board-ID fields —
-  project/PCB name, author, date, version tied to git tag, CI-board
-  protection subcircuit instantiated). Includes emitting net
+  project/PCB name, author, date, version tied to git tag,
+  handwritten serial-number box, CI-board protection subcircuit
+  instantiated). Includes emitting net
   classes/keepouts into the
   `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
   **Blocked by:** T7 · **Unblocks:** T10
@@ -125,11 +126,15 @@ graph TD
   **Blocked by:** T7 · **Unblocks:** T11
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
-  all scriptable (DESIGN.md §6). Includes the **instrumented boundary
-  node**: the supervisor-adjacent node's RX/TX ring segments (plus
-  comparator-output and working-LED taps) wired to RP2040 GPIOs for
-  PIO logic analysis and glitch stimulus (DESIGN.md §6). Captured in
-  the DSL, layout in KiCad.
+  all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
+  (§6): a subset of nodes carries human-facing I/O (potentiometer,
+  buttons, LEDs, buzzer), each input overridable from the supervisor
+  (mux/DAC substitution, button paralleling) so scripted runs stay
+  hands-off regardless of knob positions. Includes the
+  **instrumented boundary node**: the supervisor-adjacent node's RX/TX
+  ring segments (plus comparator-output and working-LED taps) wired to
+  RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
+  §6). Captured in the DSL, layout in KiCad.
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).

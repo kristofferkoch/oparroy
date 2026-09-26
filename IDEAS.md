@@ -30,6 +30,18 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 - Comparators for RX: threshold selection, hysteresis, glitch filtering.
 
+## Node peripherals
+
+- **Load cell** as a supported sensor type (2026-09-26). Interesting
+  because it likely wants its own small board: strain-gauge bridge
+  excitation + sensitive low-noise analog front end (instrumentation
+  amp / 24-bit ADC, HX711-class) that doesn't belong on the ring node
+  itself. Node talks to it over I2C/SPI — exercises the §5 I/O
+  complement and the "smart peripheral serving cooked data" pattern.
+  Open questions: whether the AFE board joins the ring as its own node
+  or hangs off a node's local bus; noise/grounding interaction with
+  the ring wiring.
+
 ## Tooling
 
 - Home-rolled DSL vs SKiDL for design capture. A home DSL could also do:

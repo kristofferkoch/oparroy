@@ -304,6 +304,25 @@ that can power-cycle nodes, inject faults, collect debug UART).
 or relays), per-node power cut, clock kill — everything scriptable from
 the supervisor so test runs are fully hands-off.
 
+Dual role (2026-09-26): the CI board is also the **demonstrator**.
+Beyond hands-off test runs, it must show the protocol to a human —
+so a subset of nodes carries real human-facing I/O from the §5
+complement: at minimum a potentiometer and buttons on input nodes,
+LEDs and a buzzer on output nodes, populated as a mix so test traffic
+*is* application traffic (§5). Properties this exploits for demos: the
+§4.1 status LEDs already narrate ring health visually, and the §2
+vsync latch makes multi-node LED/buzzer patterns tear-free — a fault
+injection live on stage (yank a connector, watch the bypass LEDs and
+the ring carry on) is the demo. Constraint: the human I/O must never
+be required for operation — every input is also drivable/readable
+scriptably, so the hands-off CI role is unaffected by a knob being in
+the wrong position. Board-design consequence: human inputs are
+**overridable from the supervisor** — e.g. the potentiometer's wiper
+goes through an analog mux so the supervisor can substitute its own
+DAC/filtered-PWM voltage during scripted runs (same injection pattern
+as the fault muxes), and buttons parallel a supervisor-driven
+optocoupler/transistor.
+
 Board fabrication (2026-09-26): the CI/test board is **4-layer** — the
 fault-injection muxes and per-node debug plumbing want the routing room,
 and the §1 cost driver doesn't apply to test infrastructure. Node-board
@@ -424,6 +443,13 @@ either a layout-checker assertion or a subcircuit):
   version number — checkable as required text fields on the fab/
   silkscreen layers. Version number ties the physical board to a git
   tag so HIL results are attributable to an exact design revision.
+- **Handwritten serial-number field** (2026-09-26): every PCB carries
+  a white silkscreen area (hatched/filled box, sized for a fine
+  marker) to write a per-unit serial number by hand at bring-up —
+  the git-tag version identifies the *design*, the handwritten serial
+  identifies the *physical unit* when several boards of the same
+  revision are on the bench. Layout-checkable: a silkscreen box of
+  minimum area, kept clear of pads and other silkscreen text.
 
 ## 8. Verification strategy
 
