@@ -8,7 +8,12 @@
 # deviations register (code-std.md §10). Also disabled:
 # cppcoreguidelines-owning-memory (no GSL in freestanding code;
 # placement new over MMIO storage is our idiom, code-std.md §5, and
-# this check insists on gsl::owner<>).
+# this check insists on gsl::owner<>). Same GSL gap for the bounds
+# profile (pro-bounds-pointer-arithmetic / -array-to-pointer-decay):
+# the fix they demand is gsl::span, outside the freestanding header
+# set — our Span (firmware/lib/span.hpp) carries the bound at every
+# interface instead (code-std.md §5), and KLEE's out-of-bounds
+# detection plus fuzzing own the defect class (code-std.md §1).
 Checks: >
   bugprone-*,
   cert-*,
@@ -27,7 +32,9 @@ Checks: >
   -readability-avoid-const-params-in-decls,
   -modernize-use-trailing-return-type,
   -cppcoreguidelines-pro-type-reinterpret-cast,
-  -cppcoreguidelines-owning-memory
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay
 WarningsAsErrors: '*'
 HeaderFilterRegex: '^firmware/'
 FormatStyle: file
