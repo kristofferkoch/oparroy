@@ -1,19 +1,30 @@
 #!/bin/sh
-# clang-tidy over the files pre-commit hands us, with the freestanding
-# flag set — same flags as the smoke build, no compile_commands.json
-# needed. Warm: about a second for a file or two.
+# clang-tidy over the files pre-commit hands us, replaying the host
+# build's compile_commands.json so the flag set is meson's single
+# source (T20). Warm: about a second for a file or two.
 set -u
-. "$(dirname "$0")/../freestanding-flags.sh"
 
-# clang-tidy is the unwrapped LLVM binary: it neither finds clang's
-# resource dir nor the nix C++ headers on its own. Point it at both —
-# libc++ (same LLVM, flake-pinned) keeps the parse identical to the
-# wrapped clang's world instead of whatever GCC the host happens to have.
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+builddir="$root/build/host"
+
+if [ ! -f "$builddir/compile_commands.json" ]; then
+    echo "clang-tidy-changed: setting up $builddir (one-off)" >&2
+    meson setup "$builddir" --native-file "$root/meson/native/clang.ini" > /dev/null
+fi
+
+# clang-tidy is the unwrapped LLVM binary: the nix clang wrapper
+# injects its resource dir and C++ headers at compile time, so neither
+# lands in compile_commands.json. Append both by hand — libc++ (same
+# LLVM, flake-pinned) keeps the parse reproducible instead of whatever
+# GCC the host happens to have. The -std/-ffreestanding flags are also
+# appended: harmless duplicates for files in the database, and they
+# keep files not yet added to the meson build (no DB entry) parseable.
 : "${OPARROY_LIBCXX_INCLUDE:?run inside the nix dev shell (nix develop)}"
 
 status=0
 for f do
-    clang-tidy --quiet "$f" -- $FREESTANDING_FLAGS \
+    clang-tidy --quiet -p "$builddir" "$f" -- \
+        -std=c++23 -ffreestanding -fno-exceptions -fno-rtti \
         -resource-dir "$(clang -print-resource-dir)" \
         -nostdinc++ -isystem "$OPARROY_LIBCXX_INCLUDE" || status=1
 done

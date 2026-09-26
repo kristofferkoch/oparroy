@@ -49,28 +49,12 @@ graph TD
     T16d --> T16e[T16e coverage on release]
     T16e --> T11[T11 node firmware v0]
     T18[T18 freestanding foundation library] --> T11
-    T20[T20 meson build scaffold] --> T16c
-    T20 --> T18
 ```
 
 ______________________________________________________________________
 
 ## Next
 
-- **T20 — Meson build scaffold.** *Shape: tooling.* Meson + ninja as
-  the firmware build system (DESIGN.md §8, decided 2026-09-26). Root
-  `meson.build` reproducing the smoke build's three configurations
-  (host object, LLVM bitcode with `-Xclang -disable-lifetime-markers`,
-  RV32EC object), one cross/native file per toolchain; the flag set in
-  `scripts/freestanding-flags.sh` moves into meson config (the shell
-  file shrinks to whatever `scripts/pre-commit/clang-tidy-changed`
-  still needs, or that script switches to `compile_commands.json`).
-  meson + ninja added to the flake dev shell;
-  `scripts/build-firmware-smoke` replaced by a meson invocation.
-  Reproducibility wired from the start (DESIGN.md §8): prefix-map flags
-  on every compile, and a check target that builds twice and compares
-  artifact hashes.
-  **Blocked by:** — · **Unblocks:** T16c, T18
 - **T16c — Host-testable protocol logic v0 + KLEE harnesses.** The
   protocol core, factored host-testable from the first commit
   (DESIGN.md §8): the T3-concrete surfaces — ratio-metric cell decode,
@@ -78,15 +62,15 @@ ______________________________________________________________________
   state machine (cut-through's off-by-one surface). Clang/LLVM-bitcode
   build in the flake shell, KLEE harnesses proving frame round-trips
   and ring state-machine invariants, including behavior under injected
-  garbage (the babbling-idiot case, §3). Build on T20's meson targets
-  and T16b's plumbing:
-  `code-std.md`, `scripts/freestanding-flags.sh`, extern-`C`
+  garbage (the babbling-idiot case, §3). Build on the T20 meson
+  scaffold and T16b's plumbing: `code-std.md`, the `freestanding_flags`
+  set in `meson.build`, extern-`C`
   `--entry-point` entries (no libc `main`), and
   `-Xclang -disable-lifetime-markers` on bitcode builds (klee 3.2 lacks
   the intrinsic). The flake's klee remains nixpkgs' partial-LLVM-19
   build (see flake.nix comment); if a harness hits another unsupported
   feature, revisit how klee is provisioned.
-  **Blocked by:** T20 · **Unblocks:** T16d
+  **Blocked by:** — · **Unblocks:** T16d
 - **T4 — Explore node watchdog/bypass circuits.** The two candidates in
   DESIGN.md §4 — normally-on analog switch held open by MCU-driven
   charge pump vs window-watchdog supervisor IC — each captured as a
@@ -109,7 +93,7 @@ ______________________________________________________________________
   fixed-capacity containers, ownership types over static arenas,
   `VERIFY` hook wired to the watchdog policy (§4). Host-compilable so
   T16's KLEE/fuzz harnesses exercise it from day one. **Blocked by:**
-  T20 · **Unblocks:** T11
+  — · **Unblocks:** T11
 
 ## Backlog
 

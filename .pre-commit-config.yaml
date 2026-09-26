@@ -26,7 +26,7 @@ repos:
       types_or: [c++, c]
 
     - id: clang-tidy
-      name: clang-tidy (freestanding flags)
+      name: clang-tidy (host compile_commands.json)
       entry: scripts/pre-commit/clang-tidy-changed
       language: script
       files: ^firmware/

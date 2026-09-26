@@ -51,6 +51,13 @@
               # libFuzzer (-fsanitize=fuzzer).
               llvmPkgs.clang
               llvmPkgs.clang-tools
+              # llvm-ar: pinned archiver for the host build
+              # (meson/native/clang.ini) — host /usr/bin/ar would leak
+              # tool provenance into artifacts (reproducibility, §8).
+              llvmPkgs.bintools
+              # Firmware build system (DESIGN.md §8, T20).
+              pkgs.meson
+              pkgs.ninja
               pkgs.klee
               pkgs.aflplusplus
               # Subcircuit simulation unit tests (DESIGN.md §7).
@@ -74,6 +81,9 @@
               arm-none-eabi-gcc --version | head -1
               clang --version | head -1
               clang-tidy --version | grep -E 'LLVM version' | head -1
+              llvm-ar --version | grep -E 'LLVM version' | head -1
+              meson --version
+              ninja --version
               klee --version | head -2
               afl-cc --version | head -1
               ngspice --version | grep -i ngspice | head -1

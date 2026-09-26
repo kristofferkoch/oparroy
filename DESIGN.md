@@ -568,6 +568,12 @@ the built-in test runner for T16e's coverage-on-release. CMake was the
 runner-up (toolchain-file ceremony, verbose custom commands); GNU make
 loses on the multi-toolchain matrix; tup ruled out (FUSE dependency,
 thin ecosystem). Provisioned through the flake like everything else.
+The project's default `buildtype` is pinned to `plain` (2026-09-26,
+T20): the nix cc-wrapper appends `-D_FORTIFY_SOURCE` *after* all user
+flags whenever it sees an explicit `-O` (meson debug's `-O0` included),
+and glibc `#error`s on that under `-Werror` at `-O0` — freestanding has
+no libc for fortify to call into anyway. Optimized flavours are chosen
+per build dir at setup time.
 
 Build reproducibility (2026-09-26): **bit-for-bit reproducible builds
 are a hard constraint** — same source tree + same `flake.lock` ⇒

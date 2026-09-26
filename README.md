@@ -74,13 +74,23 @@ infrastructure, by contrast, may cost freely.
 - **Datasheets are extracted, not just stored**: `datasheets/<PART>/`
   holds vendor PDFs plus LLM-readable markdown sidecars (facts,
   per-peripheral notes, quirks) — see `datasheets/README.md`.
+- **Meson + ninja** build the firmware (DESIGN.md §8, T20): one build
+  dir per toolchain, freestanding flag set in `meson.build`.
+  - host (clang; host objects + LLVM bitcode for KLEE):
+    `meson setup build/host --native-file meson/native/clang.ini`
+  - CH32V003 (RV32EC objects):
+    `meson setup build/rv32ec --cross-file meson/cross/rv32ec.ini`
+  - then `meson compile -C build/<dir>`; the reproducibility gate
+    `ninja -C build/host check-reproducible` builds every
+    configuration twice and compares artifact hashes.
 - **nix flake** provides everything non-Python (riscv/arm cross GCC,
   clang 19 + KLEE, AFL++, ngspice, KiCad, uv itself), pinned by
   `flake.lock` — `nix develop` enters the shell (`.envrc` provided for
   direnv users); **uv** owns Python alone (3.13, ruff strict, ty,
   pytest).
 - **Pre-commit hooks** (`pre-commit install`, T16b): clang-format,
-  clang-tidy with the freestanding flag set, and the markdown pipeline
+  clang-tidy (replaying the host build's `compile_commands.json`), and
+  the markdown pipeline
   (mdformat + markdownlint-cli2 + lychee link checks) — cheap checks
   only, ~2 s warm. Hooks are `language: system` against the
   nix-pinned tools, so the flake stays the single tool source.
@@ -96,6 +106,7 @@ infrastructure, by contrast, may cost freely.
 | `code-std.md`              | Project-owned C++ coding standard (living)              |
 | `README.md`                | This file                                               |
 | `flake.nix` + `flake.lock` | Pinned dev shell: all non-Python tools (DESIGN.md §8)   |
+| `meson.build` + `meson/`   | Firmware build: flag set, native/cross toolchain files  |
 | `.envrc`                   | direnv hook into the flake shell                        |
 | `.pre-commit-config.yaml`  | Hook wiring; tools nix-pinned, `language: system`       |
 | `firmware/`                | Node/supervisor firmware (toolchain smoke build so far) |

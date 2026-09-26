@@ -1,0 +1,46 @@
+#!/bin/sh
+# Reproducibility gate (DESIGN.md §8): same source tree + same
+# flake.lock must give byte-identical artifacts on any machine. Builds
+# every firmware configuration twice in fresh build dirs — at different
+# absolute paths, so the prefix-mapping is actually exercised — and
+# compares artifact hashes. Wired as `ninja -C build/host
+# check-reproducible`; a mismatch is red like a failing test.
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# Sorted "hash  path" list of build artifacts, paths relative to the
+# build dir so the two runs are comparable.
+hashes() {
+    find "$1" -type f \( -name '*.a' -o -name '*.o' -o -name '*.bc' \) \
+        -exec sha256sum {} + | sed "s|$tmp/[^/]*/||" | sort -k2
+}
+
+# Note: no reliance on set -e here — the caller tests this function's
+# return value, which disables -e inside it.
+check_config() {
+    name=$1; shift
+    for run in a b; do
+        meson setup "$tmp/$name-$run" "$root" "$@" > /dev/null || return 1
+        meson compile -C "$tmp/$name-$run" > /dev/null || return 1
+        hashes "$tmp/$name-$run" > "$tmp/$name-$run.sums"
+    done
+    if [ ! -s "$tmp/$name-a.sums" ]; then
+        echo "check-reproducible: $name produced no artifacts — gate is vacuous" >&2
+        return 1
+    fi
+    if cmp -s "$tmp/$name-a.sums" "$tmp/$name-b.sums"; then
+        echo "reproducible: $name ($(wc -l < "$tmp/$name-a.sums" | tr -d ' ') artifacts)"
+    else
+        echo "NOT reproducible: $name" >&2
+        diff "$tmp/$name-a.sums" "$tmp/$name-b.sums" || :
+        return 1
+    fi
+}
+
+status=0
+check_config host --native-file "$root/meson/native/clang.ini" || status=1
+check_config rv32ec --cross-file "$root/meson/cross/rv32ec.ini" || status=1
+exit "$status"
