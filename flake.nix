@@ -55,7 +55,7 @@
               # (meson/native/clang.ini) — host /usr/bin/ar would leak
               # tool provenance into artifacts (reproducibility, §8).
               llvmPkgs.bintools
-              # Firmware build system (DESIGN.md §8, T20).
+              # Firmware build system (DESIGN.md §8).
               pkgs.meson
               pkgs.ninja
               pkgs.klee
@@ -64,7 +64,7 @@
               pkgs.ngspice
               # Python side is uv's alone; nix only supplies uv itself.
               pkgs.uv
-              # Pre-commit hooks (T16b) — the framework plus every tool the
+              # Pre-commit hooks — the framework plus every tool the
               # hooks call, all nix-pinned so `.pre-commit-config.yaml` can
               # use `language: system` instead of downloading its own.
               pkgs.pre-commit

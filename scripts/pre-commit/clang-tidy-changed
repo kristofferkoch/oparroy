@@ -1,7 +1,7 @@
 #!/bin/sh
 # clang-tidy over the files pre-commit hands us, replaying the host
 # build's compile_commands.json so the flag set is meson's single
-# source (T20). Warm: about a second for a file or two.
+# source. Warm: about a second for a file or two.
 set -u
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
