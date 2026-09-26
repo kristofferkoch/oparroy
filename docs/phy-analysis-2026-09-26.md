@@ -170,6 +170,29 @@ What this changes elsewhere:
   "line active" wake option — noted for the sleep story, not part of
   the PHY baseline.
 
+Why not the plain GPIO digital input as the RX buffer (question raised
+2026-09-26, recorded here with the decision):
+
+- **Threshold placement.** Ratio-metric decode slices each cell at
+  VDD/2, symmetric on both edges. The Schmitt buffer's guaranteed
+  window at 3.3 V is VIL ≤ 0.76 V … VIH ≥ 1.68 V (DS0 §3.3.9 T3-16) —
+  the real trip points sit anywhere in that ~0.9 V band, centered near
+  0.37×VDD, not VDD/2. The OPA's divider threshold is exact,
+  supply-tracking, and ±3/±13 mV offset (DS0 §3.3.15 T3-26).
+- **Tolerance × slow edges = pulse-width distortion.** Cable RC
+  softens edges; ±0.45 V of threshold uncertainty at 100 ns/V is ±45 ns
+  of high-time error per edge, asymmetric rising/falling — against a
+  ±160–220 ns decode margin (§2). Comparator offset is ns-class at any
+  tolerable edge rate.
+- **Routing.** OPA output routes internally to TIM2_CH1 — no pin
+  spent — and OPA_PSEL is the dual-ring input mux (DESIGN.md §3). A
+  digital input costs a TIM2-mappable GPIO per direction.
+- **Headroom.** Divider threshold is tunable; hysteresis is one
+  resistor away (above); analog observability (impedance probing,
+  capacitance survey — IDEAS.md §Fault tolerance) needs a quantitative
+  line view a binary buffer can't give. The Schmitt's one advantage —
+  documented 150 mV hysteresis — is small, fixed, and off-center.
+
 ## 6. Addressing / node ID
 
 **Positional addressing, discovered by enumeration — no solder
