@@ -1,9 +1,10 @@
 # Pre-commit hooks: cheap checks only, <3s warm (T16b).
 #
-# All project tools come from the nix dev shell (flake.nix, DESIGN.md §8),
-# so project hooks are `language: system`/`script` wrappers around
-# nix-pinned binaries — pre-commit downloads nothing but the generic
-# hygiene hooks below. Run inside `nix develop` (direnv does this).
+# Non-Python tools come from the nix dev shell (flake.nix, DESIGN.md §8);
+# Python tools (ruff, ty) come from the uv project (pyproject.toml), with
+# uv itself nix-pinned. Project hooks are `language: system`/`script`
+# wrappers around those binaries — pre-commit downloads nothing but the
+# generic hygiene hooks below. Run inside `nix develop` (direnv does this).
 # Setup: pre-commit install
 
 repos:
@@ -31,6 +32,27 @@ repos:
       language: script
       files: ^firmware/
       types_or: [c++, c]
+
+    # Python side: ruff and ty via uv (pyproject.toml owns the versions).
+    # pytest stays out of pre-commit — hooks are cheap checks only.
+    - id: ruff-check
+      name: ruff check
+      entry: uv run --frozen ruff check --force-exclude
+      language: system
+      types: [python]
+
+    - id: ruff-format
+      name: ruff format
+      entry: uv run --frozen ruff format --force-exclude
+      language: system
+      types: [python]
+
+    - id: ty
+      name: ty type check
+      entry: uv run --frozen ty check
+      language: system
+      types: [python]
+      pass_filenames: false
 
     # Markdown pipeline as in falcon-app (PR #11194): mdformat owns GFM
     # layout, markdownlint lints content, lychee checks links/anchors.

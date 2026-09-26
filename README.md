@@ -87,7 +87,8 @@ infrastructure, by contrast, may cost freely.
   clang 19 + KLEE, AFL++, ngspice, KiCad, uv itself), pinned by
   `flake.lock` — `nix develop` enters the shell (`.envrc` provided for
   direnv users); **uv** owns Python alone (3.13, ruff strict, ty,
-  pytest).
+  pytest). The DSL package scaffold (T6) lives in `src/oparroy/`:
+  `uv sync`, then `uv run pytest` / `uv run ruff check` / `uv run ty check`.
 - **Pre-commit hooks** (`pre-commit install`, T16b): clang-format,
   clang-tidy (replaying the host build's `compile_commands.json`), and
   the markdown pipeline
@@ -97,23 +98,26 @@ infrastructure, by contrast, may cost freely.
 
 ## Repository layout
 
-| Path                       | Contents                                                |
-| -------------------------- | ------------------------------------------------------- |
-| `AGENTS.md`                | Doc-split and writing conventions for agents            |
-| `IDEAS.md`                 | Not-yet-planned ideas (append-only stash)               |
-| `DESIGN.md`                | Settled design decisions + open design questions        |
-| `KANBAN.md`                | Single home for planned work (cards, Next/Backlog)      |
-| `code-std.md`              | Project-owned C++ coding standard (living)              |
-| `README.md`                | This file                                               |
-| `flake.nix` + `flake.lock` | Pinned dev shell: all non-Python tools (DESIGN.md §8)   |
-| `meson.build` + `meson/`   | Firmware build: flag set, native/cross toolchain files  |
-| `.envrc`                   | direnv hook into the flake shell                        |
-| `.pre-commit-config.yaml`  | Hook wiring; tools nix-pinned, `language: system`       |
-| `firmware/`                | Node/supervisor firmware (toolchain smoke build so far) |
-| `scripts/`                 | Build + pre-commit scripts (POSIX sh)                   |
-| `docs/`                    | Reference documents (research reports, sub-designs)     |
-| `datasheets/`              | Vendor PDFs + extracted markdown sidecars per part      |
-| `LICENSE`                  | MIT, copyright 2026 Kristoffer Koch                     |
+| Path                         | Contents                                                   |
+| ---------------------------- | ---------------------------------------------------------- |
+| `AGENTS.md`                  | Doc-split and writing conventions for agents               |
+| `IDEAS.md`                   | Not-yet-planned ideas (append-only stash)                  |
+| `DESIGN.md`                  | Settled design decisions + open design questions           |
+| `KANBAN.md`                  | Single home for planned work (cards, Next/Backlog)         |
+| `code-std.md`                | Project-owned C++ coding standard (living)                 |
+| `README.md`                  | This file                                                  |
+| `flake.nix` + `flake.lock`   | Pinned dev shell: all non-Python tools (DESIGN.md §8)      |
+| `pyproject.toml` + `uv.lock` | Python side: the DSL package (ruff strict, ty, pytest)     |
+| `src/oparroy/`               | Design-capture DSL package (T6 scaffold; DSL itself is T7) |
+| `tests/`                     | Python tests (pytest)                                      |
+| `meson.build` + `meson/`     | Firmware build: flag set, native/cross toolchain files     |
+| `.envrc`                     | direnv hook into the flake shell                           |
+| `.pre-commit-config.yaml`    | Hook wiring; tools nix-pinned, `language: system`          |
+| `firmware/`                  | Node/supervisor firmware (toolchain smoke build so far)    |
+| `scripts/`                   | Build + pre-commit scripts (POSIX sh)                      |
+| `docs/`                      | Reference documents (research reports, sub-designs)        |
+| `datasheets/`                | Vendor PDFs + extracted markdown sidecars per part         |
+| `LICENSE`                    | MIT, copyright 2026 Kristoffer Koch                        |
 
 Doc conventions follow the IDEAS → KANBAN/DESIGN graduation model:
 stray thoughts live in IDEAS.md, planned work in KANBAN.md cards,

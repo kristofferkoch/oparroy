@@ -1,0 +1,57 @@
+# oparroy Python side — the design-capture DSL and its tooling (DESIGN.md
+# §7). uv owns this file's dependency graph alone; every non-Python tool
+# comes from the nix flake (DESIGN.md §8).
+
+[project]
+name = "oparroy"
+version = "0.1.0"
+description = "Design-capture DSL for the oparroy fault-tolerant ring (DESIGN.md §7)"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Kristoffer Koch" }]
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "ruff>=0.14",
+    "ty>=0.0.1a20",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Strict: everything on, minus the rules ruff itself flags as conflicting
+# with the formatter.
+select = ["ALL"]
+ignore = [
+    "COM812", # missing-trailing-comma — the formatter owns commas
+    "ISC001", # single-line-implicit-string-concatenation — formatter-owned
+    # Mutually incompatible docstring pairs — keep D211/D212's conventions
+    # (ruff's defaults when both are selected).
+    "D203", # incorrect-blank-line-before-class
+    "D213", # multi-line-summary-second-line
+    # Copyright lives in LICENSE (MIT), like the firmware — no per-file headers.
+    "CPY001", # missing-copyright-notice
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest conventions: bare asserts, no __init__.py, no docstrings on
+# every test function.
+"tests/**" = ["D100", "D103", "INP001", "S101"]
+
+[tool.pytest.ini_options]
+# src/ is a testpath so --doctest-modules picks up doctests in package
+# modules (code-std.md §12); tests/ holds the unit/property tests.
+testpaths = ["src", "tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers", "--doctest-modules"]
+
+[tool.ty.environment]
+python-version = "3.13"

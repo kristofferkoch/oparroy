@@ -4,7 +4,8 @@ Living document, created 2026-09-26 (T16b). Evolves by dated edits —
 every substantive change gets a date so archaeology stays easy.
 
 Scope: all oparroy firmware and host-testable firmware logic. The DSL
-(Python) has its own harness (ruff strict, ty) and is out of scope here.
+(Python) has its own harness (ruff strict, ty) and mostly lives outside
+this document — §12 holds the few Python rules we do own.
 
 ## 1. Philosophy
 
@@ -198,3 +199,19 @@ freestanding contract.
   catch it. Applies to every harness layer (DESIGN.md §8): unit tests,
   KLEE proofs (a violated assertion must be reachable), fuzz seeds,
   ngspice subcircuit sims, HIL.
+
+## 12. Python (the DSL)
+
+Ruff (`ALL`, formatter-conflicts off) owns style, ty owns types; this
+section holds the handful of rules we chose ourselves.
+
+- **Small functions carry doctests where suitable** (2026-09-26): if a
+  function's contract fits in a two-line REPL example, write it as a
+  doctest in the docstring — example-first documentation that pytest
+  executes (`--doctest-modules` collects `src/`; see
+  `pyproject.toml`). Doctests are illustrations, not the test suite:
+  edge cases, error paths, and property-style tests stay in `tests/`
+  as ordinary pytest tests. A doctest that needs setup code or asserts
+  more than it shows is a unit test wearing a costume — move it.
+- **Red/green applies to doctests too** (§11): watch a new doctest
+  fail (wrong expected output) before trusting it.

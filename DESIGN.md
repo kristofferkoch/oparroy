@@ -20,7 +20,8 @@ Settled (2026-09-26):
   toolchains, KLEE/clang, ngspice, KiCad, provers); **uv** for Python
   deps — see §8
 - Python tooling: **3.13, uv, ruff (strict), ty, pytest** — package
-  scaffold deferred until MCU choice and DSL shape settle
+  scaffold landed 2026-09-26 (T6): `src/oparroy/` layout, ruff `ALL`
+  (formatter-conflicts off), ty, pytest wired via pre-commit
 - MCU (2026-09-26, card T1): node = **CH32V003F4P6** (TSSOP-20),
   supervisor = **RP2040**; toolchains GCC riscv + GCC arm, clang host
   build retained for KLEE (§8)
@@ -562,7 +563,7 @@ of truth for:
 
 Rationale: owning the IR makes multi-target codegen and property
 verification straightforward; a KiCad/SKiDL-format emitter is just one
-backend. Scaffold deferred until MCU choice and DSL shape settle.
+backend. Package scaffold landed 2026-09-26 (T6, see §8 tooling).
 
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one

@@ -34,8 +34,7 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T6[T6 python scaffold] --> T7[T7 DSL v0: IR + KiCad emitter]
-    T7 --> T8[T8 DSL constraint checks]
+    T7[T7 DSL v0: IR + KiCad emitter] --> T8[T8 DSL constraint checks]
     T7 --> T9[T9 firmware header generation]
     T7 --> T19[T19 layout property checker]
     T10 --> T12[T12 test-hw harness]
@@ -48,10 +47,11 @@ ______________________________________________________________________
 
 ## Next
 
-- **T6 — Python package scaffold.** uv project, Python 3.13, ruff in
-  strict rule selection, ty, pytest, `src/oparroy/` layout. No DSL code
-  yet — just the harness it will grow in. *Shape: tooling.* **Blocked
-  by:** — · **Unblocks:** T7
+- **T7 — DSL v0: parts/nets IR + KiCad netlist emitter.** The home-rolled
+  design-capture core (DESIGN.md §7). Includes subcircuit composition
+  (functional circuits as their own files/units) and a parts DB with
+  assembler-stock status per part. **Blocked by:** — · **Unblocks:**
+  T8, T9
 - **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
   §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
   fixed-capacity containers, ownership types over static arenas,
@@ -83,11 +83,6 @@ ______________________________________________________________________
 
 ## Backlog
 
-- **T7 — DSL v0: parts/nets IR + KiCad netlist emitter.** The home-rolled
-  design-capture core (DESIGN.md §7). Includes subcircuit composition
-  (functional circuits as their own files/units) and a parts DB with
-  assembler-stock status per part. **Blocked by:** T6 · **Unblocks:**
-  T8, T9
 - **T8 — DSL constraint checking / property verification.** Electrical
   rules beyond KiCad ERC: bypass-path continuity under single-fault
   models, watchdog default-state assertions. **Blocked by:** T7 ·
