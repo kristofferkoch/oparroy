@@ -30,6 +30,7 @@ Settled (2026-09-26):
 - PCBA (2026-09-26, card T17): prototypes assembled by **JLCPCB**
   (Economic PCBA); fallback for unstocked parts is PCBWay
   partial-turnkey (§6)
+- Firmware build system (2026-09-26): **Meson + ninja** — §8
 
 ## 1. Overview
 
@@ -555,6 +556,29 @@ the parts that transfer to oparroy firmware and the DSL:
 - Symbolic verification (KLEE) is the layer SQLite *doesn't* have; it
   complements the above by exhausting small state spaces (frame
   grammar, ring state machine) rather than sampling them.
+
+Firmware build system (2026-09-26): **Meson + ninja**. The build matrix
+is wide even though the file count is small: three toolchains (riscv
+GCC node, arm GCC supervisor, clang host) × build flavours (host
+objects, LLVM bitcode for KLEE, fuzzers, coverage-instrumented release)
+plus custom outputs (KLEE runs, DSL-generated headers per T9). Meson
+covers that natively — one cross/native file per toolchain, per-target
+flag overrides, `custom_target()` for bitcode/KLEE, `b_coverage` and
+the built-in test runner for T16e's coverage-on-release. CMake was the
+runner-up (toolchain-file ceremony, verbose custom commands); GNU make
+loses on the multi-toolchain matrix; tup ruled out (FUSE dependency,
+thin ecosystem). Provisioned through the flake like everything else.
+
+Build reproducibility (2026-09-26): **bit-for-bit reproducible builds
+are a hard constraint** — same source tree + same `flake.lock` ⇒
+byte-identical artifacts, on any machine. The flake's pinned toolchains
+are the foundation; on top of it: no `__DATE__`/`__TIME__`/
+`__TIMESTAMP__` (code-std.md §2 — version identity comes from git,
+matching §7's board-version rule), `-ffile-prefix-map`/
+`-fdebug-prefix-map` on every compile so no build paths leak into
+outputs, deterministic archive mode, content-derived linker build-id.
+A check target builds twice and compares hashes — a reproducibility
+failure is red like a failing test.
 
 Tool provisioning (2026-09-26): **nix flake + uv, each in its lane**.
 Exotic tools will accumulate (provers, cross-compilers, ngspice, KiCad,

@@ -30,6 +30,9 @@ needs to earn its place every time it's touched.
   `main`, so entry points are `extern "C"`: the reset handler on
   target, a named `--entry-point` for KLEE harnesses.
 - **Freestanding contract** (§8, settled): `-ffreestanding -nostdlib -fno-exceptions -fno-rtti`, no heap outside explicitly carved arenas.
+- **No `__DATE__`/`__TIME__`/`__TIMESTAMP__`** (2026-09-26): bit-for-bit
+  reproducible builds are a hard constraint (DESIGN.md §8); version
+  identity comes from git, never from compile-time stamps.
 - Freestanding-subset headers are allowed (`<cstdint>`, `<cstddef>`,
   `<limits>`, `<type_traits>`, `<bit>`); anything that drags in hosted
   machinery is not. Project types beat std types where both exist
