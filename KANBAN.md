@@ -18,10 +18,10 @@ Cards that aren't slices (a DESIGN decision, research, a chore) carry a
 1. Take the top card in **Next** that fits your context. Next is the set
    of cards with no unbuilt blockers; within Next, higher = higher
    leverage.
-2. The change that ships a card **deletes the card** from this file —
+1. The change that ships a card **deletes the card** from this file —
    shipped cards are dropped, not moved into a Done column (git history
    is the durable archive). There is no In Progress column either.
-3. On shipping, promote any newly-unblocked Backlog card into **Next**.
+1. On shipping, promote any newly-unblocked Backlog card into **Next**.
 
 **If a card grows beyond one change, split it first** (T##a, T##b, …).
 Never leave a card half-landed.
@@ -52,7 +52,7 @@ graph TD
     T18[T18 freestanding foundation library] --> T11
 ```
 
----
+______________________________________________________________________
 
 ## Next
 
@@ -63,8 +63,7 @@ graph TD
   small, aerospace-proven, already cited in §8's exception rationale —
   with **clang-tidy AUTOSAR/CERT checks as the automatically enforced
   subset**; MISRA C++:2023 has the weakest clang-tidy coverage). Then the
-  build config: flag set (`-ffreestanding -nostdlib -fno-exceptions
-  -fno-rtti`, strict warnings as errors), `.clang-tidy` enforcement,
+  build config: flag set (`-ffreestanding -nostdlib -fno-exceptions -fno-rtti`, strict warnings as errors), `.clang-tidy` enforcement,
   a smoke freestanding source + host build script proving the flag set
   compiles in the flake shell (T16a). **Blocked by:** — ·
   **Unblocks:** T16c

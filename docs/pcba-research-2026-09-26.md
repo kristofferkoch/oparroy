@@ -36,24 +36,25 @@ and [FAQ](https://jlcpcb.com/help/article/pcb-assembly-faqs):
 
 **Estimated 2-off test board** (~60 placements, ~8–10 unique Extended
 lines, TSSOP CH32V003 + QFN RP2040): ~$10 fixed + ~$25–30 Extended fees
-+ ~$5–10 parts + ~$3 X-ray + ~$2 fab → **~$55–80 before shipping**
-(~$10–25 shipping to Norway, unverified at checkout).
+
+- ~$5–10 parts + ~$3 X-ray + ~$2 fab → **~$55–80 before shipping**
+  (~$10–25 shipping to Norway, unverified at checkout).
 
 ## Inventory snapshot (queried 2026-09-26)
 
 Stock and tier as of today; re-check in JLCPCB's quote tool before
 ordering — pages are JS-rendered and stock moves.
 
-| Part | LCSC C# | Package | Tier | Price (low qty) | Stock |
-|---|---|---|---|---|---|
-| CH32V003F4P6 | C5187096 | TSSOP-20 | Extended | $0.286 (1–49), $0.137 @4k | ~9k |
-| CH32V003J4M6 | C5346354 | SOP-8 | Extended | $0.218 | ~1.8k |
-| CH32V003A4M6 | C5346357 | SOP-16 | Extended | $0.269 | ~1.6k |
-| CH32V003F4U6 | C5299908 | QFN-20 | Extended | $0.288 (+X-ray fee) | ~1.9k |
-| RP2040 | C2040 | QFN-56 | Extended | $0.99–1.93 (+X-ray fee) | ~54k |
-| SN74LVC1G3157DBVR (TI) | C10426 | SOT-23-6 | Extended | $0.072 | ~51k |
-| SN74LVC1G3157DBVR (UMW clone) | C3040658 | SOT-23-6 | Extended | $0.047 | ~124k |
-| TS5A3166DBVR (TI) | C353035 | SOT-23-5 | Extended | $0.36 | ~15.7k |
+| Part                          | LCSC C#  | Package  | Tier     | Price (low qty)           | Stock  |
+| ----------------------------- | -------- | -------- | -------- | ------------------------- | ------ |
+| CH32V003F4P6                  | C5187096 | TSSOP-20 | Extended | $0.286 (1–49), $0.137 @4k | ~9k    |
+| CH32V003J4M6                  | C5346354 | SOP-8    | Extended | $0.218                    | ~1.8k  |
+| CH32V003A4M6                  | C5346357 | SOP-16   | Extended | $0.269                    | ~1.6k  |
+| CH32V003F4U6                  | C5299908 | QFN-20   | Extended | $0.288 (+X-ray fee)       | ~1.9k  |
+| RP2040                        | C2040    | QFN-56   | Extended | $0.99–1.93 (+X-ray fee)   | ~54k   |
+| SN74LVC1G3157DBVR (TI)        | C10426   | SOT-23-6 | Extended | $0.072                    | ~51k   |
+| SN74LVC1G3157DBVR (UMW clone) | C3040658 | SOT-23-6 | Extended | $0.047                    | ~124k  |
+| TS5A3166DBVR (TI)             | C353035  | SOT-23-5 | Extended | $0.36                     | ~15.7k |
 
 Note: **none of the project's key ICs are Basic** — every unique BOM
 line costs $3.07, so the design rule is *minimize unique parts, reuse
@@ -63,20 +64,20 @@ across nodes*.
 
 1. **WS2812-class LEDs are "Standard PCBA only"** (moisture bake) and
    force the pricier tier for the whole board — use plain LEDs.
-2. TSSOP over QFN where a choice exists (X-ray fee, reworkability).
-3. Keep single-side SMT to stay Economic.
-4. Some library parts have per-part MOQs (pay for 15, need 2) — check
+1. TSSOP over QFN where a choice exists (X-ray fee, reworkability).
+1. Keep single-side SMT to stay Economic.
+1. Some library parts have per-part MOQs (pay for 15, need 2) — check
    each line in the quote tool.
-5. ≥17 unique Extended lines flips Standard cheaper than Economic
+1. ≥17 unique Extended lines flips Standard cheaper than Economic
    ($3.07×17 ≈ $52 > $25.56 + $1.53×lines) — recheck if the BOM grows.
-6. Economic assembly panels require mouse-bites, not V-cut.
+1. Economic assembly panels require mouse-bites, not V-cut.
 
 ## Alternatives surveyed
 
 - **PCBWay**: MOQ 1, instant tooling quote + 24h parts quote, true
   consignment with overage rules (0603: min 50+30 over; ICs: 1–5 extra
   — painful at 2-off). Community datapoints put 2-off turnkey at
-  ~$150–300. Boards <50×100 mm must be panelized.
+  ~$150–300. Boards \<50×100 mm must be panelized.
 - **Seeed Fusion**: PCBA from 1 pc; all-OPL BOMs historically ~$25
   setup + $0.10–0.30/component (2017–2018 figures, unverified today);
   OPL catalog not publicly searchable — CH32V003/RP2040 coverage

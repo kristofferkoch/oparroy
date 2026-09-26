@@ -22,12 +22,12 @@ Constraints going in:
   resolution 20.8 ns (DS0 §3.3.11 T3-20).
 - 2 KB SRAM bounds frame buffers.
 
-| Candidate | Self-clocked under ±2.2 % HSI? | Constant cell time? | HW decode fit | Verdict |
-|---|---|---|---|---|
-| **PWM cells, ratio-metric decode** (WS2812-shaped) | Yes — ratio is clock-invariant to first order | Yes | TIM2 PWM-input mode + DMA, per design | **Chosen** |
-| Pulse-distance (fixed pulse, variable gap) | Yes | No — slot timing becomes data-dependent | Same capture HW, but gap measurement | Rejected: jitter in slot positions, longer average cell; only win is lower switching EMI |
-| Manchester | Yes | Yes | Needs phase tracking per cell; no timer mode does it | Rejected: halves rate, buys DC balance we don't need (DC-coupled wire, no transformer) |
-| UART async (8N1) | **No** — two HSI ends sum to 4.4 % worst case vs the ~±2 %/end async sampling budget | Yes | USART exists, but byte framing fights gap/slot tricks | Rejected on clock tolerance alone |
+| Candidate                                          | Self-clocked under ±2.2 % HSI?                                                       | Constant cell time?                     | HW decode fit                                         | Verdict                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **PWM cells, ratio-metric decode** (WS2812-shaped) | Yes — ratio is clock-invariant to first order                                        | Yes                                     | TIM2 PWM-input mode + DMA, per design                 | **Chosen**                                                                               |
+| Pulse-distance (fixed pulse, variable gap)         | Yes                                                                                  | No — slot timing becomes data-dependent | Same capture HW, but gap measurement                  | Rejected: jitter in slot positions, longer average cell; only win is lower switching EMI |
+| Manchester                                         | Yes                                                                                  | Yes                                     | Needs phase tracking per cell; no timer mode does it  | Rejected: halves rate, buys DC balance we don't need (DC-coupled wire, no transformer)   |
+| UART async (8N1)                                   | **No** — two HSI ends sum to 4.4 % worst case vs the ~±2 %/end async sampling budget | Yes                                     | USART exists, but byte framing fights gap/slot tricks | Rejected on clock tolerance alone                                                        |
 
 ## 2. The coding, concretely
 
@@ -67,13 +67,13 @@ the same per-hop bound. What actually matters:
    regenerates from its own clock. Each hop's jitter is independent
    and bounded by that hop's decode/re-encode error. True for chains
    and rings alike.
-2. **Ring closure discipline** is the genuinely ring-specific hazard:
+1. **Ring closure discipline** is the genuinely ring-specific hazard:
    bits recirculate forever unless someone drains them. Rule: the
    supervisor is the *only* frame originator and drainer; nodes only
    rewrite their own slot. Duplication/loss becomes a protocol-level
    invariant the supervisor can assert (frame it sent ≠ frame it got
    back ⇒ fault), which feeds T13's intermittent-fault strategy.
-3. **Circulation-time drift**: total loop time is the sum of per-node
+1. **Circulation-time drift**: total loop time is the sum of per-node
    delays, each ±2.2 % worst case, so frame arrival period at the
    supervisor wanders by a few percent. Ratio-metric decode makes this
    harmless — no absolute timing anywhere downstream of a node's own
@@ -219,7 +219,7 @@ one returned frame. Consequences:
   command outputs from a double buffer and (b) samples its inputs for
   the coming frame's slot. All slots in frame k therefore hold values
   from the same instant L_k, and all outputs from frame k take effect
-  together at L_{k+1}: the ring behaves as one instrument sampled at
+  together at L\_{k+1}: the ring behaves as one instrument sampled at
   the vsync rate, not as N independent peripherals. Without the latch,
   output changes would tear across positions and sensor reads would be
   skewed by position — the rolling-shutter failure mode WS2812's

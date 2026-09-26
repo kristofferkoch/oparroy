@@ -78,15 +78,15 @@ Adoption engine, in evidenced order of importance:
    the IDE edits, cross-compiles *on the board*, runs projects;
    in-browser oscilloscope, console, interactive pin diagram
    ([IDE wiki](https://github.com/BelaPlatform/bela/wiki/Bela-IDE)).
-2. **Examples as curriculum**: hundreds of categorized examples; docs
+1. **Examples as curriculum**: hundreds of categorized examples; docs
    say load one, save a copy, mutate it.
-3. **A knowledge base, not a wiki**: [learn.bela.io](https://learn.bela.io)
+1. **A knowledge base, not a wiki**: [learn.bela.io](https://learn.bela.io)
    is tutorial-shaped; free YouTube C++ course; active
    [forum](https://forum.bela.io).
-4. **Meet users in their language**: C/C++, Pure Data, SuperCollider,
+1. **Meet users in their language**: C/C++, Pure Data, SuperCollider,
    Csound, FAUST, Max RNBO, Arduino-style — same core engine behind
    all.
-5. IDE is GPLv3, ships with every board.
+1. IDE is GPLv3, ships with every board.
 
 **Lesson:** oparroy's DSL is the "single source of truth" advantage;
 spend the savings on (a) a **golden live demo** (RP2040 supervisor +
@@ -147,18 +147,18 @@ deliverable — aligning with hands-off-HIL from day one (DESIGN.md §6,
 
 ## Transferable to oparroy — decision map
 
-| Bela decision | oparroy design area |
-|---|---|
-| Tiny frozen PRU assembly blob owns all wire timing; host does policy | **PHY engine**: keep the PIO re-timing RX/TX program minimal, versioned separately from supervisor firmware |
-| Dedicated peripheral (McASP) streams bulk; programmable engine only where needed | **PHY engine**: PIO + DMA chaining; CPU out of the bit path |
-| Sensors sampled synchronously in the engine's timebase | **Protocol**: timestamp/slot node telemetry in the ring frame, not polled ad hoc |
-| Smart sensor nodes; cooked data over a standard 4-wire connector | **Node I/O**: nodes pre-process (debounce, captouch thresholding, accel FIFO), answer with digested values |
-| Hardware address selection via tri-state solder bridges, documented failure modes | **Node I/O / protocol**: hardware node-ID strategy instead of provisioning; docs teaching the short-circuit-class mistakes |
-| Per-type default addresses + one shared register map, auto-detect in host lib | **Protocol**: fixed node-type IDs in enumeration; supervisor auto-detects type |
-| One firmware across a sensor family | **Node firmware**: single MCU image, personality by type ID — one HIL target (card T11) |
-| Zero-install browser IDE, examples-as-curriculum, scope built in | **Tooling**: ship a runnable ring demo + live visualizer (RP2040 golden reference) before breadth of features |
-| Layered licensing: permissive libs, copyleft core, trademarked name | **Repo/legal**: permissive node library, copyleft supervisor/tooling, trademark "oparroy" early — only if plain MIT (settled 2026-09-26) is revisited |
-| In-house pogo-pin jig, test post-SMT/pre-through-hole, every unit in operation | **Test board**: jig as its own deliverable; test at the cheapest rework stage (card T10) |
+| Bela decision                                                                     | oparroy design area                                                                                                                                   |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tiny frozen PRU assembly blob owns all wire timing; host does policy              | **PHY engine**: keep the PIO re-timing RX/TX program minimal, versioned separately from supervisor firmware                                           |
+| Dedicated peripheral (McASP) streams bulk; programmable engine only where needed  | **PHY engine**: PIO + DMA chaining; CPU out of the bit path                                                                                           |
+| Sensors sampled synchronously in the engine's timebase                            | **Protocol**: timestamp/slot node telemetry in the ring frame, not polled ad hoc                                                                      |
+| Smart sensor nodes; cooked data over a standard 4-wire connector                  | **Node I/O**: nodes pre-process (debounce, captouch thresholding, accel FIFO), answer with digested values                                            |
+| Hardware address selection via tri-state solder bridges, documented failure modes | **Node I/O / protocol**: hardware node-ID strategy instead of provisioning; docs teaching the short-circuit-class mistakes                            |
+| Per-type default addresses + one shared register map, auto-detect in host lib     | **Protocol**: fixed node-type IDs in enumeration; supervisor auto-detects type                                                                        |
+| One firmware across a sensor family                                               | **Node firmware**: single MCU image, personality by type ID — one HIL target (card T11)                                                               |
+| Zero-install browser IDE, examples-as-curriculum, scope built in                  | **Tooling**: ship a runnable ring demo + live visualizer (RP2040 golden reference) before breadth of features                                         |
+| Layered licensing: permissive libs, copyleft core, trademarked name               | **Repo/legal**: permissive node library, copyleft supervisor/tooling, trademark "oparroy" early — only if plain MIT (settled 2026-09-26) is revisited |
+| In-house pogo-pin jig, test post-SMT/pre-through-hole, every unit in operation    | **Test board**: jig as its own deliverable; test at the cheapest rework stage (card T10)                                                              |
 
 **Could not verify:** (a) any Bela hardware-in-the-loop CI — appears
 not public; (b) whether Bela Gem reuses the original PRU assembly

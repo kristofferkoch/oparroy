@@ -82,18 +82,18 @@ infrastructure, by contrast, may cost freely.
 
 ## Repository layout
 
-| Path           | Contents                                              |
-| -------------- | ----------------------------------------------------- |
-| `AGENTS.md`    | Doc-split and writing conventions for agents          |
-| `IDEAS.md`     | Not-yet-planned ideas (append-only stash)             |
-| `DESIGN.md`    | Settled design decisions + open design questions      |
-| `KANBAN.md`    | Single home for planned work (cards, Next/Backlog)    |
-| `README.md`    | This file                                             |
+| Path                       | Contents                                              |
+| -------------------------- | ----------------------------------------------------- |
+| `AGENTS.md`                | Doc-split and writing conventions for agents          |
+| `IDEAS.md`                 | Not-yet-planned ideas (append-only stash)             |
+| `DESIGN.md`                | Settled design decisions + open design questions      |
+| `KANBAN.md`                | Single home for planned work (cards, Next/Backlog)    |
+| `README.md`                | This file                                             |
 | `flake.nix` + `flake.lock` | Pinned dev shell: all non-Python tools (DESIGN.md §8) |
-| `.envrc`       | direnv hook into the flake shell                      |
-| `docs/`        | Reference documents (research reports, sub-designs)   |
-| `datasheets/`  | Vendor PDFs + extracted markdown sidecars per part    |
-| `LICENSE`      | MIT, copyright 2026 Kristoffer Koch                   |
+| `.envrc`                   | direnv hook into the flake shell                      |
+| `docs/`                    | Reference documents (research reports, sub-designs)   |
+| `datasheets/`              | Vendor PDFs + extracted markdown sidecars per part    |
+| `LICENSE`                  | MIT, copyright 2026 Kristoffer Koch                   |
 
 Doc conventions follow the IDEAS → KANBAN/DESIGN graduation model:
 stray thoughts live in IDEAS.md, planned work in KANBAN.md cards,

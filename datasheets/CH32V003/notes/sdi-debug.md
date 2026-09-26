@@ -6,7 +6,7 @@ ch.18.
 
 - Single-wire debug on **PD1 (SWIO)**, enabled out of reset. HSI must be
   running for SDI (DS0 §1.4.18).
-- AFIO_PCFR1 SWCFG[2:0]: 0xx = SDI enabled; 100 = SDI off, PD1 becomes
+- AFIO_PCFR1 SWCFG\[2:0\]: 0xx = SDI enabled; 100 = SDI off, PD1 becomes
   GPIO — note this is self-locking against the debugger until next reset.
 - Pin conflicts: PD1 defaults carry TIM1_CH3N / ADC_ETR2; remaps carry
   I2C_SCL_1 and USART_RX_1. Keep those functions off PD1 while debugging.

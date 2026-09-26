@@ -53,30 +53,30 @@ All registers are accessed as 32-bit words unless noted; WCH header names
 
 ## Electrical quick table (DS0 ch.3)
 
-| Parameter | Value | Source |
-|---|---|---|
-| Operating VDD | 2.7–5.5 V (2.8 min with ADC) | DS0 §3.3.1 T3-2 |
-| Abs-max VDD | −0.3…5.5 V | DS0 §3.2 T3-1 |
-| Input voltage, FT pins (PC1/PC2/PC5/PC6) | VSS−0.3…5.5 V | DS0 §3.2 T3-1 |
-| Input voltage, other pins | VSS−0.3…VDD+0.3 V | DS0 §3.2 T3-1 |
-| VIH (std & FT inputs) | ≥ 0.22×(VDD−2.7)+1.55 V | DS0 §3.3.9 T3-16 |
-| VIL | ≤ 0.19×(VDD−2.7)+0.65 V | DS0 §3.3.9 T3-16 |
-| Schmitt hysteresis | 150 mV typ (all inputs + NRST) | DS0 §3.3.9/3.3.10 |
-| Weak pull-up/down | 35–55 kΩ (45 typ) | DS0 §3.3.9 T3-16 |
-| GPIO drive | ±8 mA spec'd (VOL≤0.4 V/VOH≥VDD−0.4), ±20 mA degraded; ΣIVDD 100 mA, ΣIVSS 80 mA | DS0 §3.3.9 T3-17, §3.2 |
-| Output speed grades | 2 / 10 / 30 MHz (MODE 10/01/11) | DS0 §3.3.9 T3-18 |
-| EXTI min pulse | 10 ns | DS0 §3.3.9 T3-18 |
-| ADC input range | VSS–VDD | DS0 §3.3.14 T3-23 |
-| OPA common-mode input | 0–VDD; offset ±3/±13 mV | DS0 §3.3.15 T3-26 |
-| ESD (HBM) | 4 kV | DS0 §3.2 T3-1 |
-| Injection current per pin | ±4 mA (Σ ±20 mA) | DS0 §3.2 T3-1 |
-| Run current 48 MHz HSI, 3.3 V | 4.0 mA (periphs off) / 6.4 mA (all on) | DS0 §3.3.4 T3-6-1 |
-| Sleep 48 MHz HSI, 3.3 V | 1.7 / 4.1 mA | DS0 §3.3.4 T3-7-1 |
-| Standby, 3.3 V | 7.6 µA (LSI off) / 9.1 µA (LSI on) | DS0 §3.3.4 T3-8 |
-| HSI accuracy | ±1.6/−1.2 % (0–70 °C); ±2.2 % (−40–85 °C) | DS0 §3.3.6 T3-11 |
-| VREFINT | 1.2 V typ (1.17–1.23) | DS0 §3.3.3 T3-5 |
-| POR/PDR threshold | 2.5 V typ rise / 2.48 V fall | DS0 §3.3.2 T3-4 |
-| Ambient temp | −40…85 °C (suffix 6) | DS0 §3.2 T3-1 |
+| Parameter                                | Value                                                                            | Source                 |
+| ---------------------------------------- | -------------------------------------------------------------------------------- | ---------------------- |
+| Operating VDD                            | 2.7–5.5 V (2.8 min with ADC)                                                     | DS0 §3.3.1 T3-2        |
+| Abs-max VDD                              | −0.3…5.5 V                                                                       | DS0 §3.2 T3-1          |
+| Input voltage, FT pins (PC1/PC2/PC5/PC6) | VSS−0.3…5.5 V                                                                    | DS0 §3.2 T3-1          |
+| Input voltage, other pins                | VSS−0.3…VDD+0.3 V                                                                | DS0 §3.2 T3-1          |
+| VIH (std & FT inputs)                    | ≥ 0.22×(VDD−2.7)+1.55 V                                                          | DS0 §3.3.9 T3-16       |
+| VIL                                      | ≤ 0.19×(VDD−2.7)+0.65 V                                                          | DS0 §3.3.9 T3-16       |
+| Schmitt hysteresis                       | 150 mV typ (all inputs + NRST)                                                   | DS0 §3.3.9/3.3.10      |
+| Weak pull-up/down                        | 35–55 kΩ (45 typ)                                                                | DS0 §3.3.9 T3-16       |
+| GPIO drive                               | ±8 mA spec'd (VOL≤0.4 V/VOH≥VDD−0.4), ±20 mA degraded; ΣIVDD 100 mA, ΣIVSS 80 mA | DS0 §3.3.9 T3-17, §3.2 |
+| Output speed grades                      | 2 / 10 / 30 MHz (MODE 10/01/11)                                                  | DS0 §3.3.9 T3-18       |
+| EXTI min pulse                           | 10 ns                                                                            | DS0 §3.3.9 T3-18       |
+| ADC input range                          | VSS–VDD                                                                          | DS0 §3.3.14 T3-23      |
+| OPA common-mode input                    | 0–VDD; offset ±3/±13 mV                                                          | DS0 §3.3.15 T3-26      |
+| ESD (HBM)                                | 4 kV                                                                             | DS0 §3.2 T3-1          |
+| Injection current per pin                | ±4 mA (Σ ±20 mA)                                                                 | DS0 §3.2 T3-1          |
+| Run current 48 MHz HSI, 3.3 V            | 4.0 mA (periphs off) / 6.4 mA (all on)                                           | DS0 §3.3.4 T3-6-1      |
+| Sleep 48 MHz HSI, 3.3 V                  | 1.7 / 4.1 mA                                                                     | DS0 §3.3.4 T3-7-1      |
+| Standby, 3.3 V                           | 7.6 µA (LSI off) / 9.1 µA (LSI on)                                               | DS0 §3.3.4 T3-8        |
+| HSI accuracy                             | ±1.6/−1.2 % (0–70 °C); ±2.2 % (−40–85 °C)                                        | DS0 §3.3.6 T3-11       |
+| VREFINT                                  | 1.2 V typ (1.17–1.23)                                                            | DS0 §3.3.3 T3-5        |
+| POR/PDR threshold                        | 2.5 V typ rise / 2.48 V fall                                                     | DS0 §3.3.2 T3-4        |
+| Ambient temp                             | −40…85 °C (suffix 6)                                                             | DS0 §3.2 T3-1          |
 
 ## Not in these notes
 

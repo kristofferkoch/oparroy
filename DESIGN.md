@@ -46,11 +46,11 @@ Design drivers, in priority order:
    existence against this driver. Note the asymmetry: **supervisor and
    test infrastructure may cost freely** — cost discipline applies to
    the replicated node, not to the one-off tooling around it.
-2. **Resilience**: no single connector failure (permanent or intermittent)
+1. **Resilience**: no single connector failure (permanent or intermittent)
    or single MCU failure partitions the ring.
-3. **Repairability**: when a fault does occur, it is visually locatable
+1. **Repairability**: when a fault does occur, it is visually locatable
    to node and segment without instruments (§4.1).
-4. **Testability**: hands-off hardware-in-the-loop testing from day one.
+1. **Testability**: hands-off hardware-in-the-loop testing from day one.
 
 ## 2. Physical layer
 

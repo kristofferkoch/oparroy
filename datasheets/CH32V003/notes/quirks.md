@@ -156,8 +156,7 @@ against silicon are marked **unverified**.
   lines 195-211, 563-568).
 - **minichlink uses 64-byte sectors for the 003** — matches the fast-erase
   granularity ([minichlink.c:109](https://github.com/cnlohr/ch32fun/blob/master/minichlink/minichlink.c)).
-- **Reading the last flash byte fails** — `minichlink -r dump.bin flash
-  0x4000` faults on the abstract command; 0x3FFF succeeds. Off-by-one in the
+- **Reading the last flash byte fails** — `minichlink -r dump.bin flash 0x4000` faults on the abstract command; 0x3FFF succeeds. Off-by-one in the
   debug-access path, still unexplained
   ([cnlohr/ch32fun#628](https://github.com/cnlohr/ch32fun/issues/628)).
 - **DATA0/DATA1 option data need explicit flashing** — not set by a normal
@@ -242,7 +241,7 @@ against silicon are marked **unverified**.
   a 5-bit immediate, so PC5–PC7/PD5–PD7 are unusable), the pin-change EXTI
   must be highest priority and never preempted, and critical sections must
   stay under ~40 cycles ([rv003usb README](https://github.com/cnlohr/rv003usb)).
-- **SDK Delay_* hangs if the SysTick interrupt is enabled** — WCH EVT
+- **SDK Delay\_* hangs if the SysTick interrupt is enabled*\* — WCH EVT
   Delay_Ms/Delay_Us poll the CNTIF flag that the user's own SysTick ISR must
   clear; result: infinite hang. Use a tick counter or keep delays
   interrupt-free ([openwch/ch32v003#62](https://github.com/openwch/ch32v003/issues/62)).
@@ -314,7 +313,7 @@ against silicon are marked **unverified**.
   cross-check against ESIG flash size before trusting the banner.
 - **One LinkE at a time** — minichlink cannot select among multiple attached
   WCH-LinkE programmers ([cnlohr/ch32fun#902](https://github.com/cnlohr/ch32fun/issues/902), open).
-- **OpenOCD verify is 15× slower than programming** — 15 s verify vs <1 s
+- **OpenOCD verify is 15× slower than programming** — 15 s verify vs \<1 s
   program on 16 KB with WCH's OpenOCD fork; budget CI time accordingly
   ([openwch/ch32v003#28](https://github.com/openwch/ch32v003/issues/28)).
 - **Full-flash readback off-by-one** — `minichlink -r … flash 0x4000`
