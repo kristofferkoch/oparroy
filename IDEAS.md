@@ -77,6 +77,29 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
+- **Fanout-driven net-label elision for generated drawings**
+  (2026-09-27): when generating circuit drawings (feeds T21's survey
+  and whatever renderer follows the dot dump), the highest-fanout nets
+  — GND, the power rails — become net labels/symbols instead of drawn
+  wires. A pareto cut on fanout keeps the drawing from degenerating
+  into a ratsnest around the few nets that touch everything.
+- **Technology mapping onto multi-unit packages** (2026-09-27) — the
+  FPGA-flow analogy: synthesis emits primitive gates, the technology
+  mapper packs them onto physical cells. Applied here: a capture
+  instantiates *logical* primitives (two diodes whose cathodes share a
+  net), and a mapping pass binds them onto a physical multi-unit
+  package (a BAT54C common-cathode pair) given the constraints —
+  shared-net pattern (common-cathode pair → BAT54C, series pair →
+  BAT54S, N switches + shared power → 4066-class), per-unit pin
+  assignment, and the §7 multi-unit model's same-net rule for shared
+  physical pins. What it would buy: fewer unique BOM lines (§6's
+  $3.07 per Extended line), less board area, pack-or-don't as a
+  late optimization rather than a capture-time decision. Deferred:
+  capture stays **concrete and directed** — you bind the package you
+  mean (the `Bat54s` class, unit subsets) and the checker verifies,
+  instead of a matcher inferring it. Revisit if BOM-line pressure or
+  the CI board's switch count makes hand-packing tedious; the settled
+  unit model (DESIGN.md §7) is the substrate this would map onto.
 - Hardware-in-the-loop CI: self-hosted runner permanently attached to the
   test board?
 - Analog simulation of the PHY (line drivers, comparators, bypass
