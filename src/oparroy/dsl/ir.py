@@ -14,7 +14,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from oparroy.dsl.parts import TypedPart
 
 _NAT_SPLIT = re.compile(r"(\d+)")
 
@@ -255,13 +258,75 @@ class Circuit:
     def part(
         self,
         ref: str,
+        spec: TypedPart | None = None,
         *,
-        symbol: str,
+        symbol: str | None = None,
         value: str | None = None,
         footprint: str | None = None,
     ) -> Part:
-        """Place a part: bind ``ref`` to the library symbol ``Lib:Name``."""
+        """Place a part, from a typed spec or a ``Lib:Name`` symbol.
+
+        A typed ``spec`` (``oparroy.dsl.parts``) carries its own
+        symbol, value, footprint default, and wiring: placement
+        connects its pins in the same step, and every net is resolved
+        before anything is placed, so a rejected call changes nothing.
+        A ``symbol`` string places an unwired part; wiring is
+        ``connect``'s job. ``footprint`` overrides the spec's default.
+        """
+        if isinstance(spec, str):
+            msg = f"symbol {spec!r} must be passed as symbol={spec!r}"
+            raise DefinitionError(msg)
+        if spec is not None:
+            if symbol is not None:
+                msg = "pass a typed part or symbol=, not both"
+                raise DefinitionError(msg)
+            if value is not None:
+                msg = "value goes to the typed part class, not part()"
+                raise DefinitionError(msg)
+            return self._place_typed(ref, spec, footprint)
+        if symbol is None:
+            msg = "part() needs a typed part or symbol="
+            raise DefinitionError(msg)
         return self._place(ref, self._symbols.lookup(symbol), value, footprint)
+
+    def _place_typed(
+        self,
+        ref: str,
+        spec: TypedPart,
+        footprint: str | None,
+    ) -> Part:
+        # Lazy import: parts.py imports this module at runtime.
+        from oparroy.dsl.parts import TypedPart as _TypedPart  # noqa: PLC0415
+
+        if not isinstance(spec, _TypedPart):
+            msg = f"expected a typed part (oparroy.dsl.parts), got {spec!r}"
+            raise DefinitionError(msg)
+        resolved = self._symbols.lookup(spec.symbol)
+        numbers = {pin.number for pin in resolved.pins}
+        targets = list(spec.pin_map.values())
+        unknown = sorted(set(targets) - numbers, key=natural_key)
+        if unknown:
+            msg = (
+                f"{type(spec).__name__} pin_map targets pins {unknown}, "
+                f"which {spec.symbol} does not have"
+            )
+            raise DefinitionError(msg)
+        if len(set(targets)) != len(targets):
+            msg = (
+                f"{type(spec).__name__} pin_map maps several names "
+                "to the same pin number"
+            )
+            raise DefinitionError(msg)
+        wiring = {kw: self._resolve_net(net) for kw, net in spec.nets.items()}
+        placed = self._place(
+            ref,
+            resolved,
+            spec.value,
+            footprint if footprint is not None else spec.footprint,
+        )
+        for kw, net in wiring.items():
+            net._attach(placed.pin(spec.pin_map[kw]))  # noqa: SLF001 — same module
+        return placed
 
     def _place(
         self,
