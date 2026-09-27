@@ -21,8 +21,11 @@ import argparse
 import sys
 
 from oparroy.dsl import (
+    Bat54s,
+    Capacitor,
     Circuit,
     KiCadLibraries,
+    Resistor,
     SymbolTable,
     check,
     emit_netlist,
@@ -30,34 +33,32 @@ from oparroy.dsl import (
     to_dot,
 )
 
-_R0603 = "Resistor_SMD:R_0603_1608Metric"
-_C0603 = "Capacitor_SMD:C_0603_1608Metric"
+
+class R0603(Resistor):
+    """The project's 0603 resistor bin: class-default footprint (§7)."""
+
+    default_footprint = "Resistor_SMD:R_0603_1608Metric"
+
+
+class C0603(Capacitor):
+    """The project's 0603 capacitor bin: class-default footprint (§7)."""
+
+    default_footprint = "Capacitor_SMD:C_0603_1608Metric"
 
 
 def capture(symbols: SymbolTable) -> Circuit:
     """Build the watchdog circuit IR."""
     circuit = Circuit("watchdog-chargepump", symbols)
-    rs = circuit.part("Rs", symbol="Device:R", value="220", footprint=_R0603)
-    cp = circuit.part("Cp", symbol="Device:C", value="22n", footprint=_C0603)
-    d1 = circuit.part(
-        "D1",
-        symbol="Diode:BAT54S",
-        value="BAT54S",
-        footprint="Package_TO_SOT_SMD:SOT-23",
-    )
-    cs = circuit.part("Cs", symbol="Device:C", value="10n", footprint=_C0603)
-    rb = circuit.part("Rb", symbol="Device:R", value="47k", footprint=_R0603)
-
     ka = circuit.net("ka")
     kap = circuit.net("kap")
     x = circuit.net("x")
     sel = circuit.net("sel")
     gnd = circuit.net("GND")
-    circuit.connect(ka, rs[1])
-    circuit.connect(kap, rs[2], cp[1])
-    circuit.connect(x, cp[2], d1[3])
-    circuit.connect(sel, d1[2], cs[1], rb[1])
-    circuit.connect(gnd, d1[1], cs[2], rb[2])
+    circuit.part("Rs", R0603("220", a=ka, b=kap))
+    circuit.part("Cp", C0603("22n", a=kap, b=x))
+    circuit.part("D1", Bat54s(anode=gnd, com=x, cathode=sel))
+    circuit.part("Cs", C0603("10n", a=sel, b=gnd))
+    circuit.part("Rb", R0603("47k", a=sel, b=gnd))
     return circuit
 
 
