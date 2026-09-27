@@ -236,6 +236,13 @@ bench plus the §7 protection sizing is already characterized at 3.3 V.
   connector break turning the loop into a long spur — the fix is
   supervisor-side power injection at a second tap (§1: supervisors may
   cost freely), not a higher rail.
+- **Unregulated payload rail added** (2026-09-27): alongside 3.3 V, the
+  bus carries a raw **5–18 V** rail for payloads that outgrow tens of
+  mA — anything with its own buck converter. The 18 V cap comes from
+  the cheap-buck ceiling: commodity buck regulators typically spec
+  ≤ 20 V max input. Node power and ring logic never touch it — nodes
+  stay on 3.3 V, regulation stays per-payload (§1) — it is plain
+  copper on the bus (§3 pinout) until a payload uses it.
 
 ## 3. Ring topology and bypass
 
@@ -274,6 +281,16 @@ The §5 pin budget lands at ~16–17 of 18, verified at pin-map time
 (T9/T11). Electrically neutral for the PHY: every driver still sees
 exactly one segment, so T5's drive/capacitance baseline and T15's reach
 budget are unchanged by the topology.
+
+Segment connector (2026-09-27; supersedes the single 10-contact
+connector sketched the same day): **two 6-pin connectors per node** —
+upstream-facing `(UNREG, 3V3, GND, RX_A, GND, TX_B)` and
+downstream-facing `(UNREG, 3V3, GND, TX_A, GND, RX_B)`, node-centric
+naming (RX_A/TX_A = this node's ring-A receive/transmit). Each
+connector carries UNREG + 3V3 with two GND pins, so every supply pin
+has a paired return: balanced copper cross-section for power and
+ground on both faces. Power enters a node from both directions — the
+power loop above — and connector part/style stays open (§6).
 
 Interaction with §4: the watchdog SPDT bypass stays, on ring A only —
 dual ring demotes it from sole defense to second layer. A dead MCU
@@ -525,8 +542,9 @@ outside their library costs setup fees or hand-soldering. The DSL
 parts DB tracks assembler-stock status (§7).
 
 Open: debug transport (UART per node? shared bus?),
-board interconnect style (connectors as deliberately fragile elements —
-they are the failure mode under test).
+board interconnect connector part/style — the pinout is settled
+(2026-09-27, §3); connectors remain deliberately fragile elements,
+they are the failure mode under test.
 
 Instrumented boundary node (2026-09-26): the ring node adjacent to the
 supervisor — first/last, where the supervisor closes the ring — is
@@ -654,16 +672,25 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   view (ugly, but a start); the goal is abstraction-level block views
   in the Verilog-debugger sense — prior-art survey is card T21.
 
-Landed (2026-09-26, card T7a): the DSL core in `src/oparroy/dsl/` —
+Landed (2026-09-26, card T7a; typed parts and review hardening
+2026-09-27): the DSL core in `src/oparroy/dsl/` —
 `ir.py` (parts/pins/nets/circuit + pretty-print), `check.py`
 (validation pass: connectivity, footprint existence and symbol
-footprint-filter match, power-driver rules), `kicad_emit.py` (the
+footprint-filter match, power-driver rules with KiCad's own
+power-symbol convention — a `power:`-library pin marks its net
+driven), `kicad_emit.py` (the
 s-expression `.net` pcbnew imports; byte-identical emission —
-sorted iteration, content-derived UUID tstamps, no dates or paths),
+sorted iteration, content-derived UUID tstamps, no dates or paths;
+power symbols excluded like eeschema's own export),
 `dot.py` (Graphviz dump), `kicadlib.py` + `sexpr.py` (KiCad 10 library
-access, `extends`-aware). Proven by `design/watchdog_chargepump.py`:
-the §4 charge pump re-captured flat against the nix-provisioned KiCad
-libraries, golden netlist in `tests/golden/`, 43 pytest cases green.
+access, `extends`-aware), `parts.py` (typed jellybean parts —
+`Resistor`/`Capacitor`/`Bat54s`, keyword-only pin wiring at
+construction, class-default footprints per bin). Proven by
+`design/watchdog_chargepump.py`:
+the §4 charge pump captured on typed parts against the
+nix-provisioned KiCad
+libraries, golden netlist in `tests/golden/` (byte-identical across
+the typed-parts migration), 92 pytest cases green.
 Not yet proven: a real pcbnew netlist *import* (no KiCad application in
 the flake yet — the golden format is pinned, the ingest is exercised
 when the first board enters layout).
