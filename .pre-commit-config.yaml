@@ -17,6 +17,7 @@ repos:
       exclude: '^\.clang-format$|^\.clang-tidy$'
     - id: check-added-large-files
       args: ['--maxkb=512']
+      exclude: '^datasheets/'
 
 - repo: local
   hooks:
