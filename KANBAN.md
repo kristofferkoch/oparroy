@@ -35,6 +35,10 @@ Critical paths only — every card also carries its own
 graph TD
     T19 --> T10
     T7b[T7b DSL subcircuit composition] --> T19[T19 layout property checker]
+    T7b --> T22[T22 node board design]
+    T7b --> T24[T24 instrumentation with equivalence proof]
+    T24 --> T10
+    T22 --> T10
     T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
@@ -50,14 +54,44 @@ ______________________________________________________________________
   units with declared port interfaces (§7): hierarchy carried into
   refdes/net naming, refdes stability across source edits, multi-instance
   capture — the test board's 8 identical node circuits as the proving
-  case. **Blocked by:** — · **Unblocks:** T19
+  case. Design mined from PolymorphicBlocks (evaluated 2026-09-27,
+  rejected as a dependency — JVM core vs §8 tooling discipline — mined
+  for ideas): hierarchy is capture-time structure, **flattening is a
+  pass**, hierarchy survives as metadata (hierarchical refdes,
+  sheetpaths) enabling **channelization — lay out one node, replicate
+  placement/routing 8×**; `Export`-style ports bind a subcircuit's
+  external port to an internal one; **port arrays** with width
+  propagation (button matrix, LED arrays); **bundles** — the §3
+  connector pinout as one connectable unit, a connector block mapping
+  bundle↔pin numbers declaratively; **multipacking** for multi-unit
+  packages (4066-class quad switches, BAT54ADW quad diodes — DESIGN.md
+  §7 multi-unit model: `Symbol` preserves KiCad's unit structure, parts
+  instantiate unit subsets, a physical pin shared by placed units sits
+  on one net); **component sockets** — a subcircuit declares it needs
+  a *part*, not just nets (a `DiodeSocket` protocol of pin handles;
+  satisfied by a standalone typed part or by one unit of a parent-
+  placed multi-unit package), so packing is the parent's directed
+  choice and the subcircuit stays package-agnostic — with the caveat
+  that packing across the ring-A/B redundancy boundary reintroduces a
+  single point of failure (raised 2026-09-27); checks report
+  hierarchical paths (`U1/Rs: …`). Connection sugar, added only as the flat style proves
+  tedious: `chain()` over `Input`/`Output`/`InOut`-tagged ports (the
+  ring *is* a chain; `InOut` is the tapped RX-in-bypass semantics, §4),
+  named connections naming nets, a lexically-scoped `with`-block for
+  implicit power/ground (scope stays explicit — the no-implicit-global-
+  circuit rule holds). **Blocked by:** — · **Unblocks:** T19
 - **T7c — DSL parts DB with assembler-stock status.** One record per
   part: LCSC number, JLCPCB Basic/Extended tier, stock count with as-of
   date, KiCad symbol/footprint pair, spice model binding, datasheet
   pointer into `datasheets/`. A freshness check flags stale stock
   entries (§6: part selection is inventory-driven); feeds T8's
   unsourcable-part check. The emitter resolves parts from the DB,
-  replacing the ad-hoc declarations of T7a. **Blocked by:** — ·
+  replacing the ad-hoc declarations of T7a. Selection is **constraint
+  filtering over the table**, not a lookup: filter knobs as refinement
+  data — min footprint area, excluded parts (stock-out), required part,
+  required footprints (PolymorphicBlocks steal, 2026-09-27);
+  assembler-stock status is a column *and* a checkable constraint.
+  **Blocked by:** — ·
   **Unblocks:** —
 - **T7d — DSL ngspice emitter.** Simulation-netlist backend over the
   T7a IR: emits the DUT netlist (`.subckt` wrappers matching the
@@ -68,11 +102,21 @@ ______________________________________________________________________
   against either capture. **Blocked by:** — · **Unblocks:** T7e
 - **T8 — DSL constraint checking / property verification.** Electrical
   rules beyond KiCad ERC: bypass-path continuity under single-fault
-  models, watchdog default-state assertions. **Blocked by:** — ·
+  models, watchdog default-state assertions. Typed ports carry
+  voltage/current-limit **ranges**; checks are interval containment —
+  a sink's acceptable range must cover the connected source's output
+  range — so tolerance stackup becomes checkable (PolymorphicBlocks
+  steal, 2026-09-27). Waivers are explicit, path-addressed data in the
+  capture — auditable in review — never comment-style suppression.
+  **Blocked by:** — ·
   **Unblocks:** —
 - **T9 — Firmware header generation from the DSL.** Pin maps and
   peripheral assignments emitted for the CH32V003 (DESIGN.md §5).
-  **Blocked by:** — · **Unblocks:** T11
+  Captures request pins by function (`gpio.request("keepalive")`),
+  pin numbers bind late as refinement data — one authoritative pin
+  table feeds both this generator and the §5 GPIO-budget check
+  (PolymorphicBlocks steal, 2026-09-27). **Blocked by:** — ·
+  **Unblocks:** T11
 - **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
   §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
   fixed-capacity containers, ownership types over static arenas,
@@ -136,6 +180,51 @@ ______________________________________________________________________
   classes/keepouts into the
   `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
   **Blocked by:** T7b · **Unblocks:** T10
+- **T22 — Node board design.** The single ring node as its own small
+  board, designed **before** the CI board — the CI board is eight of
+  these tiles plus a supervisor (DESIGN.md §6). Full node circuit
+  captured in the DSL: CH32V003 + PHY front-end (§2), charge-pump
+  watchdog (§4), status LEDs (§4.1), terminal protection (§7
+  checklist), two segment connectors (§3 pinout); layout in KiCad,
+  fabbed via JLCPCB (§6). Settles the node-board stackup question
+  (§9). First exercise of the whole capture→layout round trip:
+  footprint assignment and annotation stages, real pcbnew netlist
+  ingest (the T7a caveat, §7), and back-annotation so refdes numbering
+  follows physical placement (§7). **Blocked by:** T7b ·
+  **Unblocks:** T10
+- **T23 — DSL parametric value resolution.** Computed component values
+  carry slack (DESIGN.md §7): the capture states a spec — target plus
+  tolerance — and the emitter resolves it to real parts from the parts
+  DB's stocked bins: the VDD/2 divider comes out of the 10k bin, never
+  an irrational computed number. Includes ratio specs (a divider ratio
+  met by any pair from a bin) and reporting the achieved error of the
+  chosen values against the spec. Widens `Part.value` from `str` to a
+  value-spec type (DESIGN.md §7). Generalizes to **ranges as the
+  universal value spec** and **generators** (PolymorphicBlocks steal,
+  2026-09-27): a solve pass between capture and check (capture → solve
+  → check → emit) where a subcircuit computes its own part values from
+  context — the LED sizes its resistor from the actual rail voltage.
+  Solving stays a pass over the finished IR, never tangled into
+  construction: plain-Python capture semantics hold (PB's `IntLike`
+  interleaving is the anti-pattern). **Blocked by:** T7c ·
+  **Unblocks:** —
+- **T24 — DSL instrumentation transforms with reset-state equivalence.**
+  The CI board is the node design plus injected controllability and
+  observability (§6: fault-injection muxes, supervisor-override muxes,
+  sense taps) — and that makes it *dangerously different* from the
+  plain node it is meant to exercise (raised 2026-09-27). Capture
+  instrumentation as an **explicit transformation** of the
+  uninstrumented design — insert a series switch on this net, hang a
+  sense tap off that one — never a hand-maintained second capture, so
+  the two can never drift. The checker then proves the instrumented
+  board **in reset state** is equivalent to the plain board: every
+  inserted series element in its default/pass-through state reduces to
+  a wire (net merge), every tap is high-impedance, no base part or net
+  is lost, and residual differences (the series element's on-resistance
+  in the §2 decode-margin budget, tap capacitance on the §6 short-stub
+  contract) are enumerated and budgeted, not assumed away. "Almost
+  equivalent" is exactly the set of those enumerated residuals.
+  **Blocked by:** T7b · **Unblocks:** T10
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
   all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
@@ -146,11 +235,12 @@ ______________________________________________________________________
   **instrumented boundary node**: the supervisor-adjacent node's RX/TX
   ring segments (plus comparator-output and working-LED taps) wired to
   RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
-  §6). Captured in the DSL, layout in KiCad.
+  §6). Nodes tile the T22 node-board design; captured in the DSL,
+  layout in KiCad.
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  **Blocked by:** T19 · **Unblocks:** T12
+  **Blocked by:** T19, T22, T24 · **Unblocks:** T12
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Per-bit cut-through forwarding with on-the-fly slot rewrite

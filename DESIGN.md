@@ -586,6 +586,68 @@ DSL shape (2026-09-26, from the T7a design interrogation):
 - **KiCad library integration is mandatory.** Symbol/footprint
   references validate against KiCad's actual libraries (provisioned via
   the flake) — without that, pcbnew ingest can't be trusted.
+- **The pipeline is not one-way** (2026-09-27). Between capture and
+  pcbnew sit **footprint assignment** and **annotation** as explicit,
+  repeatable stages — annotation re-runs during layout so numbering
+  ends up reflecting physical placement (KiCad's geographic annotation
+  is the norm). Capture names stay the stable identity (the explicit
+  instance names above); annotation maps them to placed refdes, and the
+  DSL accepts pcbnew's back-annotation rather than treating emission as
+  a one-shot export.
+- **Footprints default per part class, overridable per instance**
+  (2026-09-27). Declaring a footprint at every instantiation is too
+  verbose: a part class carries its default footprint in the capture,
+  and later stages (assignment, the parts DB) may override. ICs bind
+  their package at capture — the package decides which pins physically
+  exist, so it is never a late-stage decision. The checker's
+  missing-footprint error applies to the **post-assignment** IR: class
+  defaults resolve during capture, so a part reaching `check` without a
+  footprint has neither default nor assignment — that is the error.
+- **Typed jellybean parts, strings for the rest** (2026-09-27). Common
+  passives and transistors get real Python classes — `Resistor`,
+  `Capacitor`, `Diode`, `Nfet`, `Pnp`, `Npn`, … — so the type checker
+  and autocomplete do the work stringly-typed declarations can't.
+  Classes accrete as captures need them (YAGNI — no speculative zoo).
+  One-off parts stay string-declared, but **declared in one place and
+  instantiated elsewhere**: declaration is data, instantiation is
+  wiring. Instantiation is **keyword-only** (2026-09-27): positional
+  arguments are a pin-swap factory (the BAT54S x/sel swap, found in the
+  T7a review, is the proof). Pin names are the keyword names —
+  `Diode(*, cathode=sel_net, anode=x_net)` — so construction *is* the
+  wiring: no separate `connect` call for typed parts, and the type
+  checker and autocomplete cover declaration and connection alike. Sole
+  exception: `Resistor` and `Capacitor` may take their value
+  positionally — one unpolarized value carries no orientation risk;
+  `CapPol` and anything else with direction-sensitive pins, never.
+  Enforced with `*` in the class signatures.
+- **Multi-unit packages mirror KiCad's unit model** (2026-09-27).
+  KiCad encodes multi-unit symbols as `<Name>_<unit>_<style>`
+  subsymbols: unit 0 = pins/graphics common to all units, style 1 =
+  normal body / 2 = De Morgan (graphics-only for us), and each unit's
+  pins carry **physical package pin numbers** — the LM2902 is four
+  op-amp units plus a separate power unit; the BAT54ADW is four diode
+  units whose *shared anode pins appear in several units*. eeschema
+  places units independently (U1A, U1B, …; unplaced units don't
+  exist), and the netlist export flattens to refdes + physical pin
+  numbers — pcbnew never sees units. The DSL mirrors this: `Symbol`
+  preserves unit structure (kicadlib flattens it today — to be fixed
+  when the first multi-unit part lands, e.g. the CI board's
+  4066-class fault-injection switches), a placed part instantiates a
+  **unit subset** (default: all — today's behavior), unplaced units
+  materialize no pins so the unconnected-pin check stays clean, and
+  the checker asserts that a physical pin shared by several placed
+  units sits on one net (KiCad ERC's own rule). Package-as-one-part
+  stays right for units used as a single element: the BAT54S series
+  pair is a single unit in KiCad's own library, which is exactly the
+  `Bat54s` typed-class choice.
+- **Computed values carry slack** (2026-09-27). A computed value
+  (divider ratio, filter corner) is a spec — target plus tolerance —
+  not a number: the emitter resolves it to a real part from a stocked
+  bin (the VDD/2 divider draws from the 10k bin), never an unsourcable
+  irrational value. Resolution runs against the T7c parts DB's value
+  bins (§6 inventory-driven selection). `Part.value` widens from a
+  string to a value-spec type when this lands — a designed change to a
+  public constructor parameter, not a patch (card: T23).
 - **Captures live in a new `design/` tree.** `circuits/` keeps benches
   and device models until T7e's port retires the DUT `.cir` files.
 - **Human-review rendering:** a Graphviz dot dump is the minimal first
@@ -849,7 +911,16 @@ resolves each is in KANBAN.md):
   boards should be **thinner than the standard 1.6 mm** (≤1.0 mm class)
   so a small board doesn't feel chunky — JLCPCB offers thinner stackups
   as a fab option; verify exact thicknesses/4-layer combos at quote
-  time. Card: — (no card yet; lands with the first node-board design).
+  time. Card: T22 (the first node-board design).
+- **DSL composition model** (§7) — how subcircuits compose: capture
+  functions over a shared `Circuit` (ports are just parent `Net`
+  objects passed in; flat IR, no per-subcircuit standalone-check story)
+  vs first-class instance nodes in the IR (hierarchical refdes like
+  `U1/Rs`, sheetpaths, per-instance checks — but the flat
+  parts/nets dicts have no place for it, so retrofitting touches
+  everything). Today's API admits the first unchanged; decide before
+  T7b builds on it. Surfaced by the T7a review (2026-09-27).
+  Card: T7b.
 - **Cable reach** (§2) — maximum segment length unamplified, and with
   an amplifier/re-driver node in the segment; line coding is settled
   (§2), so this is drive strength, comparator sensitivity, and cable
