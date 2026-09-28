@@ -262,7 +262,7 @@ while li < 5
 end
 echo "SUMMARY max_pass_len_m noisy rser=470: $&maxlen_noisy"
 if nguard_bad = 0
-  echo "PASS guards (all noise-off runs decode 15 cells)"
+  echo "PASS guards (aggressor dead in every noise-off run; 2 m noise-off decodes 15 cells)"
   quit 0
 end
 echo "FAIL guards ($&nguard_bad guard failures; broken bench, not a reach number)"

@@ -122,7 +122,8 @@ at 0.214 Ω/m, §3 pinout (one 3V3 conductor, two GND): 0.321 Ω/m of
 segment in the power loop. 8-node ring, uniform per-node current I:
 
 - **Intact ring** (supervisor feeds one point, current splits both
-  ways): worst-case drop at the far midpoint ΔV = 8I × 0.321 × L / 8.
+  ways): worst-case drop at the far midpoint ΔV = 8I × 0.321 × L
+  (half-loop segment currents 3.5I + 2.5I + 1.5I + 0.5I).
   I = 10 mA → 0.6 V budget (3.3 V → 2.7 V floor) allows **L ≈ 23 m**;
   I = 20 mA → **≈ 12 m**.
 - **Broken loop** (worst single connector fault — the ring becomes one

@@ -43,8 +43,8 @@
 * only, the lib models arrive through here, and sim-run runs each
 * bench from its own directory.
 
-.include /home/kek/src/oparroy-wt/t15/circuits/lib/sn74lvc1g3157.spi
-.include /home/kek/src/oparroy-wt/t15/circuits/lib/ch32v003.spi
+.include ../lib/sn74lvc1g3157.spi
+.include ../lib/ch32v003.spi
 
 .subckt ribbon28 a ga b gb params: len=1
 Ra a am {0.107*len}
