@@ -11,11 +11,15 @@ from oparroy.dsl import (
     Capacitor,
     Circuit,
     DefinitionError,
+    Led,
     Resistor,
+    TvsDiode,
+    TypedPart,
 )
 
 if TYPE_CHECKING:
     from conftest import StubSymbols
+    from oparroy.dsl import Net
 
 
 class StubR(Resistor):
@@ -181,3 +185,74 @@ def test_non_typed_spec_raises(symbols: StubSymbols) -> None:
     c = Circuit("t", symbols)
     with pytest.raises(DefinitionError, match="expected a typed part"):
         c.part("R1", 42)  # ty: ignore[invalid-argument-type]
+
+
+class StubLed(Led):
+    """LED redirected at the stub table's 3-pin series-pair symbol."""
+
+    symbol = "Stub:DSER"
+
+
+class StubTvs(TvsDiode):
+    """TVS redirected at the stub table's 3-pin series-pair symbol."""
+
+    symbol = "Stub:DSER"
+    default_value = "PESD3V3L1BA"
+
+
+def test_led_keyword_pins_land_on_right_numbers(symbols: StubSymbols) -> None:
+    c = Circuit("t", symbols)
+    c.net("drive")
+    c.net("gnd")
+    led = c.part("LED1", StubLed(anode="drive", cathode="gnd", value="GREEN"))
+    # Device:LED convention: pin 1 = K, pin 2 = A.
+    assert led.value == "GREEN"
+    assert led["1"].net is c.nets["gnd"]
+    assert led["2"].net is c.nets["drive"]
+
+
+def test_tvs_default_value_and_symmetric_pins(symbols: StubSymbols) -> None:
+    c = Circuit("t", symbols)
+    c.net("line")
+    c.net("gnd")
+    tvs = c.part("D1", StubTvs(a="line", b="gnd"))
+    assert tvs.value == "PESD3V3L1BA"
+    assert tvs["1"].net is c.nets["line"]
+    assert tvs["2"].net is c.nets["gnd"]
+
+
+def test_optional_pins_may_be_omitted(symbols: StubSymbols) -> None:
+    class OptionalPins(StubR):
+        required_pins: ClassVar[frozenset[str] | None] = frozenset({"a"})
+
+        def __init__(
+            self,
+            value: str,
+            *,
+            a: Net | str,
+            b: Net | str | None = None,
+            footprint: str | None = None,
+        ) -> None:
+            nets = {"a": a} | ({"b": b} if b is not None else {})
+            TypedPart.__init__(self, value, footprint, nets)
+
+    c = Circuit("t", symbols)
+    c.net("a")
+    c.net("b")
+    wired = c.part("R1", OptionalPins("1k", a="a", b="b"))
+    assert wired["2"].net is c.nets["b"]
+    # An omitted optional pin simply stays unconnected — the checker's
+    # unconnected-pin warning reports it by name.
+    unwired = c.part("R2", OptionalPins("1k", a="a"))
+    assert unwired["2"].net is None
+
+
+def test_omitted_required_pin_still_raises() -> None:
+    class BadOptional(StubR):
+        required_pins: ClassVar[frozenset[str] | None] = frozenset({"a", "b"})
+
+        def __init__(self, value: str, *, a: Net | str) -> None:
+            TypedPart.__init__(self, value, None, {"a": a})
+
+    with pytest.raises(DefinitionError, match="missing pins"):
+        BadOptional("1k", a="a")

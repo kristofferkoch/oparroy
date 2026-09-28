@@ -4,10 +4,13 @@ Single source of truth for schematic capture: a separable IR
 (:mod:`oparroy.dsl.ir`) behind a plain function-call capture API —
 including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.subcircuit`) — a validation pass
-(:mod:`oparroy.dsl.check`), and emitters — KiCad netlist
-(:mod:`oparroy.dsl.kicad_emit`), Graphviz dot (:mod:`oparroy.dsl.dot`),
-ngspice DUT netlist (:mod:`oparroy.dsl.spice_emit`), freestanding-C++
-pin headers (:mod:`oparroy.dsl.pinmap`).
+(:mod:`oparroy.dsl.check`), the stages between capture and pcbnew —
+footprint assignment (:mod:`oparroy.dsl.assign`) and annotation with
+back-annotation (:mod:`oparroy.dsl.annotate`) — and emitters — KiCad
+netlist (:mod:`oparroy.dsl.kicad_emit`), Graphviz dot
+(:mod:`oparroy.dsl.dot`), ngspice DUT netlist
+(:mod:`oparroy.dsl.spice_emit`), freestanding-C++ pin headers
+(:mod:`oparroy.dsl.pinmap`).
 Typed jellybean parts live in :mod:`oparroy.dsl.parts`; KiCad library
 access lives in :mod:`oparroy.dsl.kicadlib`; the parts DB with
 assembler-stock status lives in :mod:`oparroy.dsl.parts_db`. The
@@ -17,6 +20,19 @@ physical-layout side parses ``.kicad_pcb``
 into pcbnew (:mod:`oparroy.dsl.pcb_emit`).
 """
 
+from oparroy.dsl.annotate import (
+    Annotation,
+    AnnotationError,
+    annotate,
+    annotation_from_pcb,
+    apply_annotation,
+)
+from oparroy.dsl.assign import (
+    assign_footprints,
+    footprint_map,
+    overrides_from_json,
+    overrides_to_json,
+)
 from oparroy.dsl.check import (
     RANGE_CONTAINMENT,
     CheckError,
@@ -71,7 +87,15 @@ from oparroy.dsl.layout_check import (
     LayoutRules,
     check_layout,
 )
-from oparroy.dsl.parts import Bat54s, BundleConnector, Capacitor, Resistor, TypedPart
+from oparroy.dsl.parts import (
+    Bat54s,
+    BundleConnector,
+    Capacitor,
+    Led,
+    Resistor,
+    TvsDiode,
+    TypedPart,
+)
 from oparroy.dsl.parts_db import (
     PartFilter,
     PartRecord,
@@ -104,6 +128,8 @@ __all__ = [
     "CH32V003F4P6",
     "RANGE_CONTAINMENT",
     "AdjacencyRule",
+    "Annotation",
+    "AnnotationError",
     "Bat54s",
     "Board",
     "Bundle",
@@ -124,6 +150,7 @@ __all__ = [
     "Keepout",
     "KiCadLibraries",
     "LayoutRules",
+    "Led",
     "LibraryError",
     "Limits",
     "Net",
@@ -157,11 +184,16 @@ __all__ = [
     "SymbolTable",
     "Text",
     "Tier",
+    "TvsDiode",
     "TypedPart",
     "UnknownSymbolError",
     "Via",
     "Waiver",
     "Zone",
+    "annotate",
+    "annotation_from_pcb",
+    "apply_annotation",
+    "assign_footprints",
     "check",
     "check_layout",
     "check_pin_map",
@@ -169,6 +201,9 @@ __all__ = [
     "emit_pcb",
     "emit_pin_header",
     "emit_spice",
+    "footprint_map",
+    "overrides_from_json",
+    "overrides_to_json",
     "parse_board",
     "raise_on_errors",
     "to_dot",

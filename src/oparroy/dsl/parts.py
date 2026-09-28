@@ -41,12 +41,18 @@ class TypedPart:
     number, or a tuple of numbers for a keyword owning several pins)
     and declare the pins as keyword-only parameters, then pass the
     collected wiring here. ``Circuit.part`` consumes the spec.
+
+    Every pin in ``pin_map`` is required unless the subclass narrows
+    ``required_pins`` — a many-pinned part placed with unused pins (an
+    MCU) wires the pins it uses and leaves the rest unconnected, which
+    the checker's unconnected-pin warnings then report by name.
     """
 
     symbol: ClassVar[str]
     pin_map: ClassVar[dict[str, str | tuple[str, ...]]]
     default_value: ClassVar[str | None] = None
     default_footprint: ClassVar[str | None] = None
+    required_pins: ClassVar[frozenset[str] | None] = None
 
     def __init__(
         self,
@@ -58,7 +64,10 @@ class TypedPart:
         if unknown:
             msg = f"{type(self).__name__} has no pins {unknown}"
             raise DefinitionError(msg)
-        missing = sorted(self.pin_map.keys() - nets.keys())
+        required = self.required_pins
+        if required is None:
+            required = frozenset(self.pin_map)
+        missing = sorted(required - nets.keys())
         if missing:
             msg = f"{type(self).__name__} is missing pins {missing}"
             raise DefinitionError(msg)
@@ -137,6 +146,51 @@ class Bat54s(TypedPart):
             footprint,
             {"anode": anode, "cathode": cathode, "com": com},
         )
+
+
+class Led(TypedPart):
+    """An LED (``Device:LED``); pin 1 is the cathode, pin 2 the anode.
+
+    Keyword-only: orientation is the whole point of a diode.
+    """
+
+    symbol = "Device:LED"
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
+        "cathode": "1",
+        "anode": "2",
+    }
+    default_value = "LED"
+
+    def __init__(
+        self,
+        *,
+        cathode: Net | str,
+        anode: Net | str,
+        value: str | None = None,
+        footprint: str | None = None,
+    ) -> None:
+        super().__init__(value, footprint, {"cathode": cathode, "anode": anode})
+
+
+class TvsDiode(TypedPart):
+    """A bidirectional TVS/ESD diode (``Device:D_TVS``); pins ``a``/``b``.
+
+    Bidirectional parts are symmetric, so like ``Resistor`` the pins
+    carry no orientation — the value picks the standoff voltage.
+    """
+
+    symbol = "Device:D_TVS"
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {"a": "1", "b": "2"}
+
+    def __init__(
+        self,
+        *,
+        a: Net | str,
+        b: Net | str,
+        value: str | None = None,
+        footprint: str | None = None,
+    ) -> None:
+        super().__init__(value, footprint, {"a": a, "b": b})
 
 
 class BundleConnector(TypedPart):
