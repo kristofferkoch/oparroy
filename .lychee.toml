@@ -1,4 +1,4 @@
-# Link checking for markdown (pre-commit, T16b). Local links/anchors and
+# Link checking for markdown (pre-commit). Local links/anchors and
 # public URLs are checked; auth-gated, bot-blocking, or flaky URLs get
 # excluded here as they appear (same role as falcon-app's .lychee.toml).
 exclude = [
