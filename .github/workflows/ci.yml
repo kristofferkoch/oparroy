@@ -1,0 +1,66 @@
+# CI: every gate the repo has, run inside the nix dev shell (flake.nix,
+# DESIGN.md §8) so CI exercises byte-identical tools to a laptop.
+#
+# The shell closure comes from the `oparroy` Cachix cache — klee is
+# marked broken in nixpkgs and absent from cache.nixos.org, so without
+# the cache every run would rebuild LLVM+KLEE from source. Setup:
+#   1. Create a public cache named `oparroy` at app.cachix.org.
+#   2. Create a cache auth token there and add it to this repo as the
+#      Actions secret CACHIX_AUTH_TOKEN (Settings → Secrets → Actions).
+# Fork PRs see no secret: they pull from the cache but never push.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: oparroy
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      # Python side (uv's lane): DSL unit tests + doctests. The shell
+      # hook exports OPARROY_KICAD_* so the KiCad-library tests run.
+      - name: pytest
+        run: nix develop -c sh -c 'uv sync --frozen && uv run --frozen pytest'
+
+      # Firmware: host build + unit tests, KLEE proofs, bounded fuzz
+      # runs, ngspice subcircuit benches, and the rv32ec cross build.
+      - name: firmware host build and tests
+        run: |
+          nix develop -c meson setup build/host --native-file meson/native/clang.ini
+          nix develop -c ninja -C build/host
+          nix develop -c meson test -C build/host --print-errorlogs
+          nix develop -c ninja -C build/host klee-proofs fuzz sim
+
+      - name: firmware rv32ec cross build
+        run: |
+          nix develop -c meson setup build/rv32ec --cross-file meson/cross/rv32ec.ini
+          nix develop -c ninja -C build/rv32ec
+
+      # Reproducibility gate (DESIGN.md §8): builds every configuration
+      # twice at different absolute paths and compares artifact hashes.
+      - name: reproducibility gate
+        run: nix develop -c ninja -C build/host check-reproducible
+
+      # Same hooks as local pre-commit (language: system → the nix
+      # shell supplies every binary): ruff, ty, clang-format,
+      # clang-tidy, mdformat, markdownlint, lychee.
+      - name: pre-commit
+        run: nix develop -c pre-commit run --all-files --show-diff-on-failure
