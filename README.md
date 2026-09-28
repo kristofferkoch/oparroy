@@ -25,7 +25,7 @@ infrastructure, by contrast, may cost freely.
 
 ## Hardware direction
 
-- **Node MCU: CH32V003F4P6** (decided 2026-09-26, card T1) — 48 MHz
+- **Node MCU: CH32V003F4P6** (decided 2026-09-26) — 48 MHz
   RV32EC in TSSOP-20, on-chip comparator routable to timer capture,
   ~$0.14 @4k. Clocked from the factory-trimmed internal HSI — no
   crystal; the ratio-metric PHY makes absolute clock accuracy
@@ -35,7 +35,7 @@ infrastructure, by contrast, may cost freely.
 - **Supervisor: RP2040** — its PIO is the re-timing PHY engine and
   golden-reference transceiver; on the test board its PIO also runs as
   a logic analyzer on the instrumented boundary node (DESIGN.md §6).
-- **PHY** (decided 2026-09-26, card T3): WS2812-compatible duty-coded
+- **PHY** (decided 2026-09-26): WS2812-compatible duty-coded
   PWM cells with ratio-metric decode at an 800 kbit/s anchor,
   comparator RX + DMA, per-bit cut-through re-timing, positional
   addressing, and the frame gap as a ring-wide vsync latch
@@ -47,8 +47,7 @@ infrastructure, by contrast, may cost freely.
   5–18 V rail for payloads with their own buck. On 3M 3365 ribbon,
   segments reach **10 m unamplified**; the 470 Ω TX series resistor,
   not the cable, sets the limit (simulation:
-  [docs/cable-reach-2026-09-28.md](docs/cable-reach-2026-09-28.md),
-  card T15).
+  [docs/cable-reach-2026-09-28.md](docs/cable-reach-2026-09-28.md)).
 - **Node I/O**: potmeter, buttons/matrix, capacitive touch, I2C
   accelerometer, LEDs, buzzer — nodes are smart peripherals serving
   cooked data (Bela/Trill pattern, see
@@ -60,7 +59,7 @@ infrastructure, by contrast, may cost freely.
   (potentiometer, buttons, LEDs, buzzer), each input overridable by
   the supervisor so scripted runs stay hands-off (DESIGN.md §6).
   4-layer, self-documenting silkscreen. Prototypes assembled by
-  **JLCPCB Economic PCBA** (decided 2026-09-26, card T17); part
+  **JLCPCB Economic PCBA** (decided 2026-09-26); part
   selection is inventory-driven — minimize unique Extended BOM lines.
 
 ## Firmware direction
@@ -75,10 +74,10 @@ infrastructure, by contrast, may cost freely.
   node/ring forwarding logic (DESIGN.md §2) — proven by **KLEE**
   symbolic-execution harnesses and **libFuzzer** harnesses whose seed
   corpora double as the meson test suite; branch coverage is measured
-  on the release build (`scripts/coverage-release`, T16e).
+  on the release build (`scripts/coverage-release`).
 - The node pin map is captured in the DSL — 17 of 18 CH32V003 GPIO
   assigned with a budget check — and emits `firmware/node/pins.hpp`
-  directly (T9; DESIGN.md §7).
+  directly (DESIGN.md §7).
 - All of it under the project-owned coding standard in `code-std.md`
   (borrows from JSF AV / MISRA / AUTOSAR / CERT), statically checked
   from the first commit (DESIGN.md §8).
@@ -104,7 +103,7 @@ infrastructure, by contrast, may cost freely.
 - **Datasheets are extracted, not just stored**: `datasheets/<PART>/`
   holds vendor PDFs plus LLM-readable markdown sidecars (facts,
   per-peripheral notes, quirks) — see `datasheets/README.md`.
-- **Meson + ninja** build the firmware (DESIGN.md §8, T20): one build
+- **Meson + ninja** build the firmware (DESIGN.md §8): one build
   dir per toolchain, freestanding flag set in `meson.build`.
   - host (clang; host objects + LLVM bitcode for KLEE):
     `meson setup build/host --native-file meson/native/clang.ini`
@@ -119,7 +118,7 @@ infrastructure, by contrast, may cost freely.
   direnv users); **uv** owns Python alone (3.13, ruff strict, ty,
   pytest): `uv sync`, then `uv run pytest` / `uv run ruff check` /
   `uv run ty check`.
-- **Pre-commit hooks** (`pre-commit install`, T16b): clang-format,
+- **Pre-commit hooks** (`pre-commit install`): clang-format,
   clang-tidy (replaying the host build's `compile_commands.json`), and
   the markdown pipeline
   (mdformat + markdownlint-cli2 + lychee link checks) — cheap checks
@@ -170,6 +169,6 @@ simulation benches cover the PHY, the charge-pump watchdog, and cable
 reach. On the firmware side the foundation library and the
 ring-protocol core are in place under KLEE/fuzz/coverage verification,
 and CI runs every gate. No boards exist yet: next up is KiCad layout
-of the node board (T22), which unblocks the 8-node test board (T10)
-and the long-cable bench work (T15). Current work is tracked as cards
+of the node board, which unblocks the 8-node test board and the
+long-cable bench work. Current work is tracked as cards
 in `KANBAN.md`.
