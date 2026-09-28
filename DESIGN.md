@@ -874,9 +874,13 @@ with explicit `try_` growth. Landed in `firmware/lib/`: `Span`,
 `irange`, `StaticVector`, `VERIFY` (2026-09-26); `Error`/`ErrorOr<T>`/
 `ErrorOr<void>` + `TRY` (`GrowthResult` subsumed — `try_*` now returns
 `ErrorOr<void>`), `StaticArena` + `ArenaPtr` ownership over static
-slot pools, `UNREACHABLE`, and VERIFY's target personality
+slot pools, `UNREACHABLE`, VERIFY's target personality
 (`-DOPARROY_TARGET` → `lib::verify_failed`, the §4 wiring point — the
-node firmware's hook definition lands with T11) (2026-09-28, T18).
+node firmware's hook definition lands with T11), `lib::move`
+(`utility.hpp` — AK's spelling; `<utility>` stays outside the
+freestanding header set, code-std.md §2), and the StaticVector → `Span`
+implicit conversion (the `std::vector` → `std::span` analog, AK's
+`Vector`/`operator Span` shape) (2026-09-28, T18).
 `Error` is a bare `enum class` code, not AK's string-carrying class —
 widen to a payload-carrying class the day an error needs more than a
 code. Rule set: **project-owned** (decided

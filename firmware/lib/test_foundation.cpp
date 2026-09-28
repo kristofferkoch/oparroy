@@ -60,6 +60,13 @@ extern "C" int main() {
         return 4;
     }
 
+    // A StaticVector passes implicitly where a Span is taken — the
+    // std::vector → std::span conversion's analog.
+    lib::StaticVector<uint8_t, 3> copied;
+    if (append_all(copied, vec).is_error() || copied.size() != 3 || copied[2] != 3) {
+        return 9;
+    }
+
     lib::StaticArena<uint32_t, 2> arena;
     lib::ErrorOr<lib::ArenaPtr<uint32_t, 2>> first = take_slot(arena);
     if (first.is_error()) {
