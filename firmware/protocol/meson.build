@@ -59,11 +59,13 @@ if not meson.is_cross_build()
 
   # Fuzz harnesses (DESIGN.md §8 — alongside KLEE, not instead of it):
   # libFuzzer + ASan/UBSan over the same protocol core, driven by the
-  # fault-injection shims in fuzz/fuzz.hpp. -O1 because buildtype=plain
-  # injects no optimization and the fuzzer wants some. The entry point
-  # is the engine-agnostic LLVMFuzzerTestOneInput, so AFL++'s compat
-  # driver can reuse these harnesses unchanged.
-  fuzz_flags = ['-fsanitize=fuzzer,address,undefined', '-O1']
+  # fault-injection shims in fuzz/fuzz.hpp. -O1 (the fuzz_optimization
+  # default) because buildtype=plain injects no optimization and the
+  # fuzzer wants some; scripts/coverage-release sets -O2 so coverage is
+  # measured at the release optimization. The entry point is the
+  # engine-agnostic LLVMFuzzerTestOneInput, so AFL++'s compat driver
+  # can reuse these harnesses unchanged.
+  fuzz_flags = ['-fsanitize=fuzzer,address,undefined', get_option('fuzz_optimization')]
   fuzz_runs = []
   foreach harness : ['cell', 'node', 'ring']
     fuzz_exe = executable('fuzz-' + harness, 'fuzz' / (harness + '.cpp'),

@@ -7,7 +7,9 @@
 # exercise what actually ships. Source-based coverage
 # (-fprofile-instr-generate -fcoverage-mapping), not meson's
 # b_coverage: llvm-cov reports exact branch coverage, where
-# gcov-format data degrades on C++ at -O2.
+# gcov-format data degrades on C++ at -O2. -Dfuzz_optimization=-O2
+# because the fuzz harnesses carry a target-level -O1 that would
+# otherwise shadow -Dcpp_args (last -O wins) — see meson.options.
 # Wired as `ninja -C build/host coverage-release`.
 set -eu
 
@@ -17,7 +19,8 @@ build=$root/build/coverage
 rm -rf "$build"
 meson setup "$build" "$root" --native-file "$root/meson/native/clang.ini" \
     -Dcpp_args="-O2 -fprofile-instr-generate -fcoverage-mapping" \
-    -Dcpp_link_args="-fprofile-instr-generate"
+    -Dcpp_link_args="-fprofile-instr-generate" \
+    -Dfuzz_optimization=-O2
 meson compile -C "$build"
 
 # One profraw per test process; %p keeps parallel meson test runs apart.
