@@ -673,7 +673,7 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   in the Verilog-debugger sense — prior-art survey shipped 2026-09-28
   (card T21): [docs/prior-art-schematic-gen-2026-09-28.md](docs/prior-art-schematic-gen-2026-09-28.md)
   — borrow the layout engine (grandalf first, ELK fallback), build
-  only the view extraction; the views are card T25.
+  only the view extraction; the views are card T26.
 
 Landed (2026-09-26, card T7a; typed parts and review hardening
 2026-09-27): the DSL core in `src/oparroy/dsl/` —

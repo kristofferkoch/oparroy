@@ -144,15 +144,6 @@ ______________________________________________________________________
   long-cable measurement on the test board. Output: numbers +
   amplifier guidance in DESIGN.md §2. **Blocked by:** — ·
   **Unblocks:** —
-- **T21 — Prior-art review: automatic schematic generation.** *Shape:
-  research.* Survey how existing tools turn netlists into readable
-  schematics — netlistsvg, yosys `show`, SKiDL's schematic generation,
-  KiCad's netlist-import placement, commercial ESL auto-drawing — and
-  the graph-drawing literature underneath (layered/Sugiyama layout,
-  orthogonal routing). The goal is abstraction-level block views for
-  design review (DESIGN.md §7 DSL shape): decide what oparroy's views
-  should look like beyond T7a's dot dump, and what we build vs borrow.
-  Output: findings in `docs/`. **Blocked by:** — · **Unblocks:** —
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
   in PR #17 review, 2026-09-28): `TEST_CASE`/`EXPECT` macros over a
   tiny report hook — failure index as exit code freestanding,
@@ -180,7 +171,29 @@ ______________________________________________________________________
   tags on T7ba's ports — named connections naming nets, a
   lexically-scoped `with`-block for implicit power/ground (scope stays
   explicit — the no-implicit-global-circuit rule holds). **Blocked
-  by:** — · **Unblocks:** —
+  by:** — · **Unblocks:** T26
+- **T26 — DSL review views: block + detail.** *Shape:
+  implementation.* Follow-up of T21
+  (docs/prior-art-schematic-gen-2026-09-28.md — borrow the layout
+  engine, build only the view extraction, never build a
+  placement/routing engine). **Block view first**: one box per
+  subcircuit instance (`Part.path` carries the metadata), ports / port
+  arrays / bundles as box pins, bundles as single thick wires; then
+  the **detail view** — one subcircuit's parts and nets, direction
+  hints from KiCad `PinType`, `power:`-symbol nets collapsed to named
+  stubs, series passives optionally collapsed into labeled wire
+  segments. Layout engine: **grandalf** first (EPL-1.0 — depend
+  unmodified via uv, never vendored into this MIT tree; its shipped
+  routers are straight/spline only, so orthogonal routing is patched
+  in), ELK/elkjs the quality fallback with native port / hyperedge /
+  orthogonal support. Symbol graphics from KiCad library geometry —
+  extend `kicadlib.py` to read drawing primitives (SKiDL's
+  `generate_svg()` symbol→netlistsvg-skin conversion is the prior
+  art); generic boxes with pin names suffice until then. Output static
+  SVG, golden-tested like the netlist emitter's byte-identical
+  goldens; not `.kicad_sch` — editable output is SKiDL's trap and buys
+  review nothing. T7bd's port direction tags are the block view's
+  natural input. **Blocked by:** T7bd · **Unblocks:** —
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/`, `circuits/watchdog-chargepump/`,
   and `circuits/watchdog-supervisor/` in the DSL, with equivalence

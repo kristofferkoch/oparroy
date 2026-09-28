@@ -218,5 +218,5 @@ Sequencing: **block view first** — small graphs, highest review value,
 exercises extraction before layout quality matters. Then the detail
 view on grandalf, golden-SVG tests in the house style.
 
-Follow-up filed as KANBAN card **T25 — DSL review views: block +
+Follow-up filed as KANBAN card **T26 — DSL review views: block +
 detail** (2026-09-28), blocked by T7bd.
