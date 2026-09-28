@@ -737,6 +737,28 @@ nets only. One checker fix rode along: footprint filters match against
 the full `Lib:Name` as well as the bare name, so KiCad's lib-qualified
 filters (`Connector*:*_1x??_*`) work.
 
+Parts DB (2026-09-28, card T7c): `parts_db.py` holds one record per
+part — LCSC number, JLCPCB Basic/Extended tier, a stock snapshot with
+its as-of date and source, the KiCad symbol/footprint pair, the spice
+model binding, and the datasheet pointer into `datasheets/` — the §6
+inventory-driven-selection view as data. Selection is **constraint
+filtering over the table**, not lookup: a `PartFilter` is refinement
+data (kind, tier, area bounds, an allowed-footprint set, exclusions, a
+required part, an in-stock constraint) composing conjunctively, so
+assembler-stock status is a column *and* a checkable constraint.
+`PartsDb.bind` turns a record into a typed part class — the record
+owns symbol/value/footprint — so captures draw their bins from the
+table (`design/parts_db.py` binds `R0603`/`C0603`; capture-specific
+parts bind at the capture site) instead of re-declaring footprint
+pairs per capture, retiring the T7a ad-hoc bin classes.
+`PartsDb.check_stock` is the freshness audit: stale snapshots,
+never-queried parts, unverified tiers, and stock-outs surface as
+warnings (`python -m design.parts_db`); the per-capture
+unsourcable-part gate is T8's. Stock numbers are as-of-dated
+snapshots with provenance, never live data — re-query JLCPCB before
+ordering. Full emitter-side resolution against value bins is T23's
+solve pass.
+
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one
 unit), composed into boards — not drawn flat into a board schematic.

@@ -83,6 +83,14 @@ real work — **move**, don't copy. Reference, don't duplicate.
   — GND, the power rails — become net labels/symbols instead of drawn
   wires. A pareto cut on fanout keeps the drawing from degenerating
   into a ratsnest around the few nets that touch everything.
+- **Parts-DB stock refresh tooling** (2026-09-28): the T7c table
+  (`design/parts_db.py`) is as-of-dated snapshots by hand; a script
+  that queries JLCPCB/LCSC (their parts API, or the jlcsearch mirror)
+  and rewrites the `Stock` entries with fresh counts and as-of dates
+  would make `check_stock`'s staleness warnings self-service. Open
+  questions: rate limits and auth on JLCPCB's side, whether the script
+  edits `design/parts_db.py` in place (data-as-code stays the source
+  of truth) or emits an overlay.
 - **Technology mapping onto multi-unit packages** (2026-09-27) — the
   FPGA-flow analogy: synthesis emits primitive gates, the technology
   mapper packs them onto physical cells. Applied here: a capture
