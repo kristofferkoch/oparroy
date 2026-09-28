@@ -23,6 +23,7 @@
 // Span (span.hpp).
 
 #include "error_or.hpp"
+#include "span.hpp"
 #include "verify.hpp"
 
 #include <cstddef>
@@ -70,6 +71,18 @@ public:
 
     [[nodiscard]] constexpr std::size_t size() const {
         return m_size;
+    }
+
+    // The std::vector → std::span conversion, AK-style (Vector's
+    // operator Span): a StaticVector passes implicitly wherever a view
+    // is taken. The view is read-only either way (span.hpp), and the
+    // const split mirrors std::span: a const vector converts only to
+    // Span<const T>.
+    constexpr operator Span<T>() {
+        return Span<T>{m_storage, m_size};
+    }
+    constexpr operator Span<const T>() const {
+        return Span<const T>{m_storage, m_size};
     }
     [[nodiscard]] constexpr std::size_t capacity() const {
         return Capacity;

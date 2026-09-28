@@ -86,7 +86,9 @@ namespace {
     // The container-and-view spine used together: range-filled,
     // span-summed — exercises StaticVector, Span, and irange directly
     // (misc-include-cleaner wants every include used, and this TU is
-    // where the foundation cells compile).
+    // where the foundation cells compile). The StaticVector passes to
+    // the Span parameter implicitly (static_vector.hpp's operator
+    // Span), the std::vector → std::span conversion's analog.
     constexpr uint32_t sum_of(Span<const uint8_t> values) {
         uint32_t sum = 0;
         for (const uint8_t value : values) {
@@ -101,7 +103,7 @@ namespace {
             vec.push_back(static_cast<uint8_t>(i * 2));
         }
         VERIFY(vec.size() == 4);
-        return sum_of(Span<const uint8_t>{vec.begin(), vec.size()}) == 0 + 2 + 4 + 6;
+        return sum_of(vec) == 0 + 2 + 4 + 6;
     }
 
     // lib::move selects the move constructor: ownership of the arena
