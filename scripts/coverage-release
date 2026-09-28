@@ -1,0 +1,41 @@
+#!/bin/sh
+# Coverage measured on the release build (DESIGN.md §8, SQLite
+# doctrine): the freestanding host configuration compiled with release
+# optimization (-O2) plus clang source-based coverage instrumentation,
+# the meson test suite (the fuzz harnesses over their seed corpora)
+# run against it, and branch coverage reported by llvm-cov — tests
+# exercise what actually ships. Source-based coverage
+# (-fprofile-instr-generate -fcoverage-mapping), not meson's
+# b_coverage: llvm-cov reports exact branch coverage, where
+# gcov-format data degrades on C++ at -O2.
+# Wired as `ninja -C build/host coverage-release`.
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+build=$root/build/coverage
+
+rm -rf "$build"
+meson setup "$build" "$root" --native-file "$root/meson/native/clang.ini" \
+    -Dcpp_args="-O2 -fprofile-instr-generate -fcoverage-mapping" \
+    -Dcpp_link_args="-fprofile-instr-generate"
+meson compile -C "$build"
+
+# One profraw per test process; %p keeps parallel meson test runs apart.
+LLVM_PROFILE_FILE="$build/coverage-%p.profraw" \
+    meson test -C "$build" --print-errorlogs
+
+llvm-profdata merge -sparse "$build"/coverage-*.profraw \
+    -o "$build/coverage.profdata"
+
+# Every instrumented test binary feeds the report so coverage of the
+# header-only protocol core aggregates across harnesses. The .p
+# entries the glob also matches are meson's private dirs, not files.
+objects=
+for exe in "$build"/firmware/protocol/fuzz-*; do
+    if [ -f "$exe" ] && [ -x "$exe" ]; then
+        objects="$objects -object $exe"
+    fi
+done
+# Word splitting intended: $objects is a list of -object arguments.
+# shellcheck disable=SC2086
+llvm-cov report $objects -instr-profile="$build/coverage.profdata"
