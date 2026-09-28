@@ -33,8 +33,8 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T7bc[T7bc DSL multipacking and sockets] --> T24[T24 instrumentation with equivalence proof]
-    T24 --> T10
+    T19 --> T10
+    T24[T24 instrumentation with equivalence proof] --> T10
     T22[T22 node board design] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
@@ -45,19 +45,23 @@ ______________________________________________________________________
 
 ## Next
 
-- **T7bc — DSL multipacking and component sockets.** Split out of T7b
-  (2026-09-28). **Multipacking** for multi-unit packages (4066-class
-  quad switches, BAT54ADW quad diodes — DESIGN.md §7 multi-unit model:
-  `Symbol` preserves KiCad's unit structure — kicadlib flattens it
-  today, fixed here — parts instantiate unit subsets, a physical pin
-  shared by placed units sits on one net); **component sockets** — a
-  subcircuit declares it needs a *part*, not just nets (a
-  `DiodeSocket` protocol of pin handles; satisfied by a standalone
-  typed part or by one unit of a parent-placed multi-unit package), so
-  packing is the parent's directed choice and the subcircuit stays
-  package-agnostic — with the caveat that packing across the ring-A/B
-  redundancy boundary reintroduces a single point of failure (raised
-  2026-09-27). **Blocked by:** — · **Unblocks:** T24
+- **T24 — DSL instrumentation transforms with reset-state equivalence.**
+  The CI board is the node design plus injected controllability and
+  observability (§6: fault-injection muxes, supervisor-override muxes,
+  sense taps) — and that makes it *dangerously different* from the
+  plain node it is meant to exercise (raised 2026-09-27). Capture
+  instrumentation as an **explicit transformation** of the
+  uninstrumented design — insert a series switch on this net, hang a
+  sense tap off that one — never a hand-maintained second capture, so
+  the two can never drift. The checker then proves the instrumented
+  board **in reset state** is equivalent to the plain board: every
+  inserted series element in its default/pass-through state reduces to
+  a wire (net merge), every tap is high-impedance, no base part or net
+  is lost, and residual differences (the series element's on-resistance
+  in the §2 decode-margin budget, tap capacitance on the §6 short-stub
+  contract) are enumerated and budgeted, not assumed away. "Almost
+  equivalent" is exactly the set of those enumerated residuals.
+  **Blocked by:** — · **Unblocks:** T10
 - **T22 — Node board design.** The single ring node as its own small
   board, designed **before** the CI board — the CI board is eight of
   these tiles plus a supervisor (DESIGN.md §6). The DSL capture landed
@@ -155,23 +159,6 @@ ______________________________________________________________________
   goldens; not `.kicad_sch` — editable output is SKiDL's trap and buys
   review nothing. T7bd's port direction tags are the block view's
   natural input. **Blocked by:** T7bd · **Unblocks:** —
-- **T24 — DSL instrumentation transforms with reset-state equivalence.**
-  The CI board is the node design plus injected controllability and
-  observability (§6: fault-injection muxes, supervisor-override muxes,
-  sense taps) — and that makes it *dangerously different* from the
-  plain node it is meant to exercise (raised 2026-09-27). Capture
-  instrumentation as an **explicit transformation** of the
-  uninstrumented design — insert a series switch on this net, hang a
-  sense tap off that one — never a hand-maintained second capture, so
-  the two can never drift. The checker then proves the instrumented
-  board **in reset state** is equivalent to the plain board: every
-  inserted series element in its default/pass-through state reduces to
-  a wire (net merge), every tap is high-impedance, no base part or net
-  is lost, and residual differences (the series element's on-resistance
-  in the §2 decode-margin budget, tap capacitance on the §6 short-stub
-  contract) are enumerated and budgeted, not assumed away. "Almost
-  equivalent" is exactly the set of those enumerated residuals.
-  **Blocked by:** T7bc · **Unblocks:** T10
 - **T19 — DSL layout property checker, remaining checks.** First slice
   landed 2026-09-28: `.kicad_pcb` parser, the `LayoutRules` contract
   with the first check set (stackup, net-class width/via, trace

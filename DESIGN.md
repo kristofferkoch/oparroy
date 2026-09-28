@@ -648,13 +648,13 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   places units independently (U1A, U1B, …; unplaced units don't
   exist), and the netlist export flattens to refdes + physical pin
   numbers — pcbnew never sees units. The DSL mirrors this: `Symbol`
-  preserves unit structure (kicadlib flattens it today — to be fixed
-  when the first multi-unit part lands, e.g. the CI board's
-  4066-class fault-injection switches), a placed part instantiates a
-  **unit subset** (default: all — today's behavior), unplaced units
-  materialize no pins so the unconnected-pin check stays clean, and
-  the checker asserts that a physical pin shared by several placed
-  units sits on one net (KiCad ERC's own rule). Package-as-one-part
+  preserves unit structure (landed 2026-09-28, T7bc — see below), a
+  placed part instantiates a **unit subset** (default: all — today's
+  behavior), unplaced units materialize no pins so the unconnected-pin
+  check stays clean, and a physical pin shared by several placed units
+  sits on one net (KiCad ERC's own rule) — structural in the IR,
+  where a physical pin number is one `Pin` that can sit on only one
+  net. Package-as-one-part
   stays right for units used as a single element: the BAT54S series
   pair is a single unit in KiCad's own library, which is exactly the
   `Bat54s` typed-class choice.
@@ -848,6 +848,40 @@ geographic renumbering back out of `.kicad_pcb`). Typed parts grew
 proven: real pcbnew ingest and the back-annotation join against a real
 layout (the T7a caveat above) — first layout is human work, and the §9
 node-board stackup question settles at quote time.
+
+Multipacking and component sockets (2026-09-28, card T7bc): the
+multi-unit model above lands. kicadlib preserves KiCad's unit
+structure — `Symbol.common_pins` (unit 0, present in every placed
+unit) and `Symbol.units`; `pins` stays the all-units view and
+`Symbol.pins_for_units` resolves a subset. A `MultiUnitPart` subclass
+declares the placed subset with typed per-unit pin names
+(`unit_pins`); construction places but wires nothing — units wire
+individually through typed handles (`connect(net, u1.unit(1).anode)`,
+`Part.unit` returning a `UnitHandle`) or pack into component sockets.
+The shared physical pin is one `Pin` in the IR, so the one-net rule is
+structural: rewiring it to the same net (once per sharing unit) is a
+no-op, a second net raises at capture, and a packing that would split
+a shared pin across two nets raises at flatten. A component socket
+(`Circuit.socket`, a `SocketSpec` subclass naming its protocol pins
+and a standalone `default` typed part) lets a subcircuit declare it
+needs a *part*, not just nets: the capture wires the protocol pin
+handles like part pins, and the instantiating parent directs the
+packing — `instance(..., D1=u1.unit(3))` packs the socket into one
+unit of a parent-placed package (one unit satisfies one socket),
+`D1=SomeDiode` directs the standalone part class, and an unbound
+socket materializes as the protocol's default part under the instance
+path (`CL0/D1`) at flattening. The subcircuit stays package-agnostic.
+`Bat54adw`, `Diode`, and `DiodeSocket` are the first typed parts on
+the model; proven in `tests/test_dsl_units.py` and
+`tests/test_dsl_sockets.py` against a stub quad diode mirroring the
+BAT54ADW shared-anode pinout, plus real-library unit-structure tests
+(BAT54ADW, CD4066BE's switch+power units). **Caveat (raised
+2026-09-27): packing across the ring-A/B redundancy boundary
+reintroduces a single point of failure** — two rings' diodes in one
+package share its pins and its silicon. The DSL makes packing the
+parent's directed, review-visible choice; it does not (yet) forbid a
+cross-boundary pack — that is a checker-level rule for the capture
+that needs it, not a socket-mechanism restriction.
 
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one

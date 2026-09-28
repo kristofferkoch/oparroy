@@ -73,9 +73,11 @@ class FootprintTable(Protocol):
 def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list[Issue]:
     """Validate a finished circuit; returns the issue list.
 
-    A hierarchical circuit (one with instances) is flattened first, so
-    findings report hierarchical paths (``WD1/Rs``, net ``WD1/x``) and
-    bound port nets are checked as the merged parent net. The T8
+    A hierarchical circuit (one with instances) or one with component
+    sockets is flattened first, so findings report hierarchical paths
+    (``WD1/Rs``, net ``WD1/x``), bound port nets are checked as the
+    merged parent net, and sockets are checked as the part they
+    resolve to (standalone default or packed package unit). The T8
     port-range containment check runs before flattening, over the
     instance bindings themselves; the capture's waivers
     (``Circuit.waive``) apply last.
@@ -83,7 +85,7 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
     issues: list[Issue] = []
     issues.extend(_check_port_ranges(circuit, ()))
     waivers = tuple(_collect_waivers(circuit, ()))
-    if circuit.instances:
+    if circuit.instances or circuit.sockets:
         circuit = circuit.flatten()
     for ref in sorted(circuit.parts, key=natural_key):
         issues.extend(_check_part(circuit.parts[ref], footprints))

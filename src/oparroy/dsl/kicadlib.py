@@ -2,8 +2,9 @@
 
 The DSL validates part references against KiCad's actual libraries:
 symbols are parsed from ``.kicad_sym`` files (including ``extends``
-inheritance and per-unit subsymbols), footprints are checked by their
-presence on disk (``<Lib>.pretty/<Name>.kicad_mod``). The library roots
+inheritance and per-unit subsymbols — the unit structure is preserved,
+not flattened), footprints are checked by their presence on disk
+(``<Lib>.pretty/<Name>.kicad_mod``). The library roots
 come from the nix dev shell (``OPARROY_KICAD_SYMBOL_DIR`` /
 ``OPARROY_KICAD_FOOTPRINT_DIR``, see flake.nix) so the validated data is
 exactly what the pinned KiCad would use.
@@ -12,13 +13,23 @@ exactly what the pinned KiCad would use.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
-from oparroy.dsl.ir import PinType, Symbol, SymbolPin, UnknownSymbolError, natural_key
+from oparroy.dsl.ir import (
+    PinType,
+    Symbol,
+    SymbolPin,
+    SymbolUnit,
+    UnknownSymbolError,
+    natural_key,
+)
 from oparroy.dsl.sexpr import Sexp, parse
 
 _SYMBOL_DIR_ENV = "OPARROY_KICAD_SYMBOL_DIR"
 _FOOTPRINT_DIR_ENV = "OPARROY_KICAD_FOOTPRINT_DIR"
+
+_SUBSYMBOL = re.compile(r"_(\d+)_(\d+)$")
 
 
 class LibraryError(Exception):
@@ -152,20 +163,31 @@ class KiCadLibraries:
             chain.append(node)
             parent = current
             current = _extends_target(node)
-        pins: dict[str, SymbolPin] = {}
+        common: dict[str, SymbolPin] = {}
+        units: dict[int, dict[str, SymbolPin]] = {}
         conflicts: set[str] = set()
         filters: tuple[str, ...] = ()
         for node in reversed(chain):
-            node_pins, node_conflicts = _symbol_pins(node)
-            pins.update(node_pins)
+            node_common, node_units, node_conflicts = _symbol_pins(node)
+            common.update(node_common)
+            for number, pins in node_units.items():
+                units.setdefault(number, {}).update(pins)
             conflicts |= node_conflicts
             filters = _footprint_filters(node) or filters
+        merged: dict[str, SymbolPin] = dict(common)
+        for number in sorted(units):
+            merged.update(units[number])
         return Symbol(
             lib=lib_name,
             name=symbol_name,
-            pins=tuple(pins.values()),
+            pins=tuple(merged.values()),
             footprint_filters=filters,
             pin_conflicts=tuple(sorted(conflicts, key=natural_key)),
+            common_pins=tuple(common.values()),
+            units=tuple(
+                SymbolUnit(number=number, pins=tuple(units[number].values()))
+                for number in sorted(units)
+            ),
         )
 
     def exists(self, footprint: str) -> bool:
@@ -199,30 +221,48 @@ def _extends_target(node: list[Sexp]) -> str | None:
     return None
 
 
-def _symbol_pins(node: list[Sexp]) -> tuple[dict[str, SymbolPin], set[str]]:
-    """Merge pins across subsymbols, reporting conflicting redefinitions.
+def _symbol_pins(
+    node: list[Sexp],
+) -> tuple[dict[str, SymbolPin], dict[int, dict[str, SymbolPin]], set[str]]:
+    """Collect a symbol's pins by unit, reporting conflicting redefinitions.
 
-    Multi-unit symbols are flattened (DESIGN.md §7 records the unit
-    model as future work): identical duplicates are pin stacking and
-    stay silent, but a same-numbered pin redefined with a different
-    name or electrical type is conflicting library data — the last
-    definition wins and the pin number is reported as a conflict.
+    Subsymbol names follow KiCad's ``<Name>_<unit>_<style>``
+    convention (DESIGN.md §7): unit 0 pins are common to every placed
+    unit, and styles are alternate graphics merged per unit. Identical
+    duplicates — pin stacking, or a physical pin shared by several
+    units (the BAT54ADW anodes) — stay silent, but a same-numbered pin
+    redefined with a different name or electrical type is conflicting
+    library data: the last definition wins and the pin number is
+    reported as a conflict.
     """
-    pins: dict[str, SymbolPin] = {}
+    common: dict[str, SymbolPin] = {}
+    units: dict[int, dict[str, SymbolPin]] = {}
+    seen: dict[str, SymbolPin] = {}
     conflicts: set[str] = set()
     for subsymbol in _children(node, "symbol"):
+        name = _arg(subsymbol, 1) or ""
+        match = _SUBSYMBOL.search(name)
+        if match is None:
+            msg = (
+                f"subsymbol {name!r} does not follow KiCad's "
+                "<name>_<unit>_<style> convention"
+            )
+            raise LibraryError(msg)
+        unit = int(match.group(1))
+        scope = common if unit == 0 else units.setdefault(unit, {})
         for pin_node in _children(subsymbol, "pin"):
             pin = _parse_pin(pin_node)
             if pin is None:
                 continue
-            previous = pins.get(pin.number)
+            previous = seen.get(pin.number)
             if previous is not None and (previous.name, previous.type) != (
                 pin.name,
                 pin.type,
             ):
                 conflicts.add(pin.number)
-            pins[pin.number] = pin
-    return pins, conflicts
+            seen[pin.number] = pin
+            scope[pin.number] = pin
+    return common, units, conflicts
 
 
 def _footprint_filters(node: list[Sexp]) -> tuple[str, ...]:

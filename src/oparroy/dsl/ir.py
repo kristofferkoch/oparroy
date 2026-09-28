@@ -21,20 +21,33 @@ and bundles (``Circuit.bundle``) group existing nets under member
 names — the connector pinout as one connectable unit — bound
 member-wise. Both expand to scalar port bindings at instantiation, so
 flattening, checks, and emitters see plain nets only.
+
+Multi-unit packages mirror KiCad's unit model (T7bc): ``Symbol``
+preserves the unit structure, and a placed part instantiates a unit
+subset — unplaced units materialize no pins, and a physical pin
+shared by placed units is one ``Pin``, so KiCad ERC's shared-pin
+one-net rule is structural in the IR. Component sockets
+(``Circuit.socket``) let a subcircuit declare it needs a *part*, not
+just nets: the instantiating parent directs the packing — a unit of a
+parent-placed multi-unit package, or the socket protocol's standalone
+default part — and the subcircuit stays package-agnostic.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, overload
+from typing import TYPE_CHECKING, ClassVar, Protocol, overload
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from oparroy.dsl.parts import TypedPart
+    from oparroy.dsl.parts import MultiUnitPart, TypedPart
+
+type NetBinding = Net | str | Sequence[Net | str] | Mapping[str, Net | str]
+type Connection = NetBinding | UnitHandle | type[TypedPart]
 
 _NAT_SPLIT = re.compile(r"(\d+)")
 
@@ -94,9 +107,74 @@ class UnknownSymbolError(DefinitionError):
     """A part referenced a symbol the symbol table does not know."""
 
 
+_SOCKET_LIB = "socket"
+
+
 def _pin_numbers(numbers: str | tuple[str, ...]) -> tuple[str, ...]:
     """Normalize a pin_map value to a tuple of pin numbers."""
     return (numbers,) if isinstance(numbers, str) else numbers
+
+
+def _validate_socket_spec(spec: type[SocketSpec]) -> None:
+    """Reject a malformed socket protocol at declaration."""
+    # Lazy import: parts.py imports this module at runtime.
+    from oparroy.dsl.parts import MultiUnitPart as _MultiUnitPart  # noqa: PLC0415
+    from oparroy.dsl.parts import TypedPart as _TypedPart  # noqa: PLC0415
+
+    if not (isinstance(spec, type) and issubclass(spec, SocketSpec)):
+        msg = f"socket() needs a SocketSpec subclass, got {spec!r}"
+        raise DefinitionError(msg)
+    pins = getattr(spec, "pins", None)
+    if (
+        not isinstance(pins, tuple)
+        or not pins
+        or any(not isinstance(pin, str) or not pin for pin in pins)
+        or len(set(pins)) != len(pins)
+    ):
+        msg = f"{spec.__name__}.pins must be a non-empty tuple of unique names"
+        raise DefinitionError(msg)
+    default = getattr(spec, "default", None)
+    if not (isinstance(default, type) and issubclass(default, _TypedPart)):
+        msg = f"{spec.__name__}.default must be a typed part class, got {default!r}"
+        raise DefinitionError(msg)
+    if issubclass(default, _MultiUnitPart):
+        msg = (
+            f"{spec.__name__}.default must be a standalone part, "
+            f"not the multi-unit package {default.__name__}"
+        )
+        raise DefinitionError(msg)
+    if set(default.pin_map) != set(pins):
+        msg = (
+            f"{spec.__name__}.default ({default.__name__}) has pins "
+            f"{sorted(default.pin_map)}, not the protocol pins {sorted(pins)}"
+        )
+        raise DefinitionError(msg)
+
+
+def _bind_part_class(
+    name: str,
+    ref: str,
+    spec: type[SocketSpec],
+    part_class: type[TypedPart],
+) -> StandaloneSocket:
+    """Validate a parent-directed standalone part class for a socket."""
+    # Lazy import: parts.py imports this module at runtime.
+    from oparroy.dsl.parts import MultiUnitPart as _MultiUnitPart  # noqa: PLC0415
+
+    if issubclass(part_class, _MultiUnitPart):
+        msg = (
+            f"instance {name!r}: socket {ref!r} takes one unit of "
+            f"{part_class.__name__} (u1.unit(3)), not the whole package"
+        )
+        raise DefinitionError(msg)
+    if set(part_class.pin_map) != set(spec.pins):
+        msg = (
+            f"instance {name!r}: {part_class.__name__} does not satisfy "
+            f"socket {ref!r}: pin names {sorted(part_class.pin_map)} != "
+            f"protocol {sorted(spec.pins)}"
+        )
+        raise DefinitionError(msg)
+    return StandaloneSocket(part_class=part_class)
 
 
 @dataclass(frozen=True)
@@ -176,14 +254,35 @@ class SymbolPin:
 
 
 @dataclass(frozen=True)
+class SymbolUnit:
+    """One placeable unit of a multi-unit symbol (DESIGN.md §7).
+
+    KiCad encodes units as ``<Name>_<unit>_<style>`` subsymbols; each
+    unit's pins carry physical package pin numbers, and one physical
+    pin may appear in several units (the BAT54ADW shared anodes).
+    """
+
+    number: int
+    pins: tuple[SymbolPin, ...]
+
+
+@dataclass(frozen=True)
 class Symbol:
-    """A resolved library symbol: the pin-level contract of a part kind."""
+    """A resolved library symbol: the pin-level contract of a part kind.
+
+    ``pins`` is the all-units placement view; the unit structure
+    (DESIGN.md §7) is ``common_pins`` — unit 0, present in every
+    placed unit; the whole pin set of a single-unit symbol — and
+    ``units``, the placeable units in unit-number order.
+    """
 
     lib: str
     name: str
     pins: tuple[SymbolPin, ...]
     footprint_filters: tuple[str, ...] = ()
     pin_conflicts: tuple[str, ...] = ()
+    common_pins: tuple[SymbolPin, ...] = ()
+    units: tuple[SymbolUnit, ...] = ()
 
     @property
     def ref(self) -> str:
@@ -199,9 +298,43 @@ class Symbol:
         """
         return self.lib == "power"
 
+    @property
+    def is_socket(self) -> bool:
+        """True for component-socket placeholders (``Circuit.socket``).
+
+        A socket placeholder carries the protocol pins a subcircuit
+        wires against; flattening replaces it with the standalone part
+        or the parent-placed package unit the parent directed.
+        """
+        return self.lib == _SOCKET_LIB
+
     def pin(self, number: str) -> SymbolPin | None:
         """Look up a pin by number, or None if the symbol has no such pin."""
         return next((p for p in self.pins if p.number == number), None)
+
+    def pins_for_units(self, units: Iterable[int] | None) -> tuple[SymbolPin, ...]:
+        """Return the pins a placement materializes for a unit subset.
+
+        None places every unit (the default) — the whole ``pins``
+        view. A subset places the common pins plus the chosen units'
+        pins; unplaced units materialize no pins, so the
+        unconnected-pin check stays clean. A physical pin shared by
+        several placed units appears once.
+        """
+        if units is None:
+            return self.pins
+        known = {unit.number for unit in self.units}
+        unknown = sorted(set(units) - known)
+        if unknown:
+            msg = f"{self.ref} has no units {unknown} (units: {sorted(known)})"
+            raise DefinitionError(msg)
+        wanted = set(units)
+        merged: dict[str, SymbolPin] = {pin.number: pin for pin in self.common_pins}
+        for unit in self.units:
+            if unit.number in wanted:
+                for pin in unit.pins:
+                    merged[pin.number] = pin
+        return tuple(merged.values())
 
 
 class SymbolTable(Protocol):
@@ -210,6 +343,21 @@ class SymbolTable(Protocol):
     def lookup(self, ref: str) -> Symbol:
         """Resolve ``Lib:Name`` to a Symbol, raising UnknownSymbolError."""
         ...
+
+
+class SocketSpec:
+    """A component socket protocol: the pin handles a subcircuit needs.
+
+    Subclasses (``oparroy.dsl.parts``) fix ``pins`` — the protocol pin
+    names — and ``default``, the standalone typed part flattening
+    places when the instantiating parent does not pack the socket into
+    one unit of a parent-placed multi-unit package. Packing is the
+    parent's directed choice; the subcircuit stays package-agnostic
+    (DESIGN.md §7, T7bc).
+    """
+
+    pins: ClassVar[tuple[str, ...]]
+    default: ClassVar[type[TypedPart]]
 
 
 class Pin:
@@ -249,26 +397,57 @@ class Pin:
         return f"<Pin {self._part.ref}.{self.number}>"
 
 
+@dataclass(frozen=True)
+class Placement:
+    """How a placed part sits: hierarchy path and multi-unit selection.
+
+    ``path`` is the instance path flattening stamps on the flat copy —
+    the hierarchy metadata (sheetpath) the KiCad emitter and the
+    layout checker key channelization on. ``units`` is the placed
+    unit subset of a multi-unit symbol (None = every unit, today's
+    behavior): only the placed units' pins materialize, and a
+    physical pin shared by placed units is one ``Pin``.
+    ``unit_names`` carries the typed per-unit pin names a
+    ``MultiUnitPart`` placement declared — the currency of
+    ``Part.unit`` handles.
+    """
+
+    path: tuple[str, ...] = ()
+    units: tuple[int, ...] | None = None
+    unit_names: dict[int, dict[str, str]] | None = None
+
+
 class Part:
     """One placed component: an explicit reference bound to a symbol."""
 
-    def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + path/identity
+    def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + identity/placement
         self,
         ref: str,
         symbol: Symbol,
         value: str | None,
         footprint: str | None,
         *,
-        path: tuple[str, ...] = (),
         identity: str | None = None,
+        placement: Placement | None = None,
     ) -> None:
         self._ref = ref
         self._symbol = symbol
         self.value = value
         self.footprint = footprint
-        self._path = path
         self._identity = ref if identity is None else identity
-        self._pins = {sp.number: Pin(self, sp) for sp in symbol.pins}
+        base = Placement() if placement is None else placement
+        units = base.units
+        if units is not None:
+            if len(set(units)) != len(units):
+                msg = f"{ref} places units {sorted(units)} with duplicates"
+                raise DefinitionError(msg)
+            base = Placement(
+                path=base.path,
+                units=tuple(sorted(units)),
+                unit_names=base.unit_names,
+            )
+        self._placement = base
+        self._pins = {sp.number: Pin(self, sp) for sp in symbol.pins_for_units(units)}
 
     @property
     def ref(self) -> str:
@@ -294,12 +473,17 @@ class Part:
         the flat copy — the hierarchy metadata (sheetpath) the KiCad
         emitter and the layout checker key channelization on.
         """
-        return self._path
+        return self._placement.path
 
     @property
     def symbol(self) -> Symbol:
         """The library symbol this part instantiates."""
         return self._symbol
+
+    @property
+    def units(self) -> tuple[int, ...] | None:
+        """The placed unit subset, or None when every unit is placed."""
+        return self._placement.units
 
     @property
     def pins(self) -> tuple[Pin, ...]:
@@ -315,11 +499,104 @@ class Part:
             msg = f"{self._ref} ({self._symbol.ref}) has no pin {key}"
             raise DefinitionError(msg) from None
 
+    def unit(self, number: int) -> UnitHandle:
+        """Return a typed handle over one placed unit's pins.
+
+        Available on parts placed from a multi-unit typed part
+        (``oparroy.dsl.parts.MultiUnitPart``), which declares the pin
+        names; wire the unit (``connect(net, u1.unit(1).anode)``) or
+        hand the handle to a subcircuit's component socket.
+        """
+        unit_names = self._placement.unit_names
+        if unit_names is None:
+            msg = (
+                f"{self._ref} ({self._symbol.ref}) was not placed from a "
+                "multi-unit typed part; wire its pins by number"
+            )
+            raise DefinitionError(msg)
+        try:
+            names = unit_names[number]
+        except KeyError:
+            placed = sorted(unit_names)
+            msg = f"{self._ref} has no placed unit {number} (placed: {placed})"
+            raise DefinitionError(msg) from None
+        return UnitHandle(self, number, names)
+
+    def _flattened_placement(self, path: tuple[str, ...]) -> Placement:
+        """Return the placement for the flat copy: same units, new path."""
+        names = self._placement.unit_names
+        return Placement(
+            path=path,
+            units=self._placement.units,
+            unit_names=None
+            if names is None
+            else {u: dict(pins) for u, pins in names.items()},
+        )
+
     def __getitem__(self, number: int | str) -> Pin:
         return self.pin(number)
 
     def __repr__(self) -> str:
         return f"<Part {self._ref} {self._symbol.ref}>"
+
+
+class UnitHandle(Mapping[str, Pin]):
+    """One placed unit of a multi-unit part, by typed pin names.
+
+    The packing currency (DESIGN.md §7): wire a unit at board level
+    (``board.connect(net, u1.unit(1).anode)``), or hand it to a
+    subcircuit's component socket at instantiation — packing is the
+    parent's directed choice. Pins read by item (``handle["anode"]``)
+    or attribute (``handle.anode``).
+    """
+
+    def __init__(self, part: Part, unit: int, pin_names: dict[str, str]) -> None:
+        self._part = part
+        self._unit = unit
+        self._pin_names = dict(pin_names)
+
+    @property
+    def part(self) -> Part:
+        """The placed package part this unit belongs to."""
+        return self._part
+
+    @property
+    def unit(self) -> int:
+        """The unit number within the package."""
+        return self._unit
+
+    @property
+    def pin_map(self) -> dict[str, str]:
+        """Pin keyword name → physical pin number."""
+        return dict(self._pin_names)
+
+    def __getitem__(self, name: str) -> Pin:
+        try:
+            number = self._pin_names[name]
+        except KeyError:
+            raise KeyError(
+                f"{self._part.ref} unit {self._unit} has no pin {name!r}"
+            ) from None
+        return self._part.pin(number)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._pin_names)
+
+    def __len__(self) -> int:
+        return len(self._pin_names)
+
+    def __getattr__(self, name: str) -> Pin:
+        try:
+            number = self.__dict__["_pin_names"][name]
+        except KeyError:
+            raise AttributeError(
+                f"{self.__dict__['_part'].ref} unit {self.__dict__['_unit']} "
+                f"has no pin {name!r}"
+            ) from None
+        return self.__dict__["_part"].pin(number)
+
+    def __repr__(self) -> str:
+        return f"<UnitHandle {self._part.ref} unit {self._unit}>"
 
 
 class Net:
@@ -374,7 +651,15 @@ class Net:
         )
 
     def _attach(self, pin: Pin) -> None:
-        """Add a pin to this net; called by ``Circuit.connect``."""
+        """Add a pin to this net; called by ``Circuit.connect``.
+
+        Re-attaching to the net the pin already sits on is a no-op: a
+        physical pin shared by several placed units (DESIGN.md §7 —
+        the BAT54ADW anodes) is legitimately wired once per unit, and
+        KiCad ERC's shared-pin rule allows exactly the one net.
+        """
+        if pin.net is self:
+            return
         if pin.net is not None:
             msg = f"{pin.part.ref}.{pin.number} is already on net {pin.net.name!r}"
             raise DefinitionError(msg)
@@ -471,7 +756,7 @@ class Bundle(Mapping[str, Net]):
 def _expand_connections(
     instance_name: str,
     child: Circuit,
-    connections: dict[str, Net | str | Sequence[Net | str] | Mapping[str, Net | str]],
+    connections: dict[str, NetBinding],
 ) -> dict[str, list[tuple[Net | str, str]]]:
     """Expand array/bundle bindings into per-port connections.
 
@@ -574,11 +859,28 @@ def _expand_bundle(
     return expanded
 
 
+@dataclass(frozen=True)
+class PackedSocket:
+    """A socket satisfied by one unit of a parent-placed package."""
+
+    part: Part
+    unit: int
+    pin_map: dict[str, str]
+
+
+@dataclass(frozen=True)
+class StandaloneSocket:
+    """A socket satisfied by a parent-directed standalone typed part class."""
+
+    part_class: type[TypedPart]
+
+
 class Instance:
     """One placed subcircuit: a captured child with its ports bound.
 
-    Built by ``Circuit.instance``; carries the child circuit and the
-    port bindings (port name → parent net) that ``Circuit.flatten``
+    Built by ``Circuit.instance``; carries the child circuit, the port
+    bindings (port name → parent net), and the socket bindings
+    (socket reference → packing decision) that ``Circuit.flatten``
     consumes.
     """
 
@@ -587,10 +889,12 @@ class Instance:
         name: str,
         circuit: Circuit,
         connections: dict[str, Net],
+        socket_bindings: dict[str, PackedSocket | StandaloneSocket],
     ) -> None:
         self._name = name
         self._circuit = circuit
         self._connections = dict(connections)
+        self._socket_bindings = dict(socket_bindings)
 
     @property
     def name(self) -> str:
@@ -606,6 +910,11 @@ class Instance:
     def connections(self) -> dict[str, Net]:
         """Port bindings: port name → the parent net it sits on."""
         return dict(self._connections)
+
+    @property
+    def socket_bindings(self) -> dict[str, PackedSocket | StandaloneSocket]:
+        """Socket bindings: socket reference → the packing decision."""
+        return dict(self._socket_bindings)
 
     def __repr__(self) -> str:
         return f"<Instance {self._name} of {self._circuit.name!r}>"
@@ -626,6 +935,8 @@ class Circuit:
         self._bundles: dict[str, Bundle] = {}
         self._instances: dict[str, Instance] = {}
         self._waivers: list[Waiver] = []
+        self._sockets: dict[str, type[SocketSpec]] = {}
+        self._allocations: dict[tuple[str, int], str] = {}
 
     @property
     def name(self) -> str:
@@ -696,6 +1007,11 @@ class Circuit:
         self._waivers.append(waiver)
         return waiver
 
+    @property
+    def sockets(self) -> dict[str, type[SocketSpec]]:
+        """Component sockets by reference — the part interface (insertion order)."""
+        return dict(self._sockets)
+
     def part(
         self,
         ref: str,
@@ -713,6 +1029,8 @@ class Circuit:
         before anything is placed, so a rejected call changes nothing.
         A ``symbol`` string places an unwired part; wiring is
         ``connect``'s job. ``footprint`` overrides the spec's default.
+        A multi-unit package's placed unit subset is declared by its
+        typed part class (``oparroy.dsl.parts.MultiUnitPart``).
         """
         _reject_separator("part reference", ref)
         if isinstance(spec, str):
@@ -738,12 +1056,15 @@ class Circuit:
         footprint: str | None,
     ) -> Part:
         # Lazy import: parts.py imports this module at runtime.
+        from oparroy.dsl.parts import MultiUnitPart as _MultiUnitPart  # noqa: PLC0415
         from oparroy.dsl.parts import TypedPart as _TypedPart  # noqa: PLC0415
 
         if not isinstance(spec, _TypedPart):
             msg = f"expected a typed part (oparroy.dsl.parts), got {spec!r}"
             raise DefinitionError(msg)
         resolved = self._symbols.lookup(spec.symbol)
+        if isinstance(spec, _MultiUnitPart):
+            return self._place_multi(ref, spec, footprint, resolved)
         symbol_pins = {pin.number for pin in resolved.pins}
         targets = [
             number
@@ -775,20 +1096,73 @@ class Circuit:
                 net._attach(placed.pin(number))  # noqa: SLF001 — same module
         return placed
 
-    def _place(  # noqa: PLR0913 — placement carries ref/symbol/value/footprint + path/identity
+    def _place_multi(
+        self,
+        ref: str,
+        spec: MultiUnitPart,
+        footprint: str | None,
+        resolved: Symbol,
+    ) -> Part:
+        """Place a multi-unit typed part: validate the declared units.
+
+        The declared ``unit_pins`` are the placed unit subset (DESIGN
+        §7): each declared unit must exist in the symbol and map its
+        pin names onto pins of that unit (or the common unit). One
+        physical pin number repeating *across* units is the shared-pin
+        case and stays legal; within one unit it is a pin swap.
+        """
+        by_unit = {u.number: {p.number for p in u.pins} for u in resolved.units}
+        common = {p.number for p in resolved.common_pins}
+        unknown_units = sorted(set(spec.unit_pins) - set(by_unit))
+        if unknown_units:
+            msg = (
+                f"{type(spec).__name__} declares units {unknown_units}, "
+                f"which {spec.symbol} does not have"
+            )
+            raise DefinitionError(msg)
+        for unit, pin_map in sorted(spec.unit_pins.items()):
+            unknown = sorted(
+                set(pin_map.values()) - by_unit[unit] - common, key=natural_key
+            )
+            if unknown:
+                msg = (
+                    f"{type(spec).__name__} unit {unit} maps pins {unknown}, "
+                    f"which {spec.symbol} unit {unit} does not have"
+                )
+                raise DefinitionError(msg)
+            if len(set(pin_map.values())) != len(pin_map):
+                msg = (
+                    f"{type(spec).__name__} unit {unit} maps several names "
+                    "to the same pin number"
+                )
+                raise DefinitionError(msg)
+        return self._place(
+            ref,
+            resolved,
+            spec.value,
+            footprint if footprint is not None else spec.footprint,
+            placement=Placement(
+                units=tuple(sorted(spec.unit_pins)),
+                unit_names={unit: dict(pins) for unit, pins in spec.unit_pins.items()},
+            ),
+        )
+
+    def _place(  # noqa: PLR0913 — ref/symbol/value/footprint + identity/placement
         self,
         ref: str,
         resolved: Symbol,
         value: str | None,
         footprint: str | None,
         *,
-        path: tuple[str, ...] = (),
         identity: str | None = None,
+        placement: Placement | None = None,
     ) -> Part:
         if ref in self._parts:
             msg = f"duplicate part reference {ref!r}"
             raise DefinitionError(msg)
-        placed = Part(ref, resolved, value, footprint, path=path, identity=identity)
+        placed = Part(
+            ref, resolved, value, footprint, identity=identity, placement=placement
+        )
         self._parts[ref] = placed
         return placed
 
@@ -820,6 +1194,38 @@ class Circuit:
         """
         _reject_separator("net name", name)
         return self._add_net(name, is_port=True, source=source, sink=sink)
+
+    def socket(self, ref: str, spec: type[SocketSpec]) -> Part:
+        """Declare a component socket: this circuit needs a *part*, not nets.
+
+        The socket's protocol pins (``spec.pins``) are pin handles the
+        capture wires like any part's pins — ``connect(net, d["anode"])``
+        — but no real part is placed yet: the instantiating parent
+        directs the packing (``Circuit.instance``), either handing the
+        socket one unit of a parent-placed multi-unit package or a
+        standalone typed part class, and an unbound socket materializes
+        as the protocol's ``default`` part at flattening. The
+        subcircuit stays package-agnostic (DESIGN.md §7, T7bc).
+        """
+        _reject_separator("socket reference", ref)
+        if ref in self._sockets:
+            msg = f"duplicate socket reference {ref!r}"
+            raise DefinitionError(msg)
+        if ref in self._nets:
+            msg = f"socket reference {ref!r} collides with a net of the same name"
+            raise DefinitionError(msg)
+        _validate_socket_spec(spec)
+        symbol = Symbol(
+            lib=_SOCKET_LIB,
+            name=spec.__name__,
+            pins=tuple(
+                SymbolPin(number=name, name=name, type=PinType.PASSIVE)
+                for name in spec.pins
+            ),
+        )
+        placed = self._place(ref, symbol, None, None)
+        self._sockets[ref] = spec
+        return placed
 
     def port_array(self, name: str, width: int) -> PortArray:
         """Declare a port array: ``width`` port nets ``name[0]`` … ``name[width-1]``.
@@ -909,6 +1315,9 @@ class Circuit:
         if name in self._arrays or name in self._bundles:
             msg = f"net name {name!r} collides with a port array or bundle"
             raise DefinitionError(msg)
+        if name in self._sockets:
+            msg = f"net name {name!r} collides with a socket of the same name"
+            raise DefinitionError(msg)
         created = Net(name, is_port=is_port, source=source, sink=sink)
         self._nets[name] = created
         return created
@@ -916,8 +1325,11 @@ class Circuit:
     def connect(self, net: Net | str, *pins: Pin) -> None:
         """Join pins onto a net; a pin may sit on exactly one net.
 
-        Validates every pin (circuit membership, not already connected)
-        before attaching any, so a rejected call changes nothing.
+        Reconnecting a pin to the net it already sits on is a no-op —
+        the shared physical pin of a multi-unit package is wired once
+        per unit (DESIGN.md §7). Validates every pin (circuit
+        membership, not already connected elsewhere) before attaching
+        any, so a rejected call changes nothing.
         """
         resolved = self._resolve_net(net)
         seen: set[Pin] = set()
@@ -932,7 +1344,7 @@ class Circuit:
                 msg = f"{pin.part.ref}.{pin.number} listed twice in connect"
                 raise DefinitionError(msg)
             seen.add(pin)
-            if pin.net is not None:
+            if pin.net is not None and pin.net is not resolved:
                 msg = f"{pin.part.ref}.{pin.number} is already on net {pin.net.name!r}"
                 raise DefinitionError(msg)
         for pin in pins:
@@ -955,9 +1367,9 @@ class Circuit:
         name: str,
         subcircuit: Callable[[Circuit], None],
         /,
-        **connections: Net | str | Sequence[Net | str] | Mapping[str, Net | str],
+        **connections: Connection,
     ) -> Instance:
-        """Instantiate a subcircuit: capture it, then bind its ports.
+        """Instantiate a subcircuit: capture it, then bind its interface.
 
         ``subcircuit`` is a capture — a ``Subcircuit`` or any callable
         taking the fresh child circuit — run under ``name``. Every port
@@ -971,6 +1383,14 @@ class Circuit:
         into both segment-face bundles) must resolve to one parent net
         — conflicting bindings raise.
 
+        Component sockets bind by reference: a ``UnitHandle`` of a
+        parent-placed multi-unit package packs the socket into that
+        unit (``D1=u1.unit(3)``), a typed part class directs the
+        standalone part (``D1=Bat54s``), and an unbound socket
+        materializes as its protocol's default part at flattening.
+        Packing is the parent's directed choice; one package unit
+        satisfies one socket.
+
         The instance is capture-time structure only — nothing is
         copied into this circuit until ``flatten`` runs.
         """
@@ -983,8 +1403,16 @@ class Circuit:
             raise DefinitionError(msg)
         child = Circuit(name, self._symbols)
         subcircuit(child)
-        expanded = _expand_connections(name, child, connections)
+        net_connections, socket_values = self._partition_connections(name, connections)
+        expanded = _expand_connections(name, child, net_connections)
         ports = child.ports
+        bound_as_net = sorted(set(expanded) & set(child._sockets), key=natural_key)
+        if bound_as_net:
+            msg = (
+                f"instance {name!r}: sockets {bound_as_net} need a unit "
+                "handle or a typed part class, not a net"
+            )
+            raise DefinitionError(msg)
         unknown = sorted(set(expanded) - set(ports), key=natural_key)
         if unknown:
             msg = (
@@ -992,6 +1420,7 @@ class Circuit:
                 f"(declared: {sorted(ports, key=natural_key)})"
             )
             raise DefinitionError(msg)
+        socket_bindings, allocations = self._bind_sockets(name, child, socket_values)
         missing = sorted(set(ports) - set(expanded), key=natural_key)
         if missing:
             msg = f"instance {name!r}: ports {missing} left unconnected"
@@ -1009,9 +1438,116 @@ class Circuit:
                     raise DefinitionError(msg)
                 resolved[port_name] = target
                 sources[port_name] = source
-        placed = Instance(name, child, resolved)
+        placed = Instance(name, child, resolved, socket_bindings)
         self._instances[name] = placed
+        self._allocations.update(allocations)
         return placed
+
+    def _partition_connections(
+        self,
+        name: str,
+        connections: dict[str, Connection],
+    ) -> tuple[dict[str, NetBinding], dict[str, UnitHandle | type[TypedPart]]]:
+        """Split instance bindings into net connections and socket bindings."""
+        # Lazy import: parts.py imports this module at runtime.
+        from oparroy.dsl.parts import TypedPart as _TypedPart  # noqa: PLC0415
+
+        nets: dict[str, NetBinding] = {}
+        sockets: dict[str, UnitHandle | type[TypedPart]] = {}
+        for key, value in connections.items():
+            if isinstance(value, UnitHandle) or (
+                isinstance(value, type) and issubclass(value, _TypedPart)
+            ):
+                sockets[key] = value
+            elif isinstance(value, _TypedPart):
+                msg = (
+                    f"instance {name!r}: bind a part *class* ({key}=Diode), "
+                    "not a constructed part — the subcircuit owns the wiring"
+                )
+                raise DefinitionError(msg)
+            else:
+                nets[key] = value
+        return nets, sockets
+
+    def _bind_sockets(
+        self,
+        name: str,
+        child: Circuit,
+        values: dict[str, UnitHandle | type[TypedPart]],
+    ) -> tuple[dict[str, PackedSocket | StandaloneSocket], dict[tuple[str, int], str]]:
+        """Validate socket bindings against the child's declared sockets."""
+        sockets = child._sockets
+        for key in values:
+            if key in sockets:
+                continue
+            if key in child.ports or key in child._arrays or key in child._bundles:
+                msg = (
+                    f"instance {name!r}: {key!r} is a net port, not a "
+                    "component socket; bind a net"
+                )
+                raise DefinitionError(msg)
+            msg = (
+                f"instance {name!r}: the subcircuit has no socket {key!r} "
+                f"(declared: {sorted(sockets, key=natural_key)})"
+            )
+            raise DefinitionError(msg)
+        bindings: dict[str, PackedSocket | StandaloneSocket] = {}
+        allocations: dict[tuple[str, int], str] = {}
+        for key, value in values.items():
+            spec = sockets[key]
+            if isinstance(value, UnitHandle):
+                binding = self._bind_unit(name, key, spec, value, allocations)
+                allocations[(binding.part.ref, binding.unit)] = f"{name}/{key}"
+                bindings[key] = binding
+            else:
+                bindings[key] = _bind_part_class(name, key, spec, value)
+        return bindings, allocations
+
+    def _bind_unit(
+        self,
+        name: str,
+        ref: str,
+        spec: type[SocketSpec],
+        handle: UnitHandle,
+        allocations: dict[tuple[str, int], str],
+    ) -> PackedSocket:
+        """Validate packing a socket into one unit of a parent-placed part."""
+        part = handle.part
+        if part.symbol.is_socket:
+            msg = (
+                f"instance {name!r}: socket {ref!r} cannot be packed into "
+                "another socket's placeholder"
+            )
+            raise DefinitionError(msg)
+        if part is not self._parts.get(part.ref):
+            msg = (
+                f"instance {name!r}: {part.ref} does not belong to circuit "
+                f"{self._name!r} — pack into a unit of a parent-placed part"
+            )
+            raise DefinitionError(msg)
+        missing = sorted(set(spec.pins) - set(handle), key=natural_key)
+        extra = sorted(set(handle) - set(spec.pins), key=natural_key)
+        if missing or extra:
+            problems = []
+            if missing:
+                problems.append(f"missing {missing}")
+            if extra:
+                problems.append(f"extra {extra}")
+            msg = (
+                f"instance {name!r}: {part.ref} unit {handle.unit} does not "
+                f"satisfy socket {ref!r}: {' and '.join(problems)} "
+                f"(protocol: {sorted(spec.pins, key=natural_key)})"
+            )
+            raise DefinitionError(msg)
+        allocation = (part.ref, handle.unit)
+        if allocation in self._allocations or allocation in allocations:
+            packed_into = self._allocations.get(allocation) or allocations[allocation]
+            msg = (
+                f"instance {name!r}: unit {handle.unit} of {part.ref} is "
+                f"already packed into {packed_into}"
+            )
+            raise DefinitionError(msg)
+        return PackedSocket(part=part, unit=handle.unit, pin_map=handle.pin_map)
 
     def flatten(self) -> Circuit:
         """Reduce the instance hierarchy to a new flat circuit.
@@ -1025,9 +1561,17 @@ class Circuit:
         the top level keep their port flag, so the dangling-net
         exemption survives the pass. The flat parts carry their
         instance path as hierarchy metadata (``Part.path``).
+
+        Component sockets resolve here too: an unbound socket (or one
+        bound to a part class) materializes as the standalone typed
+        part under the instance path (``B1/D1``); a socket packed into
+        a parent-placed package unit materializes no part — its pins
+        are the package's physical pins, attached to the nets the
+        subcircuit wired (a shared physical pin packed onto two
+        different nets raises: it must sit on one).
         """
         flat = Circuit(self._name, self._symbols)
-        self._flatten_into(flat, (), {})
+        self._flatten_into(flat, (), {}, {})
         return flat
 
     def _flatten_into(
@@ -1035,6 +1579,7 @@ class Circuit:
         flat: Circuit,
         path: tuple[str, ...],
         bindings: dict[str, Net],
+        socket_bindings: dict[str, PackedSocket | StandaloneSocket],
     ) -> None:
         prefix = "".join(f"{level}/" for level in path)
         nets: dict[Net, Net] = {}
@@ -1051,21 +1596,62 @@ class Circuit:
                     sink=net.sink,
                 )
         for part in self._parts.values():
+            if part.symbol.is_socket:
+                continue
             placed = flat._place(
                 f"{prefix}{part.ref}",
                 part.symbol,
                 part.value,
                 part.footprint,
-                path=path,
+                placement=part._flattened_placement(path),  # noqa: SLF001 — same module
             )
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
+        self._flatten_sockets(flat, path, nets, socket_bindings)
         for inst in self._instances.values():
             child_bindings = {
                 port_name: nets[net] for port_name, net in inst.connections.items()
             }
-            inst.circuit._flatten_into(flat, (*path, inst.name), child_bindings)  # noqa: SLF001
+            inst.circuit._flatten_into(  # noqa: SLF001
+                flat, (*path, inst.name), child_bindings, inst.socket_bindings
+            )
+
+    def _flatten_sockets(
+        self,
+        flat: Circuit,
+        path: tuple[str, ...],
+        nets: dict[Net, Net],
+        socket_bindings: dict[str, PackedSocket | StandaloneSocket],
+    ) -> None:
+        """Resolve each socket: standalone part or packed package unit."""
+        prefix = "".join(f"{level}/" for level in path)
+        # Packed units belong to the parent circuit, flattened one
+        # level up — the parent's parts are already placed.
+        parent_prefix = "".join(f"{level}/" for level in path[:-1])
+        for ref, spec in self._sockets.items():
+            placeholder = self._parts[ref]
+            binding = socket_bindings.get(ref)
+            if isinstance(binding, PackedSocket):
+                target = flat._parts[f"{parent_prefix}{binding.part.ref}"]
+                for pin in placeholder.pins:
+                    if pin.net is not None:
+                        nets[pin.net]._attach(  # noqa: SLF001
+                            target.pin(binding.pin_map[pin.number])
+                        )
+                continue
+            part_class = spec.default if binding is None else binding.part_class
+            placed = flat._place(
+                f"{prefix}{ref}",
+                flat._symbols.lookup(part_class.symbol),
+                part_class.default_value,
+                part_class.default_footprint,
+                placement=Placement(path=path),
+            )
+            for pin in placeholder.pins:
+                if pin.net is not None:
+                    for number in _pin_numbers(part_class.pin_map[pin.number]):
+                        nets[pin.net]._attach(placed.pin(number))  # noqa: SLF001
 
     def renamed(self, refs: Mapping[str, str]) -> Circuit:
         """Apply annotation: a flat copy with parts renamed to their refdes.
@@ -1091,8 +1677,8 @@ class Circuit:
                 part.symbol,
                 part.value,
                 part.footprint,
-                path=part.path,
                 identity=part.identity,
+                placement=part._flattened_placement(part.path),  # noqa: SLF001 — same module
             )
             for pin in part.pins:
                 if pin.net is not None:
