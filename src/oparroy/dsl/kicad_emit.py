@@ -24,11 +24,11 @@ _TSTAMP_NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://oparroy.koch.no/dsl/tstamp"
 def emit_netlist(circuit: Circuit) -> str:
     """Emit the circuit as a KiCad s-expression netlist.
 
-    A hierarchical circuit (one with instances) is flattened first; the
-    hierarchy survives as each comp's ``sheetpath`` — content-derived,
-    like the tstamps.
+    A hierarchical circuit (one with instances) or one with component
+    sockets is flattened first; the hierarchy survives as each comp's
+    ``sheetpath`` — content-derived, like the tstamps.
     """
-    if circuit.instances:
+    if circuit.instances or circuit.sockets:
         circuit = circuit.flatten()
     lines = [
         '(export (version "E")',

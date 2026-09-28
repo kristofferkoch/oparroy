@@ -29,17 +29,31 @@ from oparroy.dsl.ir import (
     Pin,
     PinType,
     PortArray,
+    SocketSpec,
     Symbol,
     SymbolPin,
     SymbolTable,
+    SymbolUnit,
+    UnitHandle,
     UnknownSymbolError,
 )
 from oparroy.dsl.kicad_emit import emit_netlist
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
-from oparroy.dsl.parts import Bat54s, BundleConnector, Capacitor, Resistor, TypedPart
+from oparroy.dsl.parts import (
+    Bat54adw,
+    Bat54s,
+    BundleConnector,
+    Capacitor,
+    Diode,
+    DiodeSocket,
+    MultiUnitPart,
+    Resistor,
+    TypedPart,
+)
 from oparroy.dsl.subcircuit import Subcircuit
 
 __all__ = [
+    "Bat54adw",
     "Bat54s",
     "Bundle",
     "BundleConnector",
@@ -47,11 +61,14 @@ __all__ = [
     "CheckError",
     "Circuit",
     "DefinitionError",
+    "Diode",
+    "DiodeSocket",
     "FootprintTable",
     "Instance",
     "Issue",
     "KiCadLibraries",
     "LibraryError",
+    "MultiUnitPart",
     "Net",
     "Part",
     "Pin",
@@ -59,11 +76,14 @@ __all__ = [
     "PortArray",
     "Resistor",
     "Severity",
+    "SocketSpec",
     "Subcircuit",
     "Symbol",
     "SymbolPin",
     "SymbolTable",
+    "SymbolUnit",
     "TypedPart",
+    "UnitHandle",
     "UnknownSymbolError",
     "check",
     "emit_netlist",

@@ -56,11 +56,13 @@ class FootprintTable(Protocol):
 def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list[Issue]:
     """Validate a finished circuit; returns the issue list.
 
-    A hierarchical circuit (one with instances) is flattened first, so
-    findings report hierarchical paths (``WD1/Rs``, net ``WD1/x``) and
-    bound port nets are checked as the merged parent net.
+    A hierarchical circuit (one with instances) or one with component
+    sockets is flattened first, so findings report hierarchical paths
+    (``WD1/Rs``, net ``WD1/x``), bound port nets are checked as the
+    merged parent net, and sockets are checked as the part they
+    resolve to (standalone default or packed package unit).
     """
-    if circuit.instances:
+    if circuit.instances or circuit.sockets:
         circuit = circuit.flatten()
     issues: list[Issue] = []
     for ref in sorted(circuit.parts, key=natural_key):

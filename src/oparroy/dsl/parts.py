@@ -12,10 +12,14 @@ throughout. Classes accrete as captures need them (YAGNI — no
 speculative zoo). Footprints default per class — subclass per
 footprint bin (``class R0603(Resistor)``) — overridable per instance.
 
-Multi-unit packages (a quad op-amp, a BAT54ADW) follow KiCad's unit
-model (DESIGN.md §7); parts whose units are used as one element, like
-the BAT54S series pair, stay package-as-one-part — as does KiCad's
-own library.
+Multi-unit packages (a quad switch, a BAT54ADW) follow KiCad's unit
+model (DESIGN.md §7): ``MultiUnitPart`` declares the placed unit
+subset with typed per-unit pin names; construction places but wires
+nothing — units wire individually through typed handles
+(``board.connect(net, u1.unit(1).anode)``) or pack into subcircuit
+component sockets (``SocketSpec``) at instantiation. Parts whose units
+are used as one element, like the BAT54S series pair, stay
+package-as-one-part — as does KiCad's own library.
 
 Error policy: a missing or misspelled pin on the built-in classes is
 signature misuse and raises ``TypeError`` from argument binding;
@@ -28,7 +32,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from oparroy.dsl.ir import Bundle, DefinitionError
+from oparroy.dsl.ir import Bundle, DefinitionError, SocketSpec
 
 if TYPE_CHECKING:
     from oparroy.dsl.ir import Net
@@ -104,6 +108,85 @@ class Capacitor(TypedPart):
         footprint: str | None = None,
     ) -> None:
         super().__init__(value, footprint, {"a": a, "b": b})
+
+
+class Diode(TypedPart):
+    """Single diode (``Device:D``); ``anode`` is pin 2, ``cathode`` pin 1.
+
+    Keyword-only: orientation is the whole point of a diode. No
+    class-default footprint — subclass per footprint bin, like
+    ``Resistor``/``Capacitor``.
+    """
+
+    symbol = "Device:D"
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
+        "anode": "2",
+        "cathode": "1",
+    }
+
+    def __init__(
+        self,
+        *,
+        anode: Net | str,
+        cathode: Net | str,
+        value: str | None = None,
+        footprint: str | None = None,
+    ) -> None:
+        super().__init__(value, footprint, {"anode": anode, "cathode": cathode})
+
+
+class MultiUnitPart(TypedPart):
+    """A multi-unit package (a quad switch, a BAT54ADW): units wire singly.
+
+    Subclasses fix ``symbol`` and ``unit_pins`` — placed unit number →
+    pin keyword → physical pin number. The declared units are the
+    placed subset (DESIGN.md §7): unplaced units materialize no pins,
+    and one physical pin repeating *across* units (the BAT54ADW
+    anodes) is the shared-pin case — it sits on one net. Construction
+    places but wires nothing: units wire at board level through typed
+    handles (``board.connect(net, u1.unit(1).anode)``) or pack into
+    subcircuit component sockets at instantiation.
+    """
+
+    unit_pins: ClassVar[dict[int, dict[str, str]]]
+
+    def __init__(
+        self, *, value: str | None = None, footprint: str | None = None
+    ) -> None:
+        self.value = self.default_value if value is None else value
+        self.footprint = self.default_footprint if footprint is None else footprint
+        self._nets: dict[str, Net | str] = {}
+
+
+class Bat54adw(MultiUnitPart):
+    """BAT54ADW quad Schottky (``Diode:BAT54ADW``, SOT-363): two com-anode pairs.
+
+    Units 1/2 share anode pin 6, units 3/4 share anode pin 3. Unit
+    pins follow the ``DiodeSocket`` protocol (``anode``/``cathode``),
+    so any unit packs into a diode socket.
+    """
+
+    symbol = "Diode:BAT54ADW"
+    unit_pins: ClassVar[dict[int, dict[str, str]]] = {
+        1: {"cathode": "1", "anode": "6"},
+        2: {"cathode": "2", "anode": "6"},
+        3: {"anode": "3", "cathode": "4"},
+        4: {"anode": "3", "cathode": "5"},
+    }
+    default_value = "BAT54ADW"
+    default_footprint = "Package_TO_SOT_SMD:SOT-363_SC-70-6"
+
+
+class DiodeSocket(SocketSpec):
+    """A single-diode socket: ``anode``/``cathode`` pin handles.
+
+    Satisfied standalone by a ``Diode`` (the default) or packed into
+    any unit of a ``Bat54adw``-class package — the instantiating
+    parent's directed choice (DESIGN.md §7, T7bc).
+    """
+
+    pins: ClassVar[tuple[str, ...]] = ("anode", "cathode")
+    default: ClassVar[type[TypedPart]] = Diode
 
 
 class Bat54s(TypedPart):
