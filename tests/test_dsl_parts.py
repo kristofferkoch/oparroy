@@ -21,9 +21,6 @@ if TYPE_CHECKING:
     from conftest import StubSymbols
     from oparroy.dsl import Net
 
-if TYPE_CHECKING:
-    from conftest import StubSymbols
-
 
 class StubR(Resistor):
     """Resistor redirected at the stub symbol table, with a bin default."""
