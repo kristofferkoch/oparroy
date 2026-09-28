@@ -709,7 +709,7 @@ names alike; unbound (top-level) ports keep their interface flag
 through flattening, so the dangling-net exemption survives the pass.
 Hierarchy survives flattening
 as metadata: `Part.path` feeds real `sheetpath`s in the KiCad netlist
-with content-derived tstamps — the channelization hook. Check and both
+with content-derived tstamps — the channelization hook. Check and the
 emitters flatten implicitly and report hierarchical paths. The §4
 watchdog is the first subcircuit (`design/watchdog_chargepump.py`); the
 8-instance proving case runs in `tests/test_dsl_subcircuit.py`.
