@@ -21,6 +21,16 @@ _TOOL = "oparroy-dsl"
 _TSTAMP_NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://oparroy.koch.no/dsl/tstamp")
 
 
+def part_tstamp(circuit: str, identity: str) -> uuid.UUID:
+    """Derive the content-based tstamp a comp with this identity emits with.
+
+    Identity is the capture name (``Part.identity``), not the refdes,
+    so the tstamp survives re-annotation — pcbnew's timestamp matching
+    is how back-annotation finds the part again.
+    """
+    return uuid.uuid5(_TSTAMP_NS, f"{circuit}/{identity}")
+
+
 def emit_netlist(circuit: Circuit) -> str:
     """Emit the circuit as a KiCad s-expression netlist.
 
@@ -71,7 +81,7 @@ def _emit_part(circuit: Circuit, part: Part) -> list[str]:
         lines.append(f'      (value "{_quote(part.value)}")')
     if part.footprint is not None:
         lines.append(f'      (footprint "{_quote(part.footprint)}")')
-    stamp = uuid.uuid5(_TSTAMP_NS, f"{circuit.name}/{part.ref}")
+    stamp = part_tstamp(circuit.name, part.identity)
     lines.append(_emit_sheetpath(circuit, part))
     lines.append(f'      (tstamps "{stamp}"))')
     return lines

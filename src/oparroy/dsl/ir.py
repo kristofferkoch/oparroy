@@ -185,7 +185,7 @@ class Pin:
 class Part:
     """One placed component: an explicit reference bound to a symbol."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + path/identity
         self,
         ref: str,
         symbol: Symbol,
@@ -193,18 +193,31 @@ class Part:
         footprint: str | None,
         *,
         path: tuple[str, ...] = (),
+        identity: str | None = None,
     ) -> None:
         self._ref = ref
         self._symbol = symbol
         self.value = value
         self.footprint = footprint
         self._path = path
+        self._identity = ref if identity is None else identity
         self._pins = {sp.number: Pin(self, sp) for sp in symbol.pins}
 
     @property
     def ref(self) -> str:
         """The reference designator, assigned explicitly at capture."""
         return self._ref
+
+    @property
+    def identity(self) -> str:
+        """The capture name this part is known by, stable across stages.
+
+        Equal to ``ref`` until annotation renames the part to its board
+        refdes — the identity keeps the capture name (``WD1/Rs``) so the
+        emitted tstamps survive re-annotation and pcbnew keeps matching
+        the part by timestamp (DESIGN.md §7).
+        """
+        return self._identity
 
     @property
     def path(self) -> tuple[str, ...]:
@@ -641,7 +654,7 @@ class Circuit:
                 net._attach(placed.pin(number))  # noqa: SLF001 — same module
         return placed
 
-    def _place(
+    def _place(  # noqa: PLR0913 — placement carries ref/symbol/value/footprint + path/identity
         self,
         ref: str,
         resolved: Symbol,
@@ -649,11 +662,12 @@ class Circuit:
         footprint: str | None,
         *,
         path: tuple[str, ...] = (),
+        identity: str | None = None,
     ) -> Part:
         if ref in self._parts:
             msg = f"duplicate part reference {ref!r}"
             raise DefinitionError(msg)
-        placed = Part(ref, resolved, value, footprint, path=path)
+        placed = Part(ref, resolved, value, footprint, path=path, identity=identity)
         self._parts[ref] = placed
         return placed
 
@@ -906,6 +920,38 @@ class Circuit:
                 port_name: nets[net] for port_name, net in inst.connections.items()
             }
             inst.circuit._flatten_into(flat, (*path, inst.name), child_bindings)  # noqa: SLF001
+
+    def renamed(self, refs: Mapping[str, str]) -> Circuit:
+        """Apply annotation: a flat copy with parts renamed to their refdes.
+
+        The annotation stage (``oparroy.dsl.annotate``) maps capture
+        names to placed refdes; this pass materializes the renamed IR
+        the netlist emitter consumes. Each part keeps its capture name
+        as ``Part.identity``, so the emitted tstamps stay stable across
+        re-annotation and pcbnew keeps matching parts by timestamp.
+        Parts missing from ``refs`` keep their current ref (power
+        symbols are never annotated). A rename that collides raises like
+        any duplicate reference.
+        """
+        if self._instances:
+            return self.flatten().renamed(refs)
+        renamed = Circuit(self._name, self._symbols)
+        nets: dict[Net, Net] = {}
+        for name, net in self._nets.items():
+            nets[net] = renamed._add_net(name, is_port=net.is_port)
+        for part in self._parts.values():
+            placed = renamed._place(
+                refs.get(part.identity, refs.get(part.ref, part.ref)),
+                part.symbol,
+                part.value,
+                part.footprint,
+                path=part.path,
+                identity=part.identity,
+            )
+            for pin in part.pins:
+                if pin.net is not None:
+                    nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
+        return renamed
 
     def dump(self) -> str:
         """Pretty-print the IR for humans; not a round-trip format."""
