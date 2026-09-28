@@ -695,6 +695,27 @@ Not yet proven: a real pcbnew netlist *import* (no KiCad application in
 the flake yet — the golden format is pinned, the ingest is exercised
 when the first board enters layout).
 
+Subcircuit composition (2026-09-28, card T7ba): hierarchy is
+capture-time structure, **flattening is a pass** — `subcircuit.py`
+(`Subcircuit` base), `Circuit.port` (a net marked as interface, exempt
+from the dangling-net checks), `Circuit.instance` (captures the child
+per instance and binds every port by keyword; unknown or unconnected
+ports raise at capture), `Circuit.flatten` (instance names prefix part
+references and internal nets — `WD1/Rs`, `WD1/x` — while port nets
+merge into the net their instance bound; explicit names at every level
+keep refdes stable across source edits). `/` is the hierarchy path
+separator and is rejected in instance names, part references, and net
+names alike; unbound (top-level) ports keep their interface flag
+through flattening, so the dangling-net exemption survives the pass.
+Hierarchy survives flattening
+as metadata: `Part.path` feeds real `sheetpath`s in the KiCad netlist
+with content-derived tstamps — the channelization hook. Check and both
+emitters flatten implicitly and report hierarchical paths. The §4
+watchdog is the first subcircuit (`design/watchdog_chargepump.py`); the
+8-instance proving case runs in `tests/test_dsl_subcircuit.py`.
+Remainder of the T7b split: port arrays/bundles (T7bb), multipacking
+and component sockets (T7bc), connection sugar (T7bd).
+
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one
 unit), composed into boards — not drawn flat into a board schematic.
@@ -939,15 +960,6 @@ resolves each is in KANBAN.md):
   so a small board doesn't feel chunky — JLCPCB offers thinner stackups
   as a fab option; verify exact thicknesses/4-layer combos at quote
   time. Card: T22 (the first node-board design).
-- **DSL composition model** (§7) — how subcircuits compose: capture
-  functions over a shared `Circuit` (ports are just parent `Net`
-  objects passed in; flat IR, no per-subcircuit standalone-check story)
-  vs first-class instance nodes in the IR (hierarchical refdes like
-  `U1/Rs`, sheetpaths, per-instance checks — but the flat
-  parts/nets dicts have no place for it, so retrofitting touches
-  everything). Today's API admits the first unchanged; decide before
-  T7b builds on it. Surfaced by the T7a review (2026-09-27).
-  Card: T7b.
 - **Cable reach** (§2) — maximum segment length unamplified, and with
   an amplifier/re-driver node in the segment; line coding is settled
   (§2), so this is drive strength, comparator sensitivity, and cable

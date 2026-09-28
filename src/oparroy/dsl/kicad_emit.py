@@ -22,7 +22,14 @@ _TSTAMP_NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://oparroy.koch.no/dsl/tstamp"
 
 
 def emit_netlist(circuit: Circuit) -> str:
-    """Emit the circuit as a KiCad s-expression netlist."""
+    """Emit the circuit as a KiCad s-expression netlist.
+
+    A hierarchical circuit (one with instances) is flattened first; the
+    hierarchy survives as each comp's ``sheetpath`` — content-derived,
+    like the tstamps.
+    """
+    if circuit.instances:
+        circuit = circuit.flatten()
     lines = [
         '(export (version "E")',
         "  (design",
@@ -65,9 +72,30 @@ def _emit_part(circuit: Circuit, part: Part) -> list[str]:
     if part.footprint is not None:
         lines.append(f'      (footprint "{_quote(part.footprint)}")')
     stamp = uuid.uuid5(_TSTAMP_NS, f"{circuit.name}/{part.ref}")
-    lines.append('      (sheetpath (names "/") (tstamps "/"))')
+    lines.append(_emit_sheetpath(circuit, part))
     lines.append(f'      (tstamps "{stamp}"))')
     return lines
+
+
+def _emit_sheetpath(circuit: Circuit, part: Part) -> str:
+    """Render the comp's sheet path: "/" at root, the instance path below.
+
+    Sheet tstamps are content-derived per path prefix, so emission
+    stays byte-identical and an instance's sheet identity is as stable
+    as its name.
+    """
+    if not part.path:
+        return '      (sheetpath (names "/") (tstamps "/"))'
+    names = "/" + "/".join(part.path) + "/"
+    stamps = "/".join(
+        str(
+            uuid.uuid5(
+                _TSTAMP_NS, f"{circuit.name}/sheet/{'/'.join(part.path[:depth])}"
+            )
+        )
+        for depth in range(1, len(part.path) + 1)
+    )
+    return f'      (sheetpath (names "{_quote(names)}") (tstamps "/{stamps}/"))'
 
 
 def _quote(text: str) -> str:
