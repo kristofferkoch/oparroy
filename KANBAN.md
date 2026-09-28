@@ -39,6 +39,7 @@ graph TD
     T22[T22 node board design] --> T10
     T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
     T10 --> T12[T12 test-hw harness]
+    T10 --> T15[T15 cable reach: bench + §2 adoption]
     T11 --> T12
     T16e[T16e coverage on release] --> T11[T11 node firmware v0]
 ```
@@ -134,16 +135,6 @@ ______________________________________________________________________
   detection hooks: supervisor frame-echo comparison, illegal-cell
   detection, and the pull-down-parked idle-low segment (§2 measured
   block). **Blocked by:** — · **Unblocks:** —
-- **T15 — Characterize cable reach.** *Shape: research.* Maximum
-  segment length unamplified, and with an amplifier/re-driver in the
-  segment (DESIGN.md §9). ngspice over cable models first (RLGC of a
-  candidate cable, capacitive load per node) — build on
-  `circuits/phy-segment/` (swap the lumped segment for the RLGC line;
-  T5's lumped-C baseline is benign: margins flat to 1 nF, but keep
-  far-end edge rates within what tb_noise covered or rerun it) — then
-  long-cable measurement on the test board. Output: numbers +
-  amplifier guidance in DESIGN.md §2. **Blocked by:** — ·
-  **Unblocks:** —
 - **T21 — Prior-art review: automatic schematic generation.** *Shape:
   research.* Survey how existing tools turn netlists into readable
   schematics — netlistsvg, yosys `show`, SKiDL's schematic generation,
@@ -238,7 +229,7 @@ ______________________________________________________________________
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  **Blocked by:** T19, T22, T24 · **Unblocks:** T12
+  **Blocked by:** T19, T22, T24 · **Unblocks:** T12, T15
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Per-bit cut-through forwarding with on-the-fly slot rewrite
@@ -258,3 +249,18 @@ ______________________________________________________________________
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
   **Unblocks:** —
+- **T15 — Cable reach: bench confirmation and §2 adoption.** *Shape:
+  research.* Sim half landed 2026-09-28
+  (`docs/cable-reach-2026-09-28.md`): 10 m per segment on 3M 3365
+  ribbon with the §7 470 Ω protection, the 470 Ω TX series R (not the
+  cable) sets the limit, analog re-slice repeaters *reduce* reach,
+  power (not signal) binds under a connector break. Remaining:
+  long-cable bench measurement on the test board — 3365/06 reels at
+  5/10/15/25 m, per-segment error counting under the §6
+  fault-injection harness, far-end overshoot vs real TVS clamps on
+  the instrumented boundary node's PIO taps — plus comparator offset
+  on real silicon at staircase edge rates (sim swept the ±13 mV
+  fast-edge spec). On shipping: adopt the doc's proposed DESIGN.md §2
+  block, resolve the §9 cable-reach open question, and decide the
+  broken-loop power policy (≤ 5 m segments vs §2.1 second-tap
+  injection). **Blocked by:** T10 · **Unblocks:** —
