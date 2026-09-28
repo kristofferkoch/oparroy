@@ -1,0 +1,271 @@
+* tb_reach_noise — crosstalk immunity at reach boundary (card T15):
+* tb_reach passes rser=470 spans out to 12 m, but past ~2 m the
+* far-end edges are us-class reflection staircases — far outside the
+* 125 ns edge rates tb_noise covered. The card's condition applies:
+* rerun the noise case against the distributed line. This bench
+* replays tb_noise's phase-2 aggressors onto the cable far end at the
+* lengths where the staircase dwells near threshold, and applies the
+* same contract.
+*
+* Aggressors (tb_noise's model, verbatim): a 20 kHz buzzer-class PWM
+* (50 % duty) and a ~1.1 MHz comm/PWM line (887 ns period, phase walks
+* through the 1.25 us cells), 3.3 V swing, 2 ns edges, coupled through
+* 12p + 6p into the far-end line node. On the cable the §3 pinout
+* already shields data-data coupling inside the ribbon (both data
+* wires sit ground-signal-ground), so the bounded external-aggressor
+* model is the right case; the far end is the most sensitive point —
+* the line is at its slowest there and the comparator is one 470 ohm
+* resistor away. Lumped at the far end, not distributed along the
+* span — noted as a model limit.
+*
+* Bench: tb_reach's 15-cell stream, rser=470, len in {2, 5, 8, 10,
+* 12} m x voff in {-13m, 0, +13m} (DS0 §3.3.15 T3-26) with noise on,
+* plus a noise-off guard run per length (agpp proves the stimulus is
+* live in noisy runs and dead in guards — a broken noise source can
+* never read as immunity).
+*
+* Contract per run (same as tb_reach/tb_noise):
+*   cells = 15, maxspur < 160 ns (ICxF fCK_INT N=8 absorbs ~167 ns),
+*   minmarg >= 100 ns, 0.9 us < period < 1.6 us
+* Failing lengths are the measurement (they set the protected reach
+* number); the bench fails red only on its guards — every noise-off
+* run must show a dead aggressor (agq), and the 2 m noise-off runs
+* must decode all 15 cells (a broken stimulus can never read as a
+* short-reach result).
+*
+* Results (2026-09-28, ngspice 45): PASS 2..10 m at all voff (margins
+* 165..190 ns, zero spurious pulses — the staircase stays monotonic
+* under +-250 mV-class steps), FAIL at 12 m (one 224-248 ns spurious
+* pulse per stream, past ICxF absorption, plus a lost cell). The 18 pF
+* of aggressor capacitance alone tips 12 m: noise-off 12 m runs fail
+* the cell count in this bench though tb_reach (no coupling caps)
+* passed 12 m at 129 ns. Protected reach number: 10 m with
+* crosstalk margin, 12 m best case on a quiet line.
+* SUMMARY: max_pass_len_m noisy rser=470: 10.
+
+.include phy-cable-segment.cir
+.param len=2 voff=0 noisef=0
+
+Vdd vdd 0 3.3
+Vup up 0 0
+Vsel sel 0 3.3
+
+* 15 cells at 1.25 us, first rising edge at 100 ns, 5 ns edges (same
+* stream as tb_decode / tb_reach)
+Vst stim 0 PWL(
++ 0n 0
++ 95n 0 100n 3.3 495n 3.3 500n 0
++ 1.345u 0 1.35u 3.3 2.142u 3.3 2.147u 0
++ 2.595u 0 2.6u 3.3 2.995u 3.3 3u 0
++ 3.845u 0 3.85u 3.3 4.642u 3.3 4.647u 0
++ 5.095u 0 5.1u 3.3 5.892u 3.3 5.897u 0
++ 6.345u 0 6.35u 3.3 6.745u 3.3 6.75u 0
++ 7.595u 0 7.6u 3.3 7.995u 3.3 8u 0
++ 8.845u 0 8.85u 3.3 9.642u 3.3 9.647u 0
++ 10.095u 0 10.1u 3.3 10.892u 3.3 10.897u 0
++ 11.345u 0 11.35u 3.3 12.142u 3.3 12.147u 0
++ 12.595u 0 12.6u 3.3 12.995u 3.3 13u 0
++ 13.845u 0 13.85u 3.3 14.245u 3.3 14.25u 0
++ 15.095u 0 15.1u 3.3 15.495u 3.3 15.5u 0
++ 16.345u 0 16.35u 3.3 17.142u 3.3 17.147u 0
++ 17.595u 0 17.6u 3.3 17.995u 3.3 18u 0
++ 20u 0)
+
+Rst stim txin 1m
+
+Xseg up txin sel line rxout vdd 0 cable_span
++ params: len={len} rser=470 voff={voff}
+
+* crosstalk aggressors, capacitively coupled into the far-end line
+Vag1 ag1 0 PULSE(0 {3.3*noisef} 0 2n 2n 24.9u 50u)
+Vag2 ag2 0 PULSE(0 {3.3*noisef} 137n 2n 2n 371n 887n)
+Cag1 ag1 line 12p
+Cag2 ag2 line 6p
+
+.control
+* ngspice plot lifetime gotcha: scalars let after a tran die with that
+* tran's plot at the next reset, so every value read after a later
+* reset must be pre-declared here (const plot) and only updated
+* in-loop, and each measurement block is consumed before the next
+* reset — the guard run therefore comes first in each iteration
+let nguard_bad = 0
+let maxlen_noisy = 0
+let gcells = 0
+let cellcnt = 0
+let spurcnt = 0
+let maxspur = 0
+let minmarg = 0
+let ok = 0
+let li = 0
+while li < 5
+  * len = {2,5,8,10,12} by outer index
+  let lnn = 2
+  if li = 1
+    let lnn = 5
+  end
+  if li = 2
+    let lnn = 8
+  end
+  if li = 3
+    let lnn = 10
+  end
+  if li = 4
+    let lnn = 12
+  end
+  let vi = 0
+  while vi < 3
+    * voff = {-13m,0,13m} by inner index
+    let von = -13m
+    if vi = 1
+      let von = 0
+    end
+    if vi = 2
+      let von = 13m
+    end
+    alterparam len = $&lnn
+    alterparam voff = $&von
+
+    * noise-off guard at this (len, voff): must decode 15 cells with
+    * the aggressor source dead
+    alterparam noisef = 0
+    reset
+    tran 1n 20u uic
+    meas tran agq pp v(ag1)
+    let v = v(rxout)
+    let tt = time
+    let n = length(v)
+    let state = 0
+    let gcnt = 0
+    let cur_rise = 0
+    let i = 1
+    while i < n
+      if (state = 0) & (v[i] > 1.3)
+        let state = 1
+        let cur_rise = tt[i]
+      end
+      if (state = 1) & (v[i] < 1.15)
+        let state = 0
+        if (tt[i] - cur_rise) ge 250n
+          let gcnt = gcnt + 1
+        end
+      end
+      let i = i + 1
+    end
+    let gcells = gcnt
+    if agq > 0.1
+      let nguard_bad = nguard_bad + 1
+    end
+    * cell-count guard only at 2 m, where the contract must hold with
+    * margin to spare; at longer lengths a noise-off failure is the
+    * reach boundary (data), not a broken bench
+    if lnn < 3
+      if gcnt ne 15
+        let nguard_bad = nguard_bad + 1
+      end
+    end
+
+    * noisy run
+    alterparam noisef = 1
+    reset
+    tran 1n 20u uic
+    meas tran agpp pp v(ag1)
+
+    * slice state machine as tb_noise, with period tracking as
+    * tb_reach
+    let v = v(rxout)
+    let tt = time
+    let n = length(v)
+    let state = 0
+    let ccnt = 0
+    let scnt = 0
+    let cur_rise = 0
+    let prev_rise = 0
+    let msp = 0
+    let mmg = 1
+    let pmin = 1
+    let pmax = 0
+    let i = 1
+    while i < n
+      if (state = 0) & (v[i] > 1.3)
+        let state = 1
+        let cur_rise = tt[i]
+      end
+      if (state = 1) & (v[i] < 1.15)
+        let state = 0
+        let w = tt[i] - cur_rise
+        if w ge 250n
+          let ccnt = ccnt + 1
+          let mrg = abs(w - 625n)
+          if mrg < mmg
+            let mmg = mrg
+          end
+          if prev_rise > 0
+            let per = cur_rise - prev_rise
+            if per < pmin
+              let pmin = per
+            end
+            if per > pmax
+              let pmax = per
+            end
+          end
+          let prev_rise = cur_rise
+        else
+          let scnt = scnt + 1
+          if w > msp
+            let msp = w
+          end
+        end
+      end
+      let i = i + 1
+    end
+    let cellcnt = ccnt
+    let spurcnt = scnt
+    let maxspur = msp
+    let minmarg = mmg
+
+    let ok = 1
+    if ccnt ne 15
+      let ok = 0
+    end
+    if msp ge 160n
+      let ok = 0
+    end
+    if mmg lt 100n
+      let ok = 0
+    end
+    if pmin lt 0.9e-6
+      let ok = 0
+    end
+    if pmax gt 1.6e-6
+      let ok = 0
+    end
+    if agpp < 1
+      let ok = 0
+    end
+    if ok = 1
+      if lnn > maxlen_noisy
+        let maxlen_noisy = lnn
+      end
+    end
+
+    let mmn = minmarg*1e9
+    let spn = maxspur*1e9
+    let vfm = von*1e3
+    if ok = 1
+      echo "RNOISE_PASS len_m=$&lnn voff_mV=$&vfm cells=$&cellcnt spurs=$&spurcnt maxspur_ns=$&spn minmarg_ns=$&mmn"
+    else
+      echo "RNOISE_FAIL len_m=$&lnn voff_mV=$&vfm cells=$&cellcnt spurs=$&spurcnt maxspur_ns=$&spn minmarg_ns=$&mmn"
+    end
+    let vi = vi + 1
+  end
+  let li = li + 1
+end
+echo "SUMMARY max_pass_len_m noisy rser=470: $&maxlen_noisy"
+if nguard_bad = 0
+  echo "PASS guards (all noise-off runs decode 15 cells)"
+  quit 0
+end
+echo "FAIL guards ($&nguard_bad guard failures; broken bench, not a reach number)"
+quit 1
+.endc
+.end

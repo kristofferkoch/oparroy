@@ -29,6 +29,16 @@ if not meson.is_cross_build()
     )
   endforeach
 
+  foreach tb : ['tb_reach', 'tb_redriver', 'tb_reach_noise']
+    sim_runs += run_target('sim-cable-reach-' + tb,
+      command: [
+        files('..' / 'scripts' / 'sim-run'),
+        meson.current_build_dir() / ('sim-out-cable-reach-' + tb),
+        meson.current_source_dir() / 'cable-reach' / (tb + '.cir'),
+      ],
+    )
+  endforeach
+
   # ninja sim: run every subcircuit simulation unit test.
   alias_target('sim', sim_runs)
 endif
