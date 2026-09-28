@@ -39,7 +39,10 @@ class StubSymbols:
 
     Models KiCad's real conventions: a power source has a power_out
     pin; a power-library symbol (``power:+3V3``-class) has a power_in
-    pin and marks the rail driven (see check.py's power rules).
+    pin and marks the rail driven (see check.py's power rules). The
+    real ``Device:``/``Diode:`` refs are mirrored too, so tests can
+    drive emitters (which bind on the KiCad symbol) without the
+    nix-provisioned libraries.
     """
 
     def __init__(self) -> None:
@@ -53,6 +56,15 @@ class StubSymbols:
                     "DSER",
                     {"1": PinType.PASSIVE, "2": PinType.PASSIVE, "3": PinType.PASSIVE},
                     ("SOT?23*",),
+                    pin_names={"1": "A", "2": "K", "3": "COM"},
+                ),
+                make_symbol("R", passive, ("R_*",), lib="Device"),
+                make_symbol("C", passive, ("C_*",), lib="Device"),
+                make_symbol(
+                    "BAT54S",
+                    {"1": PinType.PASSIVE, "2": PinType.PASSIVE, "3": PinType.PASSIVE},
+                    ("SOT?23*",),
+                    lib="Diode",
                     pin_names={"1": "A", "2": "K", "3": "COM"},
                 ),
                 make_symbol(

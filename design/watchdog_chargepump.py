@@ -17,6 +17,7 @@ Usage (in the nix dev shell):
 
     python -m design.watchdog_chargepump            # check + netlist
     python -m design.watchdog_chargepump --dot      # Graphviz view
+    python -m design.watchdog_chargepump --spice    # ngspice DUT netlist
 """
 
 import argparse
@@ -32,9 +33,15 @@ from oparroy.dsl import (
     SymbolTable,
     check,
     emit_netlist,
+    emit_spice,
     raise_on_errors,
     to_dot,
 )
+
+# Ad-hoc spice model bindings (until T7c's parts DB owns them): the
+# BAT54S-class pump diodes, stand-in parameters from
+# circuits/watchdog-chargepump/watchdog-chargepump.cir's dpump model.
+SPICE_MODELS = {"BAT54S": "d(is=200n n=1.0 rs=5 tt=1n bv=30)"}
 
 
 class R0603(Resistor):
@@ -74,12 +81,17 @@ def capture(symbols: SymbolTable) -> Circuit:
 
 
 def main() -> None:
-    """Check the capture and emit the KiCad netlist (or dot with --dot)."""
+    """Check the capture and emit the KiCad netlist (--dot/--spice: other views)."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--dot",
         action="store_true",
         help="emit the Graphviz dot view instead of the KiCad netlist",
+    )
+    parser.add_argument(
+        "--spice",
+        action="store_true",
+        help="emit the ngspice DUT netlist (wd_chargepump .subckt) instead",
     )
     args = parser.parse_args()
     libs = KiCadLibraries.from_env()
@@ -88,7 +100,15 @@ def main() -> None:
     for issue in issues:
         sys.stderr.write(f"{issue}\n")
     raise_on_errors(issues)
-    sys.stdout.write(to_dot(circuit) if args.dot else emit_netlist(circuit))
+    if args.dot:
+        sys.stdout.write(to_dot(circuit))
+    elif args.spice:
+        # The subckt name matches the hand-written DUT's interface, so
+        # circuits/watchdog-chargepump/tb_*.cir drive this emission
+        # unmodified (spice_emit.py's module docstring has the split).
+        sys.stdout.write(emit_spice(circuit, name="wd_chargepump", models=SPICE_MODELS))
+    else:
+        sys.stdout.write(emit_netlist(circuit))
 
 
 if __name__ == "__main__":

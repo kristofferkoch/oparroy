@@ -5,7 +5,8 @@ Single source of truth for schematic capture: a separable IR
 including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.subcircuit`) — a validation pass
 (:mod:`oparroy.dsl.check`), and emitters — KiCad netlist
-(:mod:`oparroy.dsl.kicad_emit`), Graphviz dot (:mod:`oparroy.dsl.dot`).
+(:mod:`oparroy.dsl.kicad_emit`), Graphviz dot (:mod:`oparroy.dsl.dot`),
+ngspice DUT netlist (:mod:`oparroy.dsl.spice_emit`).
 Typed jellybean parts live in :mod:`oparroy.dsl.parts`; KiCad library
 access lives in :mod:`oparroy.dsl.kicadlib`.
 """
@@ -37,6 +38,7 @@ from oparroy.dsl.ir import (
 from oparroy.dsl.kicad_emit import emit_netlist
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
 from oparroy.dsl.parts import Bat54s, BundleConnector, Capacitor, Resistor, TypedPart
+from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 
 __all__ = [
@@ -67,6 +69,7 @@ __all__ = [
     "UnknownSymbolError",
     "check",
     "emit_netlist",
+    "emit_spice",
     "raise_on_errors",
     "to_dot",
 ]

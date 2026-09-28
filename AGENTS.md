@@ -57,7 +57,8 @@ home-rolled Python DSL (single source of truth) that emits KiCad
 netlists, constraint checks, firmware headers, and simulation netlists —
 KiCad is used for layout only. DSL core (IR, subcircuit composition with ports,
 port arrays and bundles, and a flattening pass,
-validation pass, KiCad netlist emitter, KiCad library access, typed
+validation pass, KiCad netlist emitter, ngspice simulation-netlist
+emitter, KiCad library access, typed
 jellybean parts and connector blocks, dot dump) lives in `src/oparroy/dsl/`; circuit captures
 live in `design/` (DESIGN.md §7 DSL shape). Firmware is freestanding
 C++ (no standard library; RAII, placement new on memory-mapped I/O)
