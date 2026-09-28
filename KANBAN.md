@@ -129,11 +129,20 @@ ______________________________________________________________________
   (§8): branch coverage of the freestanding *release* configuration —
   tests exercise what actually ships — wired as a script target in the
   flake shell. **Blocked by:** — · **Unblocks:** T11
-- **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
-  re-route vs hardware auto-bypass vs both (DESIGN.md §3). T5's
-  detection hooks: supervisor frame-echo comparison, illegal-cell
-  detection, and the pull-down-parked idle-low segment (§2 measured
-  block). **Blocked by:** — · **Unblocks:** —
+- **T13 — Intermittent-fault strategy.** *Shape: decision.* Analysis
+  landed 2026-09-28
+  (docs/intermittent-fault-strategy-2026-09-28.md): recommends the
+  layered option — protocol re-route with anti-flap hysteresis as the
+  only response to segment faults, the §4 hardware bypass retained for
+  MCU death, deliberate self-bypass as the escalation rung, no new
+  hardware; hardware auto-bypass for segment faults rejected. What
+  remains: the owner **ratifies or rejects the recommendation**, then
+  settle DESIGN.md §3 (flap/hysteresis policy) and §9 (intermittent
+  connector faults) on the ratified text. Follow-on work the decision
+  feeds (memo §5): hysteresis constants tuned on the test board
+  (T10/T12), telemetry flap bits and the self-bypass command-slot
+  encoding (T11), the KLEE/fuzz rate-cap proof obligation (T11/T16).
+  **Blocked by:** — · **Unblocks:** —
 - **T15 — Characterize cable reach.** *Shape: research.* Maximum
   segment length unamplified, and with an amplifier/re-driver in the
   segment (DESIGN.md §9). ngspice over cable models first (RLGC of a
