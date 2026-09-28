@@ -9,6 +9,7 @@
 // implementation under test proves nothing (code-std.md §11).
 
 #include "../../lib/range.hpp"
+#include "../../lib/verify.hpp"
 #include "../bits.hpp"
 #include "../cell.hpp"
 #include "../node.hpp"
@@ -29,7 +30,7 @@ oparroy::TxAction feed_cell(oparroy::Node& node, oparroy::CellDecode decode) {
     }
     // GCC doesn't treat an exhaustive enum switch as covering;
     // -Wswitch-enum still guards against a missed enumerator.
-    __builtin_unreachable();
+    UNREACHABLE();
 }
 
 // Shadow model of the input stream, not of the node: an in-frame illegal

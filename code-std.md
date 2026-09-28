@@ -52,8 +52,9 @@ needs to earn its place every time it's touched.
   time, which a dead `default` would silence. Switches over plain
   integers take a `default`. Fallthrough only with `[[fallthrough]]`.
   GCC doesn't treat an exhaustive enum switch as covering, so the
-  function ends with `__builtin_unreachable()` (a project `UNREACHABLE`
-  macro once T18 lands) — `-Wswitch-enum` still guards the cases.
+  function ends with `UNREACHABLE()` (`firmware/lib/verify.hpp`,
+  landed 2026-09-28 with T18, replacing bare
+  `__builtin_unreachable()`) — `-Wswitch-enum` still guards the cases.
 - Loops have bounded trip counts where feasible — friendlier to KLEE
   and to WCET reasoning. Unbounded loops need a stated reason (e.g.
   polling a status register with a timeout).
@@ -137,7 +138,9 @@ needs to earn its place every time it's touched.
   same spot is a proof obligation.
 - `VERIFY(...)` failures route through the project failure hook, which
   ties into the watchdog/bypass policy (§4): deliberate bypass-engage,
-  not a hung loop.
+  not a hung loop. (2026-09-28: the hook is `lib::verify_failed`,
+  wired by `-DOPARROY_TARGET` in `firmware/lib/verify.hpp`; the node
+  firmware's definition lands with T11.)
 
 ## 7. Constants and configuration
 

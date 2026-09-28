@@ -37,6 +37,7 @@ if not meson.is_cross_build()
         'bits.hpp', 'cell.hpp', 'node.hpp', 'klee' / 'klee.hpp',
         '..' / 'lib' / 'range.hpp',
         '..' / 'lib' / 'span.hpp',
+        '..' / 'lib' / 'verify.hpp',
       ],
       command: meson.get_compiler('cpp').cmd_array() + klee_bitcode_flags + [
         '@INPUT@', '-o', '@OUTPUT@',

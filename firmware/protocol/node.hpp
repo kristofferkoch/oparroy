@@ -7,6 +7,7 @@
 // decode feeds on_bit / on_illegal_cell / on_break, and the TX half
 // streams whatever the returned TxAction asks for.
 
+#include "../lib/verify.hpp"
 #include "bits.hpp"
 
 #include <cstdint>
@@ -69,7 +70,7 @@ public:
         }
         // GCC doesn't treat an exhaustive enum switch as covering;
         // -Wswitch-enum still guards against a missed enumerator.
-        __builtin_unreachable();
+        UNREACHABLE();
     }
 
     // Illegal cell (period outside 0.9–1.6 µs, cell.hpp): stop
