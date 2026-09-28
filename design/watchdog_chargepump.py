@@ -22,12 +22,11 @@ Usage (in the nix dev shell):
 import argparse
 import sys
 
+from design.bins import C0603, R0603
 from oparroy.dsl import (
     Bat54s,
-    Capacitor,
     Circuit,
     KiCadLibraries,
-    Resistor,
     Subcircuit,
     SymbolTable,
     check,
@@ -35,18 +34,6 @@ from oparroy.dsl import (
     raise_on_errors,
     to_dot,
 )
-
-
-class R0603(Resistor):
-    """The project's 0603 resistor bin: class-default footprint (§7)."""
-
-    default_footprint = "Resistor_SMD:R_0603_1608Metric"
-
-
-class C0603(Capacitor):
-    """The project's 0603 capacitor bin: class-default footprint (§7)."""
-
-    default_footprint = "Capacitor_SMD:C_0603_1608Metric"
 
 
 class WatchdogChargePump(Subcircuit):
