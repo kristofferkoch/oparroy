@@ -1,0 +1,316 @@
+* tb_reach — unamplified cable reach of the PHY segment (card T15,
+* DESIGN.md §9): how long a 3M 3365 ribbon span can get before the
+* WS2812-style cells stop decoding at the far-end comparator, and what
+* sets the limit. Builds on tb_decode's 15-cell stream and decode
+* contract; the lumped Lseg/Cseg is swapped for the transmission-line
+* span of phy-cable-segment.cir.
+*
+* Bench: same 15-cell stream as tb_decode (bits 0,1,0,1,1,0,0,1,1,1,
+* 0,0,0,1,0; 1.25 us cells, T0H=395 ns, T1H=792 ns), inserted path
+* only (sel high, txin driven; the bypass path is the same cable
+* driven through the upstream node's identical TX/switch structure).
+* rxout sliced through the tb_noise 1.30/1.15 V Schmitt state machine
+* so spurious sub-slice pulses are counted, not hidden.
+*
+* Sweep (alterparam + reset over a vector run table, house style), 18
+* runs:
+*   rser=470 (the §7 BOM protection value) at len = 0.5..50 m, fine
+*     grid around the failure boundary
+*   rser=1mohm (unprotected 50 ohm drive, the T5 baseline) at
+*     len = 0.5..200 m, coarse grid finding where it stops passing
+* voff fixed at 0: tb_decode swept +-13 mV across the same comparator
+* and saw < 4 ns of margin movement everywhere.
+*
+* Contract per run (the tb_decode/tb_noise contract, restated for a
+* distributed segment):
+*   cells = 15          — one full-width (>= 250 ns) rxout pulse per
+*                         cell; spurious reflections must not
+*                         fabricate or eat pulses
+*   maxspur < 160 ns    — widest spurious pulse absorbable by ICxF
+*                         fCK_INT N=8 (~167 ns rejection, RM §11.4.7)
+*   minmarg >= 100 ns   — every cell's high-time stays >= 100 ns from
+*                         the 625 ns decode midpoint
+*   0.9 us < period < 1.6 us — firmware legal-cell window (§2)
+* Failing lengths are the measurement, not bench failures: the bench
+* echoes REACH_PASS/REACH_FAIL per run and fails red only on its
+* guards — both rser variants must pass at 0.5 m (a broken stimulus or
+* model can never read as a short-reach result).
+*
+* Echoed per run beyond the contract: line 10-90 % edge rates (against
+* the 125 ns tb_noise covered), line peak overshoot (far end is
+* unterminated; doubling into the hi-Z load overvoltages the segment
+* until the TVS clamps — a §7 protection input, not a contract item),
+* and end-to-end added delay of the first edge.
+*
+* Results (2026-09-28, ngspice 45):
+*   rser=470 (BOM): PASS 0.5..12 m — margins flat ~179-183 ns to 10 m,
+*     129.6 ns at 12 m (periods 1198..1308 ns), FAIL from 15 m: the
+*     line stops returning below threshold inside short low periods
+*     (RC settle through 520 ohm into the line C, not reflections) —
+*     cells merge (11 at 15 m) and split into 4 spurious pulses up to
+*     168 ns. Far-end 10-90 % edges degrade from 68 ns (0.5 m) to
+*     us-class reflection staircases past ~2 m: monotonic (both
+*     reflection coefficients positive), so the comparator crosses
+*     once per cell and decode holds while settling does.
+*   rser=1mohm (50 ohm drive): PASS at every swept length to 200 m —
+*     margins 172..180 ns flat, periods 1247..1253 ns, edges 5..13 ns
+*     (ringing, reflection coefficient at the source is negative, but
+*     the far-end doubling keeps every crossing one-way). Decode does
+*     not bound this reach: far-end delay is td + ~205 ns of
+*     comparator (1177 ns at 200 m, a ring-latency input) and the
+*     unterminated far end overshoots to 3.7..4.4 Vpk (doubling; the
+*     470 ohm RX series R keeps injection at the OPA pin <= 2 mA).
+*   SUMMARY: max_pass_len_m rser=470: 12, rser=1m: 200 (sweep limit,
+*     not a found bound).
+
+.include phy-cable-segment.cir
+.param len=0.5 rser=470
+
+Vdd vdd 0 3.3
+Vup up 0 0
+Vsel sel 0 3.3
+
+* 15 cells at 1.25 us, first rising edge at 100 ns, 5 ns edges (same
+* stream as tb_decode)
+Vst stim 0 PWL(
++ 0n 0
++ 95n 0 100n 3.3 495n 3.3 500n 0
++ 1.345u 0 1.35u 3.3 2.142u 3.3 2.147u 0
++ 2.595u 0 2.6u 3.3 2.995u 3.3 3u 0
++ 3.845u 0 3.85u 3.3 4.642u 3.3 4.647u 0
++ 5.095u 0 5.1u 3.3 5.892u 3.3 5.897u 0
++ 6.345u 0 6.35u 3.3 6.745u 3.3 6.75u 0
++ 7.595u 0 7.6u 3.3 7.995u 3.3 8u 0
++ 8.845u 0 8.85u 3.3 9.642u 3.3 9.647u 0
++ 10.095u 0 10.1u 3.3 10.892u 3.3 10.897u 0
++ 11.345u 0 11.35u 3.3 12.142u 3.3 12.147u 0
++ 12.595u 0 12.6u 3.3 12.995u 3.3 13u 0
++ 13.845u 0 13.85u 3.3 14.245u 3.3 14.25u 0
++ 15.095u 0 15.1u 3.3 15.495u 3.3 15.5u 0
++ 16.345u 0 16.35u 3.3 17.142u 3.3 17.147u 0
++ 17.595u 0 17.6u 3.3 17.995u 3.3 18u 0
++ 20u 0)
+
+Rst stim txin 1m
+
+Xseg up txin sel line rxout vdd 0 cable_span
++ params: len={len} rser={rser}
+
+.control
+* run table (vector style, as tb_noise): runs 0-10 = rser 470 with a
+* fine grid around the failure boundary, runs 11-17 = rser 1mohm out
+* to 200 m to find where the unprotected drive stops passing
+let rsv = vector(18)
+let lev = vector(18)
+let rsv[0]=470
+let lev[0]=0.5
+let rsv[1]=470
+let lev[1]=1
+let rsv[2]=470
+let lev[2]=2
+let rsv[3]=470
+let lev[3]=5
+let rsv[4]=470
+let lev[4]=8
+let rsv[5]=470
+let lev[5]=10
+let rsv[6]=470
+let lev[6]=12
+let rsv[7]=470
+let lev[7]=15
+let rsv[8]=470
+let lev[8]=20
+let rsv[9]=470
+let lev[9]=30
+let rsv[10]=470
+let lev[10]=50
+let rsv[11]=1m
+let lev[11]=0.5
+let rsv[12]=1m
+let lev[12]=5
+let rsv[13]=1m
+let lev[13]=10
+let rsv[14]=1m
+let lev[14]=20
+let rsv[15]=1m
+let lev[15]=50
+let rsv[16]=1m
+let lev[16]=100
+let rsv[17]=1m
+let lev[17]=200
+let pass_short_prot = 0
+let pass_short_bare = 0
+let maxlen_prot = 0
+let maxlen_bare = 0
+let k = 0
+while k < 18
+    let rsn = rsv[k]
+    let lnn = lev[k]
+    alterparam rser = $&rsn
+    alterparam len = $&lnn
+    reset
+    tran 1n 20u uic
+
+    * slice rxout through a 1.30/1.15 V Schmitt state machine;
+    * classify pulses: >= 250 ns wide = cell, narrower = spurious;
+    * track margins and cell-to-cell periods on cell pulses only
+    let v = v(rxout)
+    let tt = time
+    let n = length(v)
+    let state = 0
+    let cellcnt = 0
+    let spurcnt = 0
+    let cur_rise = 0
+    let prev_rise = 0
+    let maxspur = 0
+    let minmarg = 1
+    let pmin = 1
+    let pmax = 0
+    let i = 1
+    while i < n
+      if (state = 0) & (v[i] > 1.3)
+        let state = 1
+        let cur_rise = tt[i]
+      end
+      if (state = 1) & (v[i] < 1.15)
+        let state = 0
+        let w = tt[i] - cur_rise
+        if w ge 250n
+          let cellcnt = cellcnt + 1
+          let mrg = abs(w - 625n)
+          if mrg < minmarg
+            let minmarg = mrg
+          end
+          if prev_rise > 0
+            let per = cur_rise - prev_rise
+            if per < pmin
+              let pmin = per
+            end
+            if per > pmax
+              let pmax = per
+            end
+          end
+          let prev_rise = cur_rise
+        else
+          let spurcnt = spurcnt + 1
+          if w > maxspur
+            let maxspur = w
+          end
+        end
+      end
+      let i = i + 1
+    end
+
+    * line edge rates 10-90 % of the second rising/falling edge, found
+    * by hand: a staircase line may never reach 90 % inside a cell, and
+    * this ngspice has no defined() to guard a failed meas — a scan
+    * just reports 0 instead
+    let vl = v(line)
+    let ecr = 0
+    let ecf = 0
+    let r10 = 0
+    let r90 = 0
+    let f90 = 0
+    let f10 = 0
+    let nr10 = 0
+    let nr90 = 0
+    let nf90 = 0
+    let nf10 = 0
+    let i = 1
+    while i < n
+      if (vl[i-1] le 0.33) & (vl[i] > 0.33)
+        let nr10 = nr10 + 1
+        if nr10 = 2
+          let r10 = tt[i]
+        end
+      end
+      if (vl[i-1] le 2.97) & (vl[i] > 2.97)
+        let nr90 = nr90 + 1
+        if nr90 = 2
+          let r90 = tt[i]
+        end
+      end
+      if (vl[i-1] ge 2.97) & (vl[i] < 2.97)
+        let nf90 = nf90 + 1
+        if nf90 = 2
+          let f90 = tt[i]
+        end
+      end
+      if (vl[i-1] ge 0.33) & (vl[i] < 0.33)
+        let nf10 = nf10 + 1
+        if nf10 = 2
+          let f10 = tt[i]
+        end
+      end
+      let i = i + 1
+    end
+    if (r90 > r10) & (r10 > 0)
+      let ecr = r90 - r10
+    end
+    if (f10 > f90) & (f90 > 0)
+      let ecf = f10 - f90
+    end
+    meas tran pk max v(line)
+    meas tran tstart trig v(stim) val=1.65 rise=1 targ v(rxout) val=1.3 rise=1
+
+    let ok = 1
+    if cellcnt ne 15
+      let ok = 0
+    end
+    if maxspur ge 160n
+      let ok = 0
+    end
+    if minmarg lt 100n
+      let ok = 0
+    end
+    if pmin lt 0.9e-6
+      let ok = 0
+    end
+    if pmax gt 1.6e-6
+      let ok = 0
+    end
+
+    * guards and reach tracking
+    if lnn < 0.75
+      if rsn > 1
+        let pass_short_prot = ok
+      else
+        let pass_short_bare = ok
+      end
+    end
+    if ok = 1
+      if rsn > 1
+        if lnn > maxlen_prot
+          let maxlen_prot = lnn
+        end
+      else
+        if lnn > maxlen_bare
+          let maxlen_bare = lnn
+        end
+      end
+    end
+
+    let mmn = minmarg*1e9
+    let spn = maxspur*1e9
+    let pn0 = pmin*1e9
+    let pn1 = pmax*1e9
+    let ec0 = ecr*1e9
+    let ec1 = ecf*1e9
+    let pkv = pk
+    let dly = tstart*1e9
+    if ok = 1
+      echo "REACH_PASS rser=$&rsn len_m=$&lnn cells=$&cellcnt spurs=$&spurcnt maxspur_ns=$&spn minmarg_ns=$&mmn pmin_ns=$&pn0 pmax_ns=$&pn1 trise_ns=$&ec0 tfall_ns=$&ec1 pkline_v=$&pkv delay_ns=$&dly"
+    else
+      echo "REACH_FAIL rser=$&rsn len_m=$&lnn cells=$&cellcnt spurs=$&spurcnt maxspur_ns=$&spn minmarg_ns=$&mmn pmin_ns=$&pn0 pmax_ns=$&pn1 trise_ns=$&ec0 tfall_ns=$&ec1 pkline_v=$&pkv delay_ns=$&dly"
+    end
+    let k = k + 1
+end
+echo "SUMMARY max_pass_len_m rser=470: $&maxlen_prot rser=1m: $&maxlen_bare"
+if (pass_short_prot = 1) & (pass_short_bare = 1)
+  echo "PASS guards (both rser pass at 0.5 m)"
+  quit 0
+end
+echo "FAIL guards (0.5 m must pass for both rser; broken bench, not a reach number)"
+quit 1
+.endc
+.end

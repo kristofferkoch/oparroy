@@ -1,0 +1,77 @@
+* phy-cable-segment — one ring segment over a real cable, node k to
+* node k+1 (T15, DESIGN.md §9 cable reach): node TX pin -> 470 ohm
+* series protection R (§7 I/O terminal checklist) -> 74LVC1G3157
+* bypass/insert switch -> 3M 3365 ribbon span -> far-end protection
+* (TVS capacitance, 470 ohm series R) -> next node's OPA comparator
+* RX. Replaces phy-segment.cir's lumped Lseg/Cseg with a
+* transmission-line span; everything else mirrors the T5 topology so
+* the decode-margin contract (tb_decode) carries over.
+*
+* Subcircuits:
+*   ribbon28 a ga b gb        — the cable span itself (params: len)
+*   cable_tx txin txs vdd gnd — TX pin + series R (params: rser, vcc)
+*   cable_rx line rxout vdd gnd — far-end protection + OPA comparator
+*                               (params: voff, vcc, ctvs, cpin)
+*   cable_span up txin sel line rxout vdd gnd — tx + switch + span +
+*                               rx, the full segment (params: len,
+*                               rser, voff, vth, vcc)
+*
+* Cable: 3M 3365 28 AWG flat ribbon, ground-signal-ground (the §3
+* segment pinout flanks every data wire with GND pins — the
+* datasheet's "unbalanced" configuration). Facts:
+* datasheets/3M3365/notes/facts.md (TS-0080 §Electrical): Z0 = 102 ohm,
+* C = 47.5 pF/m, L = 0.49 uH/m, td = 4.86 ns/m, R = 0.214 ohm/m.
+* Modeled as a lossless line (Z0, td) with the conductor R split
+* half per end: ngspice's LTRA (full RLGC) produces no output in
+* ngspice 45 (verified 2026-09-28), and G is unmeasurable at these
+* frequencies anyway — dielectric loss binds only at 100s of MHz*m,
+* far past the lengths where the decode contract fails. Skin effect
+* unmodeled: at <= 50 m and <= 100 MHz edge content its excess loss is
+* second-order against the 50..520 ohm source resistance. R split
+* error is second order too: at 50 m the 10.7 ohm total is 10 % of Z0.
+*
+* Far-end load per node (§7 checklist): TVS capacitance ctvs=30p at
+* the connector (low-cap bidirectional ESD class, tens of pF), 470 ohm
+* series R, cpin=5p OPA pin capacitance. The OPA model input is hi-Z,
+* so cpin carries the pin.
+*
+* rser=470 is the §7 BOM value; benches sweep it (1m = unprotected
+* 50 ohm drive, the T5 baseline) because it turns out to set the
+* reflection behavior of the whole segment.
+*
+* Include note: mirrors phy-segment.cir — benches include this file
+* only, the lib models arrive through here, and sim-run runs each
+* bench from its own directory.
+
+.include ../lib/sn74lvc1g3157.spi
+.include ../lib/ch32v003.spi
+
+.subckt ribbon28 a ga b gb params: len=1
+Ra a am {0.107*len}
+T1 am ga bm gb z0=102 td={4.86n*len}
+Rb bm b {0.107*len}
+.ends ribbon28
+
+.subckt cable_tx txin txs vdd gnd params: rser=470 vcc=3.3
+Xtx txin txp vdd gnd ch32v003_tx_pin params: vcc={vcc}
+Rser txp txs {rser}
+.ends cable_tx
+
+.subckt cable_rx line rxout vdd gnd params: voff=0 vcc=3.3 ctvs=30p cpin=5p
+Ctvs line gnd {ctvs}
+Rrx line rxp 470
+Cpin rxp gnd {cpin}
+Rth1 vdd th 10k
+Rth2 th gnd 10k
+Xcmp rxp th rxout vdd gnd ch32v003_opa_cmp params: voff={voff} vcc={vcc}
+Rld rxout gnd 4k
+Cld rxout gnd 50p
+.ends cable_rx
+
+.subckt cable_span up txin sel line rxout vdd gnd
++ params: len=1 rser=470 voff=0 vth=1.65 vcc=3.3
+Xtx txin txs vdd gnd cable_tx params: rser={rser} vcc={vcc}
+Xsw swa up txs sel vdd gnd sn74lvc1g3157 params: vth={vth} vcc={vcc}
+Xcab swa gnd line gnd ribbon28 params: len={len}
+Xrx line rxout vdd gnd cable_rx params: voff={voff} vcc={vcc}
+.ends cable_span

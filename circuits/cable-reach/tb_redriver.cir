@@ -1,0 +1,270 @@
+* tb_redriver — cable reach with a re-driver mid-segment (card T15,
+* DESIGN.md §9): two ribbon spans joined by an analog repeater
+* (far-end protection + OPA comparator + TX pin + series R — exactly
+* the receive/transmit analog chain of any ring node, minus protocol
+* re-timing). The question: does reach double, and what does the
+* re-driver cost in added delay and signal quality?
+*
+* The re-driver modeled here is the *floor*: it re-slices the line at
+* VDD/2 and re-drives, but does not re-synthesize T0H/T1H — duty
+* distortion accumulates across spans. A real oparroy node re-times
+* from its own timer (DESIGN.md §2 per-bit cut-through), which is
+* strictly better: each span's decode is the tb_reach problem
+* unchanged, so N re-timed spans give N x per-span reach with no
+* cumulative penalty. This bench quantifies the analog-repeater case
+* so the doc can state both.
+*
+* Bench: tb_reach's 15-cell stream into span 1 (full cable_span with
+* the bypass/insert switch, inserted path), mid re-driver as above
+* (no switch — a dedicated re-driver element has no node to bypass),
+* span 2 into the final cable_rx. Both rxout1 (mid) and rxout2 (end)
+* are sliced through the tb_noise 1.30/1.15 V Schmitt state machine
+* and must meet the tb_reach contract:
+*   cells = 15, maxspur < 160 ns, minmarg >= 100 ns,
+*   0.9 us < period < 1.6 us   — at BOTH taps
+* Failing span lengths are the measurement, not bench failures; the
+* bench fails red only on its guards (both taps pass at span = 1 m
+* for both rser values).
+*
+* Sweep (vector run table), 10 runs:
+*   rser=470 (BOM): span = 1, 5, 8, 10, 12, 15, 20 m — brackets the
+*     tb_reach unamplified boundary, so the doubling claim is checked
+*     against the same config
+*   rser=1mohm:     span = 20, 50, 100 m — the unprotected case,
+*     where tb_reach passes far past these spans: verifies the
+*     re-driver chain itself adds no failure mode
+* Echoed per run: contract numbers at both taps, per-tap first-edge
+* delay (the re-driver's added latency, a §2 ring-latency input).
+*
+* Results (2026-09-28, ngspice 45):
+*   rser=470: spans PASS only to 5 m (10 m total) — WORSE than the
+*     12 m unamplified tb_reach reach. The repeater re-drives the mid
+*     comparator's 7.7 V/us ramp (vs the TX pin's clean 5 ns edges);
+*     from 8 m spans the second span fabricates spurious pulses
+*     (220 ns at 8 m, past ICxF absorption) while the first span still
+*     decodes fine (minmarg1 182 ns at 8 m). Duty does re-center at
+*     the mid slice: tap-2 margins 233-238 ns where spans pass.
+*   rser=1mohm: spans PASS to 100 m (200 m total) = the tb_reach
+*     per-span reach; the re-driver adds no failure mode, only latency
+*     (~740 ns for re-slice + second span at 100 m: dly1 690 ns, dly2
+*     1429 ns).
+*   SUMMARY: max_pass_span_m rser=470: 5, rser=1m: 100. An analog
+*   re-slice repeater does not extend protected reach; only a
+*   re-timing node does (each span is then the tb_reach problem
+*   unchanged).
+
+.include phy-cable-segment.cir
+.param span=1 rser=470
+
+Vdd vdd 0 3.3
+Vup up 0 0
+Vsel sel 0 3.3
+
+* 15 cells at 1.25 us, first rising edge at 100 ns, 5 ns edges (same
+* stream as tb_decode / tb_reach)
+Vst stim 0 PWL(
++ 0n 0
++ 95n 0 100n 3.3 495n 3.3 500n 0
++ 1.345u 0 1.35u 3.3 2.142u 3.3 2.147u 0
++ 2.595u 0 2.6u 3.3 2.995u 3.3 3u 0
++ 3.845u 0 3.85u 3.3 4.642u 3.3 4.647u 0
++ 5.095u 0 5.1u 3.3 5.892u 3.3 5.897u 0
++ 6.345u 0 6.35u 3.3 6.745u 3.3 6.75u 0
++ 7.595u 0 7.6u 3.3 7.995u 3.3 8u 0
++ 8.845u 0 8.85u 3.3 9.642u 3.3 9.647u 0
++ 10.095u 0 10.1u 3.3 10.892u 3.3 10.897u 0
++ 11.345u 0 11.35u 3.3 12.142u 3.3 12.147u 0
++ 12.595u 0 12.6u 3.3 12.995u 3.3 13u 0
++ 13.845u 0 13.85u 3.3 14.245u 3.3 14.25u 0
++ 15.095u 0 15.1u 3.3 15.495u 3.3 15.5u 0
++ 16.345u 0 16.35u 3.3 17.142u 3.3 17.147u 0
++ 17.595u 0 17.6u 3.3 17.995u 3.3 18u 0
++ 20u 0)
+
+Rst stim txin 1m
+
+* span 1: full segment (switch + cable + far-end RX)
+Xseg1 up txin sel line1 rxout1 vdd 0 cable_span
++ params: len={span} rser={rser}
+
+* re-driver: rxout1 (mid comparator, already carrying its 4k/50p
+* load) straight into a TX pin + series R, then span 2 and the final
+* far-end RX
+Xtx2 rxout1 txs2 vdd 0 cable_tx params: rser={rser}
+Xcab2 txs2 0 line2 0 ribbon28 params: len={span}
+Xrx2 line2 rxout2 vdd 0 cable_rx
+
+.control
+* run table: runs 0-6 = rser 470 bracketing the tb_reach boundary,
+* runs 7-10 = rser 1mohm checking the re-driver adds no failure mode
+* (run 10 is the 1 m guard)
+let rsv = vector(11)
+let spv = vector(11)
+let rsv[0]=470
+let spv[0]=1
+let rsv[1]=470
+let spv[1]=5
+let rsv[2]=470
+let spv[2]=8
+let rsv[3]=470
+let spv[3]=10
+let rsv[4]=470
+let spv[4]=12
+let rsv[5]=470
+let spv[5]=15
+let rsv[6]=470
+let spv[6]=20
+let rsv[7]=1m
+let spv[7]=20
+let rsv[8]=1m
+let spv[8]=50
+let rsv[9]=1m
+let spv[9]=100
+let rsv[10]=1m
+let spv[10]=1
+let guard_prot = 0
+let guard_bare = 0
+let maxlen_prot = 0
+let maxlen_bare = 0
+let k = 0
+while k < 11
+  let rsn = rsv[k]
+  let spn = spv[k]
+  alterparam rser = $&rsn
+  alterparam span = $&spn
+  reset
+  tran 1n 20u uic
+
+  * contract state machine, run on both taps (tap index 1 = mid
+  * re-driver input, 2 = final receiver)
+  let tap = 1
+  while tap < 3
+    if tap = 1
+      let v = v(rxout1)
+    else
+      let v = v(rxout2)
+    end
+    let tt = time
+    let n = length(v)
+    let state = 0
+    let cellcnt = 0
+    let spurcnt = 0
+    let cur_rise = 0
+    let prev_rise = 0
+    let maxspur = 0
+    let minmarg = 1
+    let pmin = 1
+    let pmax = 0
+    let i = 1
+    while i < n
+      if (state = 0) & (v[i] > 1.3)
+        let state = 1
+        let cur_rise = tt[i]
+      end
+      if (state = 1) & (v[i] < 1.15)
+        let state = 0
+        let w = tt[i] - cur_rise
+        if w ge 250n
+          let cellcnt = cellcnt + 1
+          let mrg = abs(w - 625n)
+          if mrg < minmarg
+            let minmarg = mrg
+          end
+          if prev_rise > 0
+            let per = cur_rise - prev_rise
+            if per < pmin
+              let pmin = per
+            end
+            if per > pmax
+              let pmax = per
+            end
+          end
+          let prev_rise = cur_rise
+        else
+          let spurcnt = spurcnt + 1
+          if w > maxspur
+            let maxspur = w
+          end
+        end
+      end
+      let i = i + 1
+    end
+
+    let ok = 1
+    if cellcnt ne 15
+      let ok = 0
+    end
+    if maxspur ge 160n
+      let ok = 0
+    end
+    if minmarg lt 100n
+      let ok = 0
+    end
+    if pmin lt 0.9e-6
+      let ok = 0
+    end
+    if pmax gt 1.6e-6
+      let ok = 0
+    end
+    if tap = 1
+      let ok1 = ok
+      let cells1 = cellcnt
+      let spurs1 = spurcnt
+      let ms1 = maxspur
+      let mm1 = minmarg
+    else
+      let ok2 = ok
+      let cells2 = cellcnt
+      let spurs2 = spurcnt
+      let ms2 = maxspur
+      let mm2 = minmarg
+    end
+    let tap = tap + 1
+  end
+
+  * per-tap first-edge delays (re-driver latency is dly2 - dly1)
+  meas tran dly1 trig v(stim) val=1.65 rise=1 targ v(rxout1) val=1.3 rise=1
+  meas tran dly2 trig v(stim) val=1.65 rise=1 targ v(rxout2) val=1.3 rise=1
+
+  let ok = ok1 & ok2
+  if spn < 1.5
+    if rsn > 1
+      let guard_prot = ok
+    else
+      let guard_bare = ok
+    end
+  end
+  if ok = 1
+    if rsn > 1
+      if spn > maxlen_prot
+        let maxlen_prot = spn
+      end
+    else
+      if spn > maxlen_bare
+        let maxlen_bare = spn
+      end
+    end
+  end
+
+  let mmn1 = mm1*1e9
+  let msn1 = ms1*1e9
+  let mmn2 = mm2*1e9
+  let msn2 = ms2*1e9
+  let dl1 = dly1*1e9
+  let dl2 = dly2*1e9
+  if ok = 1
+    echo "REDRIVER_PASS rser=$&rsn span_m=$&spn cells1=$&cells1 spurs1=$&spurs1 maxspur1_ns=$&msn1 minmarg1_ns=$&mmn1 cells2=$&cells2 spurs2=$&spurs2 maxspur2_ns=$&msn2 minmarg2_ns=$&mmn2 dly1_ns=$&dl1 dly2_ns=$&dl2"
+  else
+    echo "REDRIVER_FAIL rser=$&rsn span_m=$&spn cells1=$&cells1 spurs1=$&spurs1 maxspur1_ns=$&msn1 minmarg1_ns=$&mmn1 cells2=$&cells2 spurs2=$&spurs2 maxspur2_ns=$&msn2 minmarg2_ns=$&mmn2 dly1_ns=$&dl1 dly2_ns=$&dl2"
+  end
+  let k = k + 1
+end
+echo "SUMMARY max_pass_span_m rser=470: $&maxlen_prot rser=1m: $&maxlen_bare (total reach = 2x span)"
+if (guard_prot = 1) & (guard_bare = 1)
+  echo "PASS guards (both taps pass at span 1 m for both rser)"
+  quit 0
+end
+echo "FAIL guards (span 1 m must pass at both taps; broken bench, not a reach number)"
+quit 1
+.endc
+.end
