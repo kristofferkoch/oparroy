@@ -19,6 +19,13 @@ When an idea graduates, **move** it (out of IDEAS.md into a KANBAN card,
 or into DESIGN.md if it is a design decision) — don't leave a copy
 behind.
 
+**Card IDs (`T##`) never leave KANBAN.md.** Cards are deleted as they
+ship, so a `T##` cited anywhere else — docs, README, commit messages,
+PRs — becomes an orphan reference the moment the card lands. Name the
+subsystem, decision, or doc section instead ("the node pin map",
+"DESIGN.md §7"); provenance lives in git history and in KANBAN's own
+card text while the card is alive.
+
 ## Voice and format
 
 Tight, active, present tense. Concrete over abstract — name the part,
