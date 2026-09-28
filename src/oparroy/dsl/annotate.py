@@ -83,6 +83,11 @@ class Annotation:
         """The table: flat capture path → refdes."""
         return dict(self._refs)
 
+    @property
+    def circuit(self) -> str | None:
+        """The design this table belongs to (``None`` if unnamed)."""
+        return self._circuit
+
     def to_json(self) -> str:
         """Serialize: sorted keys, byte-identical across runs."""
         refs = {key: self._refs[key] for key in sorted(self._refs, key=natural_key)}
@@ -143,6 +148,16 @@ def annotate(
     """
     if circuit.instances:
         circuit = circuit.flatten()
+    if (
+        prior is not None
+        and prior.circuit is not None
+        and prior.circuit != circuit.name
+    ):
+        msg = (
+            f"annotation belongs to circuit {prior.circuit!r}, "
+            f"not {circuit.name!r} — a stale table, not a prior annotation"
+        )
+        raise AnnotationError(msg)
     parts = _board_parts(circuit)
     prefixes = {ref: _prefix(part.symbol.ref, rules) for ref, part in parts.items()}
     assigned: dict[str, str] = {}

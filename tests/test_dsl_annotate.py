@@ -190,3 +190,11 @@ def test_back_annotation_round_trip_through_annotate(symbols: StubSymbols) -> No
     pcb = _pcb(_footprint(str(part_tstamp("anno", "Rs")), "R7"))
     refreshed = annotate(circuit, prior=annotation_from_pcb(circuit, pcb), rules=RULES)
     assert refreshed.refs["Rs"] == "R7"
+
+
+def test_stale_circuit_name_rejected(symbols: StubSymbols) -> None:
+    # The table names its design so a stale file against a renamed
+    # capture is a visible error, not silent misassignment.
+    prior = Annotation({"Rs": "R1"}, circuit="old-name")
+    with pytest.raises(AnnotationError, match="old-name"):
+        annotate(build(symbols), prior=prior, rules=RULES)
