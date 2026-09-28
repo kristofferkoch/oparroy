@@ -11,7 +11,7 @@ or intermittent), or a dead/hung microcontroller — partitions the ring:
 
 - The ring is dual: every segment carries two counter-rotating data
   rings with symmetric rebroadcast, so any single fault leaves every
-  node reachable (DESIGN.md §3).
+  node reachable ([DESIGN.md §3](DESIGN.md#3-ring-topology-and-bypass)).
 - Bypass wiring routes around failed interconnects.
 - Each node has a semi-passive hardware watchdog that bypasses the
   node's RX→TX path unless the MCU actively keeps the bypass disabled.
@@ -34,14 +34,14 @@ infrastructure, by contrast, may cost freely.
   extracted part facts: `datasheets/CH32V003/notes/`.
 - **Supervisor: RP2040** — its PIO is the re-timing PHY engine and
   golden-reference transceiver; on the test board its PIO also runs as
-  a logic analyzer on the instrumented boundary node (DESIGN.md §6).
+  a logic analyzer on the instrumented boundary node ([DESIGN.md §6](DESIGN.md#6-test-board)).
 - **PHY** (decided 2026-09-26): WS2812-compatible duty-coded
   PWM cells with ratio-metric decode at an 800 kbit/s anchor,
   comparator RX + DMA, per-bit cut-through re-timing, positional
   addressing, and the frame gap as a ring-wide vsync latch
-  (DESIGN.md §2; analysis:
+  ([DESIGN.md §2](DESIGN.md#2-physical-layer); analysis:
   [docs/phy-analysis-2026-09-26.md](docs/phy-analysis-2026-09-26.md)).
-- **Segment interconnect** (DESIGN.md §2.1, §3): 2x6-pin connectors
+- **Segment interconnect** ([DESIGN.md §2.1](DESIGN.md#21-ring-power-rail), [§3](DESIGN.md#3-ring-topology-and-bypass)): 2x6-pin connectors
   carry both counter-rotating data rings plus power — a single 3.3 V
   rail that is both the signaling rail and node power, and a raw
   5–18 V rail for payloads with their own buck. On 3M 3365 ribbon,
@@ -57,7 +57,7 @@ infrastructure, by contrast, may cost freely.
   scriptable for hands-off hardware-in-the-loop testing. Doubles as
   the **demonstrator**: some nodes carry human-facing I/O
   (potentiometer, buttons, LEDs, buzzer), each input overridable by
-  the supervisor so scripted runs stay hands-off (DESIGN.md §6).
+  the supervisor so scripted runs stay hands-off ([DESIGN.md §6](DESIGN.md#6-test-board)).
   4-layer, self-documenting silkscreen. Prototypes assembled by
   **JLCPCB Economic PCBA** (decided 2026-09-26); part
   selection is inventory-driven — minimize unique Extended BOM lines.
@@ -71,22 +71,22 @@ infrastructure, by contrast, may cost freely.
   `try_*` APIs, `VERIFY` with a target failure hook, fixed-capacity
   `StaticVector`/`Span`, and a `StaticArena` slot pool.
 - **Ring protocol core** in `firmware/protocol/` — bit cells and
-  node/ring forwarding logic (DESIGN.md §2) — proven by **KLEE**
+  node/ring forwarding logic ([DESIGN.md §2](DESIGN.md#2-physical-layer)) — proven by **KLEE**
   symbolic-execution harnesses and **libFuzzer** harnesses whose seed
   corpora double as the meson test suite; branch coverage is measured
   on the release build (`scripts/coverage-release`).
 - The node pin map is captured in the DSL — 17 of 18 CH32V003 GPIO
   assigned with a budget check — and emits `firmware/node/pins.hpp`
-  directly (DESIGN.md §7).
+  directly ([DESIGN.md §7](DESIGN.md#7-design-capture-dsl)).
 - All of it under the project-owned coding standard in
   [code-std.md](code-std.md)
   (borrows from JSF AV / MISRA / AUTOSAR / CERT), statically checked
-  from the first commit (DESIGN.md §8).
+  from the first commit ([DESIGN.md §8](DESIGN.md#8-verification-strategy)).
 
 ## Tooling
 
 - **Design capture is code**: the home-rolled Python DSL
-  (`src/oparroy/dsl/`, DESIGN.md §7) is the single source of truth —
+  (`src/oparroy/dsl/`, [DESIGN.md §7](DESIGN.md#7-design-capture-dsl)) is the single source of truth —
   an IR with subcircuit composition (ports, port arrays, bundles,
   multipacking, component sockets), a validation pass (limit ranges,
   interval containment, waivers as data), and emitters for KiCad
@@ -104,7 +104,7 @@ infrastructure, by contrast, may cost freely.
 - **Datasheets are extracted, not just stored**: `datasheets/<PART>/`
   holds vendor PDFs plus LLM-readable markdown sidecars (facts,
   per-peripheral notes, quirks) — see `datasheets/README.md`.
-- **Meson + ninja** build the firmware (DESIGN.md §8): one build
+- **Meson + ninja** build the firmware ([DESIGN.md §8](DESIGN.md#8-verification-strategy)): one build
   dir per toolchain, freestanding flag set in `meson.build`.
   - host (clang; host objects + LLVM bitcode for KLEE):
     `meson setup build/host --native-file meson/native/clang.ini`
@@ -133,33 +133,34 @@ infrastructure, by contrast, may cost freely.
 
 ## Repository layout
 
-| Path                         | Contents                                                       |
-| ---------------------------- | -------------------------------------------------------------- |
-| `AGENTS.md`                  | Doc-split and writing conventions for agents                   |
-| `IDEAS.md`                   | Not-yet-planned ideas (append-only stash)                      |
-| `DESIGN.md`                  | Settled design decisions + open design questions               |
-| `KANBAN.md`                  | Single home for planned work (cards, Next/Backlog)             |
-| `code-std.md`                | Project-owned C++ coding standard (living)                     |
-| `README.md`                  | This file                                                      |
-| `flake.nix` + `flake.lock`   | Pinned dev shell: all non-Python tools (DESIGN.md §8)          |
-| `pyproject.toml` + `uv.lock` | Python side: the DSL package (ruff strict, ty, pytest)         |
-| `src/oparroy/`               | Design-capture DSL package (`dsl/`: IR, checks, emitters)      |
-| `design/`                    | DSL circuit captures: node board, pin map, parts DB seed       |
-| `circuits/`                  | ngspice benches: PHY segment, watchdog, cable reach            |
-| `tests/`                     | Python tests (pytest) + golden netlists, `.kicad_pcb` fixtures |
-| `meson.build` + `meson/`     | Firmware build: flag set, native/cross toolchain files         |
-| `.envrc`                     | direnv hook into the flake shell                               |
-| `.pre-commit-config.yaml`    | Hook wiring; tools nix-pinned, `language: system`              |
-| `.github/workflows/`         | CI: every gate inside the nix shell                            |
-| `firmware/`                  | Node/supervisor firmware: foundation lib, ring protocol        |
-| `scripts/`                   | Build, sim/proof/fuzz, coverage + pre-commit scripts (sh)      |
-| `docs/`                      | Reference documents (research reports, sub-designs)            |
-| `datasheets/`                | Vendor PDFs + extracted markdown sidecars per part             |
-| `LICENSE`                    | MIT, copyright 2026 Kristoffer Koch                            |
+| Path                         | Contents                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                  | Doc-split and writing conventions for agents                                               |
+| `IDEAS.md`                   | Not-yet-planned ideas (append-only stash)                                                  |
+| `DESIGN.md`                  | Settled design decisions + open design questions                                           |
+| `KANBAN.md`                  | Single home for planned work (cards, Next/Backlog)                                         |
+| `code-std.md`                | Project-owned C++ coding standard (living)                                                 |
+| `README.md`                  | This file                                                                                  |
+| `flake.nix` + `flake.lock`   | Pinned dev shell: all non-Python tools ([DESIGN.md §8](DESIGN.md#8-verification-strategy)) |
+| `pyproject.toml` + `uv.lock` | Python side: the DSL package (ruff strict, ty, pytest)                                     |
+| `src/oparroy/`               | Design-capture DSL package (`dsl/`: IR, checks, emitters)                                  |
+| `design/`                    | DSL circuit captures: node board, pin map, parts DB seed                                   |
+| `circuits/`                  | ngspice benches: PHY segment, watchdog, cable reach                                        |
+| `tests/`                     | Python tests (pytest) + golden netlists, `.kicad_pcb` fixtures                             |
+| `meson.build` + `meson/`     | Firmware build: flag set, native/cross toolchain files                                     |
+| `.envrc`                     | direnv hook into the flake shell                                                           |
+| `.pre-commit-config.yaml`    | Hook wiring; tools nix-pinned, `language: system`                                          |
+| `.github/workflows/`         | CI: every gate inside the nix shell                                                        |
+| `firmware/`                  | Node/supervisor firmware: foundation lib, ring protocol                                    |
+| `scripts/`                   | Build, sim/proof/fuzz, coverage + pre-commit scripts (sh)                                  |
+| `docs/`                      | Reference documents (research reports, sub-designs)                                        |
+| `datasheets/`                | Vendor PDFs + extracted markdown sidecars per part                                         |
+| `LICENSE`                    | MIT, copyright 2026 Kristoffer Koch                                                        |
 
 Doc conventions follow the IDEAS → KANBAN/DESIGN graduation model:
 stray thoughts live in IDEAS.md, planned work in KANBAN.md cards,
-settled decisions in DESIGN.md. See `AGENTS.md` §Documentation.
+settled decisions in DESIGN.md. See
+[AGENTS.md §Documentation](AGENTS.md#documentation--the-ideas--kanban--design-split).
 
 ## Status
 
