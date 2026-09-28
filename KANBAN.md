@@ -88,19 +88,6 @@ ______________________________________________________________________
   T7ba's hierarchical refdes/sheetpath metadata is the channelization
   hook: one instance's layout replicates across the rest.
   **Blocked by:** — · **Unblocks:** T10
-- **T7c — DSL parts DB with assembler-stock status.** One record per
-  part: LCSC number, JLCPCB Basic/Extended tier, stock count with as-of
-  date, KiCad symbol/footprint pair, spice model binding, datasheet
-  pointer into `datasheets/`. A freshness check flags stale stock
-  entries (§6: part selection is inventory-driven); feeds T8's
-  unsourcable-part check. The emitter resolves parts from the DB,
-  replacing the ad-hoc declarations of T7a. Selection is **constraint
-  filtering over the table**, not a lookup: filter knobs as refinement
-  data — min footprint area, excluded parts (stock-out), required part,
-  required footprints (PolymorphicBlocks steal, 2026-09-27);
-  assembler-stock status is a column *and* a checkable constraint.
-  **Blocked by:** — ·
-  **Unblocks:** —
 - **T7d — DSL ngspice emitter.** Simulation-netlist backend over the
   T7a IR: emits the DUT netlist (`.subckt` wrappers matching the
   hand-written interfaces in `circuits/`), with spice model bindings
@@ -108,6 +95,22 @@ ______________________________________________________________________
   and `.meas` assertions stay in external bench decks — the DSL emits
   the circuit, benches drive it — so today's benches run unmodified
   against either capture. **Blocked by:** — · **Unblocks:** T7e
+- **T23 — DSL parametric value resolution.** Computed component values
+  carry slack (DESIGN.md §7): the capture states a spec — target plus
+  tolerance — and the emitter resolves it to real parts from the parts
+  DB's stocked bins: the VDD/2 divider comes out of the 10k bin, never
+  an irrational computed number. Includes ratio specs (a divider ratio
+  met by any pair from a bin) and reporting the achieved error of the
+  chosen values against the spec. Widens `Part.value` from `str` to a
+  value-spec type (DESIGN.md §7). Generalizes to **ranges as the
+  universal value spec** and **generators** (PolymorphicBlocks steal,
+  2026-09-27): a solve pass between capture and check (capture → solve
+  → check → emit) where a subcircuit computes its own part values from
+  context — the LED sizes its resistor from the actual rail voltage.
+  Solving stays a pass over the finished IR, never tangled into
+  construction: plain-Python capture semantics hold (PB's `IntLike`
+  interleaving is the anti-pattern). **Blocked by:** — ·
+  **Unblocks:** —
 - **T8 — DSL constraint checking / property verification.** Electrical
   rules beyond KiCad ERC: bypass-path continuity under single-fault
   models, watchdog default-state assertions. Typed ports carry
@@ -190,22 +193,6 @@ ______________________________________________________________________
   shipping, the hand-written DUT `.cir` files retire — the DSL becomes
   the single source of truth (§7), not a second copy of it.
   **Blocked by:** T7d · **Unblocks:** —
-- **T23 — DSL parametric value resolution.** Computed component values
-  carry slack (DESIGN.md §7): the capture states a spec — target plus
-  tolerance — and the emitter resolves it to real parts from the parts
-  DB's stocked bins: the VDD/2 divider comes out of the 10k bin, never
-  an irrational computed number. Includes ratio specs (a divider ratio
-  met by any pair from a bin) and reporting the achieved error of the
-  chosen values against the spec. Widens `Part.value` from `str` to a
-  value-spec type (DESIGN.md §7). Generalizes to **ranges as the
-  universal value spec** and **generators** (PolymorphicBlocks steal,
-  2026-09-27): a solve pass between capture and check (capture → solve
-  → check → emit) where a subcircuit computes its own part values from
-  context — the LED sizes its resistor from the actual rail voltage.
-  Solving stays a pass over the finished IR, never tangled into
-  construction: plain-Python capture semantics hold (PB's `IntLike`
-  interleaving is the anti-pattern). **Blocked by:** T7c ·
-  **Unblocks:** —
 - **T24 — DSL instrumentation transforms with reset-state equivalence.**
   The CI board is the node design plus injected controllability and
   observability (§6: fault-injection muxes, supervisor-override muxes,

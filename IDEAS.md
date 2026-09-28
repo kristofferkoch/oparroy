@@ -91,6 +91,11 @@ real work — **move**, don't copy. Reference, don't duplicate.
   questions: rate limits and auth on JLCPCB's side, whether the script
   edits `design/parts_db.py` in place (data-as-code stays the source
   of truth) or emits an overlay.
+- **Verify BAT54S C727126 tier/stock at JLCPCB before T22**
+  (2026-09-28): the parts-DB seed (`design/parts_db.py`) marks the
+  BAT54S's assembly tier unverified and its stock never queried —
+  `check_stock` flags exactly this. Needs a human with browser access
+  to jlcpcb.com; until then a conservative filter never admits it.
 - **Technology mapping onto multi-unit packages** (2026-09-27) — the
   FPGA-flow analogy: synthesis emits primitive gates, the technology
   mapper packs them onto physical cells. Applied here: a capture
