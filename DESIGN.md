@@ -737,6 +737,31 @@ nets only. One checker fix rode along: footprint filters match against
 the full `Lib:Name` as well as the bare name, so KiCad's lib-qualified
 filters (`Connector*:*_1x??_*`) work.
 
+Node board and the capture→layout stages (2026-09-28, card T22): the
+ring node is captured in `design/node.py` — CH32V003F4P6
+(`design/ch32v003.py`: pins keyword-only by port name, power pins
+required, the rest reported unconnected by name via the typed-part
+optional-pins hook), the PHY front-end (`design/phy_frontend.py`:
+SN74LVC1G3157 bypass with the RX tap on B1, VDD/2 threshold divider
+from the 10k bin, ring-B protected RX/TX, 470 Ω + TVS footprint per
+§7-checklist terminal, the §2 hysteresis fallback carried as DNP), the
+§4 charge pump, the §4.1 status LEDs (power / working / per-connector),
+an SWIO test pad, and the two §3 segment connectors. TIM1_BKIN (PC2)
+is wired to the watchdog's `sel` — bypass engaging brakes both TX
+channels (§2). `Node` is a subcircuit: the node board captures it
+directly, and T10 tiles it eight times. Between capture and pcbnew sit
+the two stages this section promised: `assign.py` (footprint overrides
+as JSON data on top of the class-default bins, now shared in
+`design/bins.py`) and `annotate.py` (capture names → board refdes;
+prior annotations survive source edits; comp tstamps are keyed on the
+new `Part.identity`, not the refdes, so pcbnew keeps matching by
+timestamp across re-annotation; `annotation_from_pcb` folds KiCad's
+geographic renumbering back out of `.kicad_pcb`). Typed parts grew
+`Led` and `TvsDiode`. Golden: `tests/golden/oparroy-node.net`. Not yet
+proven: real pcbnew ingest and the back-annotation join against a real
+layout (the T7a caveat above) — first layout is human work, and the §9
+node-board stackup question settles at quote time.
+
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one
 unit), composed into boards — not drawn flat into a board schematic.
