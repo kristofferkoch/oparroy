@@ -33,10 +33,10 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T19 --> T10
+    T22[T22 node board design] --> T19 --> T10
     T7bc[T7bc DSL multipacking and sockets] --> T24[T24 instrumentation with equivalence proof]
     T24 --> T10
-    T22[T22 node board design] --> T10
+    T22 --> T10
     T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
@@ -71,23 +71,7 @@ ______________________________________________________________________
   whole capture→layout round trip: footprint assignment and annotation
   stages, real pcbnew netlist ingest (the T7a caveat, §7), and
   back-annotation so refdes numbering follows physical placement (§7).
-  **Blocked by:** — · **Unblocks:** T10
-- **T19 — DSL layout property checker.** Parse `.kicad_pcb` and assert
-  layout-level properties (DESIGN.md §7): bypass-path copper
-  independence, LED-adjacent-to-connector placement contracts,
-  net-class width/clearance compliance, trace-length budgets (feeds
-  T15), mechanical contracts (min corner radius for handling,
-  standoff mounting holes + keepouts, stackup contract — layer count
-  and board thickness per §6/§9), board-level checklist
-  conformance (power LED present, silkscreen board-ID fields —
-  project/PCB name, author, date, version tied to git tag,
-  handwritten serial-number box, CI-board protection subcircuit
-  instantiated). Includes emitting net
-  classes/keepouts into the
-  `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
-  T7ba's hierarchical refdes/sheetpath metadata is the channelization
-  hook: one instance's layout replicates across the rest.
-  **Blocked by:** — · **Unblocks:** T10
+  **Blocked by:** — · **Unblocks:** T10, T19
 - **T7c — DSL parts DB with assembler-stock status.** One record per
   part: LCSC number, JLCPCB Basic/Extended tier, stock count with as-of
   date, KiCad symbol/footprint pair, spice model binding, datasheet
@@ -223,6 +207,26 @@ ______________________________________________________________________
   contract) are enumerated and budgeted, not assumed away. "Almost
   equivalent" is exactly the set of those enumerated residuals.
   **Blocked by:** T7bc · **Unblocks:** T10
+- **T19 — DSL layout property checker, remaining checks.** First slice
+  landed 2026-09-28: `.kicad_pcb` parser, the `LayoutRules` contract
+  with the first check set (stackup, net-class width/via, trace
+  budgets, corner radius, silkscreen ID fields, serial-box area,
+  mounting holes + keepouts, adjacency/presence, bypass pad
+  whitelisting), and the constraint-skeleton emitter (DESIGN.md §7).
+  Remaining, each wanting the first real board (T22) to calibrate
+  against: **copper-geometry bypass independence** beyond pad
+  whitelisting (bypass-net segments/vias must not touch node-logic
+  copper between RX and TX, §4 — includes parsing copper arc tracks,
+  which the parser skips today); **serial-box clearance** from pads
+  and other silkscreen text (needs board-absolute pad positions —
+  footprint rotation is not yet modeled); **TVS/series-R placement
+  contracts** (§7 checklist: TVS adjacent to its connector, R between
+  TVS and µC pin — needs the T22 capture to name the parts);
+  **channelization hook** (per-instance layout replication keyed on
+  T7ba sheetpath metadata, meaningless until a hierarchical board
+  exists); **pcbnew ingest validation** of the emitted skeleton (real
+  KiCad round trip — T22 exercises the first one).
+  **Blocked by:** T22 · **Unblocks:** T10
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
   all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
