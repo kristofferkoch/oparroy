@@ -670,7 +670,10 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   and device models until T7e's port retires the DUT `.cir` files.
 - **Human-review rendering:** a Graphviz dot dump is the minimal first
   view (ugly, but a start); the goal is abstraction-level block views
-  in the Verilog-debugger sense — prior-art survey is card T21.
+  in the Verilog-debugger sense — prior-art survey shipped 2026-09-28
+  (card T21): [docs/prior-art-schematic-gen-2026-09-28.md](docs/prior-art-schematic-gen-2026-09-28.md)
+  — borrow the layout engine (grandalf first, ELK fallback), build
+  only the view extraction; the views are card T26.
 
 Landed (2026-09-26, card T7a; typed parts and review hardening
 2026-09-27): the DSL core in `src/oparroy/dsl/` —
