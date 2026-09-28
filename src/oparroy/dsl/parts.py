@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from oparroy.dsl.ir import DefinitionError
+from oparroy.dsl.ir import Bundle, DefinitionError
 
 if TYPE_CHECKING:
     from oparroy.dsl.ir import Net
@@ -38,12 +38,13 @@ class TypedPart:
     """A typed part spec: symbol, value, footprint, and pin wiring.
 
     Subclasses fix ``symbol`` and ``pin_map`` (keyword name → pin
-    number) and declare the pins as keyword-only parameters, then pass
-    the collected wiring here. ``Circuit.part`` consumes the spec.
+    number, or a tuple of numbers for a keyword owning several pins)
+    and declare the pins as keyword-only parameters, then pass the
+    collected wiring here. ``Circuit.part`` consumes the spec.
     """
 
     symbol: ClassVar[str]
-    pin_map: ClassVar[dict[str, str]]
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]]
     default_value: ClassVar[str | None] = None
     default_footprint: ClassVar[str | None] = None
 
@@ -75,7 +76,7 @@ class Resistor(TypedPart):
     """Unpolarized resistor (``Device:R``); pins ``a``/``b`` are 1/2."""
 
     symbol = "Device:R"
-    pin_map: ClassVar[dict[str, str]] = {"a": "1", "b": "2"}
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {"a": "1", "b": "2"}
 
     def __init__(
         self,
@@ -92,7 +93,7 @@ class Capacitor(TypedPart):
     """Unpolarized capacitor (``Device:C``); pins ``a``/``b`` are 1/2."""
 
     symbol = "Device:C"
-    pin_map: ClassVar[dict[str, str]] = {"a": "1", "b": "2"}
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {"a": "1", "b": "2"}
 
     def __init__(
         self,
@@ -114,7 +115,11 @@ class Bat54s(TypedPart):
     """
 
     symbol = "Diode:BAT54S"
-    pin_map: ClassVar[dict[str, str]] = {"anode": "1", "cathode": "2", "com": "3"}
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
+        "anode": "1",
+        "cathode": "2",
+        "com": "3",
+    }
     default_value = "BAT54S"
     default_footprint = "Package_TO_SOT_SMD:SOT-23"
 
@@ -132,3 +137,21 @@ class Bat54s(TypedPart):
             footprint,
             {"anode": anode, "cathode": cathode, "com": com},
         )
+
+
+class BundleConnector(TypedPart):
+    """A connector block: pins wired from a bundle, declared as data.
+
+    Subclasses fix ``symbol`` and ``pin_map`` — bundle member name →
+    pin number, or a tuple of numbers for a member owning several pins
+    (the §3 segment connector's paired grounds) — plus optional
+    ``default_value``/``default_footprint``. Construction takes the
+    bundle: member names must match ``pin_map`` exactly, and drift
+    reports through ``TypedPart``'s unknown/missing-pin errors.
+    """
+
+    def __init__(self, bundle: Bundle, *, footprint: str | None = None) -> None:
+        if not isinstance(bundle, Bundle):
+            msg = f"{type(self).__name__} wires a Bundle, got {bundle!r}"
+            raise TypeError(msg)
+        super().__init__(None, footprint, dict(bundle.items()))

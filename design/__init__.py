@@ -1,7 +1,9 @@
 """oparroy design captures — boards and subcircuits in DSL form.
 
-Each module here is one captured circuit (DESIGN.md §7): a
-``capture(symbols)`` function building the IR, plus a ``main`` that
-checks and emits. ``circuits/`` keeps the ngspice benches and device
-models until T7e retires the hand-written DUT netlists.
+Each board or subcircuit module is one captured circuit (DESIGN.md
+§7): a ``capture(symbols)`` function building the IR, plus a ``main``
+that checks and emits. Shared blocks (connector pinouts, per-project
+part bins) are plain modules without a ``main`` — ``segment.py`` is
+the §3 connector block. ``circuits/`` keeps the ngspice benches and
+device models until T7e retires the hand-written DUT netlists.
 """

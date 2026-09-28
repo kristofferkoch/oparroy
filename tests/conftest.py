@@ -55,6 +55,11 @@ class StubSymbols:
                     ("SOT?23*",),
                     pin_names={"1": "A", "2": "K", "3": "COM"},
                 ),
+                make_symbol(
+                    "CONN6",
+                    {str(pin): PinType.PASSIVE for pin in range(1, 7)},
+                    ("CONN_*",),
+                ),
                 make_symbol("REG", {"1": PinType.POWER_OUT}, ("REG_*",)),
                 make_symbol(
                     "+3V3",
@@ -96,7 +101,13 @@ def symbols() -> StubSymbols:
 
 @pytest.fixture
 def footprints() -> StubFootprints:
-    known = {"StubFP:R_0603", "StubFP:C_0603", "StubFP:PWR_SIP", "StubFP:LOAD_SIP"}
+    known = {
+        "StubFP:R_0603",
+        "StubFP:C_0603",
+        "StubFP:PWR_SIP",
+        "StubFP:LOAD_SIP",
+        "StubFP:CONN_1x06",
+    }
     return StubFootprints(known)
 
 
