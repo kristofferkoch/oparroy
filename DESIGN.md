@@ -713,8 +713,29 @@ with content-derived tstamps — the channelization hook. Check and both
 emitters flatten implicitly and report hierarchical paths. The §4
 watchdog is the first subcircuit (`design/watchdog_chargepump.py`); the
 8-instance proving case runs in `tests/test_dsl_subcircuit.py`.
-Remainder of the T7b split: port arrays/bundles (T7bb), multipacking
-and component sockets (T7bc), connection sugar (T7bd).
+Remainder of the T7b split: multipacking and component sockets (T7bc),
+connection sugar (T7bd).
+
+Port arrays and bundles (2026-09-28, card T7bb): the interface scales
+past scalar ports. `Circuit.port_array` declares a width-fixed vector
+(`led[0]`…`led[7]`) bound element-wise at instantiation — a width
+mismatch raises at capture (button matrices, LED arrays); elements may
+also bind individually by name. `Circuit.bundle` groups *existing*
+nets under member names — the §3 connector pinout as one connectable
+unit. Members name wires, not node functions (`a` is the ring-A data
+wire on pin 4 of both faces), so two faces join member-to-member; the
+power nets alias into both faces' bundles, and a port reached through
+two groups must resolve to one parent net — conflicting bindings
+raise. `BundleConnector` (parts.py) is the connector block: the
+member→pin-number mapping is class data, and `pin_map` values widen to
+tuples for a member owning several pins (the paired §3 grounds).
+`design/segment.py` carries the §3 pinout (`segment_ports`) and the
+connector block itself (part/footprint provisional — §3 leaves the
+connector style open, §6). Both group forms expand to scalar port
+bindings at instantiation: flattening, checks, and emitters see plain
+nets only. One checker fix rode along: footprint filters match against
+the full `Lib:Name` as well as the bare name, so KiCad's lib-qualified
+filters (`Connector*:*_1x??_*`) work.
 
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one

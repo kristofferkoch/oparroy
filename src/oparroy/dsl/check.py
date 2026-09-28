@@ -178,10 +178,14 @@ def _check_net(net: Net) -> list[Issue]:
 def _matches_filters(part: Part) -> bool:
     if not part.symbol.footprint_filters or part.footprint is None:
         return True
+    # KiCad filters come in both shapes: name-only ("R_*") and
+    # lib-qualified ("Connector*:*_1x??_*") — match against the bare
+    # footprint name and the full Lib:Name reference.
     fp_name = part.footprint.rsplit(":", maxsplit=1)[-1]
     return any(
-        fnmatch.fnmatchcase(fp_name, fp_filter)
+        fnmatch.fnmatchcase(candidate, fp_filter)
         for fp_filter in part.symbol.footprint_filters
+        for candidate in (fp_name, part.footprint)
     )
 
 

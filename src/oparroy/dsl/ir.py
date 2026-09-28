@@ -14,14 +14,22 @@ subcircuits (``Circuit.instance``) with declared port interfaces
 the hierarchy to the flat IR checks and emitters consume — instance
 names prefix part references and internal nets, so identities stay
 stable across source edits and findings report hierarchical paths.
+
+Interfaces scale past scalar ports two ways (T7bb): port arrays
+(``Circuit.port_array``) are width-fixed vectors bound element-wise,
+and bundles (``Circuit.bundle``) group existing nets under member
+names — the connector pinout as one connectable unit — bound
+member-wise. Both expand to scalar port bindings at instantiation, so
+flattening, checks, and emitters see plain nets only.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, overload
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -84,6 +92,11 @@ def _reject_separator(kind: str, name: str) -> None:
 
 class UnknownSymbolError(DefinitionError):
     """A part referenced a symbol the symbol table does not know."""
+
+
+def _pin_numbers(numbers: str | tuple[str, ...]) -> tuple[str, ...]:
+    """Normalize a pin_map value to a tuple of pin numbers."""
+    return (numbers,) if isinstance(numbers, str) else numbers
 
 
 @dataclass(frozen=True)
@@ -273,6 +286,195 @@ class Net:
         return f"<Net {self._name} ({len(self._pins)} pins)>"
 
 
+class PortArray(Sequence[Net]):
+    """A port vector of ``width`` port nets (``name[0]``, ``name[1]``, …).
+
+    The array interface — button matrices, LED arrays (T7bb). Captures
+    index it like any sequence; ``Circuit.instance`` binds it to a
+    sequence of parent nets of equal width and flattening merges
+    element-wise, so a width drift raises at capture.
+    """
+
+    def __init__(self, name: str, nets: tuple[Net, ...]) -> None:
+        self._name = name
+        self._nets = nets
+
+    @property
+    def name(self) -> str:
+        """The array base name; the element nets are ``name[i]``."""
+        return self._name
+
+    @property
+    def nets(self) -> tuple[Net, ...]:
+        """The element nets, in index order."""
+        return self._nets
+
+    def __len__(self) -> int:
+        return len(self._nets)
+
+    @overload
+    def __getitem__(self, index: int) -> Net: ...
+    @overload
+    def __getitem__(self, index: slice) -> tuple[Net, ...]: ...
+    def __getitem__(self, index: int | slice) -> Net | tuple[Net, ...]:
+        return self._nets[index]
+
+    def __repr__(self) -> str:
+        return f"<PortArray {self._name}[{len(self)}]>"
+
+
+class Bundle(Mapping[str, Net]):
+    """A named group of nets, connectable as one unit (T7bb).
+
+    Members alias existing nets under bundle-local names — the §3
+    segment pinout: ``upstream.a`` is a node's RX_A port,
+    ``downstream.a`` its TX_A, and the two faces join member-to-member.
+    ``Circuit.instance`` binds a bundle port to a same-membered bundle
+    or mapping; ``BundleConnector`` maps members to connector pin
+    numbers declaratively. Member access works by item
+    (``bundle["a"]``) or attribute (``bundle.a``); a member shadowing a
+    class attribute (``name``, …) stays reachable by item.
+    """
+
+    def __init__(self, name: str, members: dict[str, Net]) -> None:
+        self._name = name
+        self._members = dict(members)
+
+    @property
+    def name(self) -> str:
+        """The bundle name — the binding keyword at instantiation."""
+        return self._name
+
+    def __getitem__(self, member: str) -> Net:
+        try:
+            return self._members[member]
+        except KeyError:
+            raise KeyError(f"bundle {self._name!r} has no member {member!r}") from None
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._members)
+
+    def __len__(self) -> int:
+        return len(self._members)
+
+    def __getattr__(self, member: str) -> Net:
+        try:
+            return self.__dict__["_members"][member]
+        except KeyError:
+            raise AttributeError(
+                f"bundle {self._name!r} has no member {member!r}"
+            ) from None
+
+    def __repr__(self) -> str:
+        return f"<Bundle {self._name}: {' '.join(self._members)}>"
+
+
+def _expand_connections(
+    instance_name: str,
+    child: Circuit,
+    connections: dict[str, Net | str | Sequence[Net | str] | Mapping[str, Net | str]],
+) -> dict[str, list[tuple[Net | str, str]]]:
+    """Expand array/bundle bindings into per-port connections.
+
+    Every expanded entry carries its source label for conflict reports;
+    a port reached twice (the §3 power nets, aliased into both
+    segment-face bundles) keeps both entries, and ``Circuit.instance``
+    resolves them to one parent net.
+    """
+    expanded: dict[str, list[tuple[Net | str, str]]] = {}
+    for key, value in connections.items():
+        if key in child._arrays:  # noqa: SLF001 — same module
+            entries = _expand_array(instance_name, child._arrays[key], value)  # noqa: SLF001
+        elif key in child._bundles:  # noqa: SLF001 — same module
+            entries = _expand_bundle(instance_name, child._bundles[key], value)  # noqa: SLF001
+        elif isinstance(value, Net | str):
+            entries = {key: (value, key)}
+        else:
+            msg = (
+                f"instance {instance_name!r}: port {key!r} bound to {value!r}, "
+                "not a net"
+            )
+            raise DefinitionError(msg)
+        for port_name, entry in entries.items():
+            expanded.setdefault(port_name, []).append(entry)
+    return expanded
+
+
+def _expand_array(
+    instance_name: str,
+    array: PortArray,
+    value: Net | str | Sequence[Net | str] | Mapping[str, Net | str],
+) -> dict[str, tuple[Net | str, str]]:
+    """Expand an array binding into per-element ``name[i]`` connections."""
+    width = len(array)
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        msg = (
+            f"instance {instance_name!r}: port {array.name!r} is an array of "
+            f"width {width}; bind a sequence of {width} nets"
+        )
+        raise DefinitionError(msg)
+    elements = list(value)
+    if len(elements) != width:
+        msg = (
+            f"instance {instance_name!r}: port array {array.name!r} has "
+            f"width {width}, bound to {len(elements)} nets"
+        )
+        raise DefinitionError(msg)
+    expanded: dict[str, tuple[Net | str, str]] = {}
+    for index, element in enumerate(elements):
+        if not isinstance(element, Net | str):
+            msg = (
+                f"instance {instance_name!r}: port array {array.name!r} "
+                f"element {index} bound to {element!r}, not a net"
+            )
+            raise DefinitionError(msg)
+        # The source label is the array binding keyword, not the
+        # element name — a conflict with an individual element binding
+        # must name two distinguishable sources.
+        expanded[f"{array.name}[{index}]"] = (element, array.name)
+    return expanded
+
+
+def _expand_bundle(
+    instance_name: str,
+    bundle: Bundle,
+    value: Net | str | Sequence[Net | str] | Mapping[str, Net | str],
+) -> dict[str, tuple[Net | str, str]]:
+    """Expand a bundle binding into per-member port connections."""
+    members = list(bundle)
+    if not isinstance(value, Mapping):
+        msg = (
+            f"instance {instance_name!r}: port {bundle.name!r} is a bundle "
+            f"with members {members}; bind a bundle or a mapping"
+        )
+        raise DefinitionError(msg)
+    supplied = dict(value)
+    unknown = sorted(set(supplied) - set(members), key=natural_key)
+    missing = sorted(set(members) - set(supplied), key=natural_key)
+    if unknown or missing:
+        problems = []
+        if missing:
+            problems.append(f"missing {missing}")
+        if unknown:
+            problems.append(f"unknown {unknown}")
+        msg = (
+            f"instance {instance_name!r}: bundle {bundle.name!r} binding has "
+            f"{' and '.join(problems)} (members: {members})"
+        )
+        raise DefinitionError(msg)
+    expanded = {}
+    for member in members:
+        net = supplied[member]
+        if not isinstance(net, Net | str):
+            msg = (
+                f"instance {instance_name!r}: bundle {bundle.name!r} member "
+                f"{member!r} bound to {net!r}, not a net"
+            )
+            raise DefinitionError(msg)
+        expanded[bundle[member].name] = (net, f"{bundle.name}.{member}")
+    return expanded
+
+
 class Instance:
     """One placed subcircuit: a captured child with its ports bound.
 
@@ -321,6 +523,8 @@ class Circuit:
         self._symbols = symbols
         self._parts: dict[str, Part] = {}
         self._nets: dict[str, Net] = {}
+        self._arrays: dict[str, PortArray] = {}
+        self._bundles: dict[str, Bundle] = {}
         self._instances: dict[str, Instance] = {}
 
     @property
@@ -342,6 +546,16 @@ class Circuit:
     def ports(self) -> dict[str, Net]:
         """Port nets by name — the subcircuit interface (insertion order)."""
         return {name: net for name, net in self._nets.items() if net.is_port}
+
+    @property
+    def port_arrays(self) -> dict[str, PortArray]:
+        """Port arrays by name — the vector interface (insertion order)."""
+        return dict(self._arrays)
+
+    @property
+    def bundles(self) -> dict[str, Bundle]:
+        """Bundles by name — the grouped interface (insertion order)."""
+        return dict(self._bundles)
 
     @property
     def instances(self) -> dict[str, Instance]:
@@ -396,9 +610,13 @@ class Circuit:
             msg = f"expected a typed part (oparroy.dsl.parts), got {spec!r}"
             raise DefinitionError(msg)
         resolved = self._symbols.lookup(spec.symbol)
-        numbers = {pin.number for pin in resolved.pins}
-        targets = list(spec.pin_map.values())
-        unknown = sorted(set(targets) - numbers, key=natural_key)
+        symbol_pins = {pin.number for pin in resolved.pins}
+        targets = [
+            number
+            for mapped in spec.pin_map.values()
+            for number in _pin_numbers(mapped)
+        ]
+        unknown = sorted(set(targets) - symbol_pins, key=natural_key)
         if unknown:
             msg = (
                 f"{type(spec).__name__} pin_map targets pins {unknown}, "
@@ -419,7 +637,8 @@ class Circuit:
             footprint if footprint is not None else spec.footprint,
         )
         for kw, net in wiring.items():
-            net._attach(placed.pin(spec.pin_map[kw]))  # noqa: SLF001 — same module
+            for number in _pin_numbers(spec.pin_map[kw]):
+                net._attach(placed.pin(number))  # noqa: SLF001 — same module
         return placed
 
     def _place(
@@ -454,9 +673,86 @@ class Circuit:
         _reject_separator("net name", name)
         return self._add_net(name, is_port=True)
 
+    def port_array(self, name: str, width: int) -> PortArray:
+        """Declare a port array: ``width`` port nets ``name[0]`` … ``name[width-1]``.
+
+        The vector interface (button matrices, LED arrays). Width is
+        fixed at declaration — the parent binds exactly ``width`` nets
+        (``Circuit.instance``) and flattening merges element-wise, so a
+        width drift raises at capture. Element nets also bind
+        individually by name (``led[0]``=…) when a parent wires them
+        one by one.
+        """
+        _reject_separator("port array name", name)
+        if "[" in name or "]" in name:
+            msg = f"port array name {name!r} must not contain '[' or ']'"
+            raise DefinitionError(msg)
+        if width < 1:
+            msg = f"port array {name!r} needs a width of at least 1"
+            raise DefinitionError(msg)
+        self._check_group_name_free("port array", name)
+        element_names = [f"{name}[{i}]" for i in range(width)]
+        collisions = [n for n in element_names if n in self._nets]
+        if collisions:
+            msg = f"port array {name!r} collides with existing nets {collisions}"
+            raise DefinitionError(msg)
+        array = PortArray(
+            name,
+            tuple(self._add_net(n, is_port=True) for n in element_names),
+        )
+        self._arrays[name] = array
+        return array
+
+    def bundle(self, name: str, /, **members: Net | str) -> Bundle:
+        """Group existing nets under member names, connectable as one unit.
+
+        Members alias nets of this circuit — ports for a subcircuit
+        interface (the §3 segment pinout), plain nets for a board-level
+        link. ``Circuit.instance`` binds a bundle to a same-membered
+        ``Bundle`` or a mapping; ``parts.BundleConnector`` maps members
+        to connector pin numbers declaratively. One net may not alias
+        two members of the same bundle (a member would bind nothing —
+        multi-pin members are the connector block's tuple pin_map).
+        """
+        _reject_separator("bundle name", name)
+        self._check_group_name_free("bundle", name)
+        if not members:
+            msg = f"bundle {name!r} needs at least one member"
+            raise DefinitionError(msg)
+        resolved: dict[str, Net] = {}
+        for member, net in members.items():
+            if not member:
+                msg = f"bundle {name!r} has an empty member name"
+                raise DefinitionError(msg)
+            _reject_separator(f"bundle {name!r} member", member)
+            resolved[member] = self._resolve_net(net)
+        aliased: dict[Net, str] = {}
+        for member, net in resolved.items():
+            if net in aliased:
+                msg = (
+                    f"bundle {name!r}: members {aliased[net]!r} and "
+                    f"{member!r} alias the same net {net.name!r}"
+                )
+                raise DefinitionError(msg)
+            aliased[net] = member
+        created = Bundle(name, resolved)
+        self._bundles[name] = created
+        return created
+
+    def _check_group_name_free(self, kind: str, name: str) -> None:
+        if name in self._arrays or name in self._bundles:
+            msg = f"duplicate {kind} name {name!r}"
+            raise DefinitionError(msg)
+        if name in self._nets:
+            msg = f"{kind} name {name!r} collides with a net of the same name"
+            raise DefinitionError(msg)
+
     def _add_net(self, name: str, *, is_port: bool) -> Net:
         if name in self._nets:
             msg = f"duplicate net name {name!r}"
+            raise DefinitionError(msg)
+        if name in self._arrays or name in self._bundles:
+            msg = f"net name {name!r} collides with a port array or bundle"
             raise DefinitionError(msg)
         created = Net(name, is_port=is_port)
         self._nets[name] = created
@@ -504,7 +800,7 @@ class Circuit:
         name: str,
         subcircuit: Callable[[Circuit], None],
         /,
-        **connections: Net | str,
+        **connections: Net | str | Sequence[Net | str] | Mapping[str, Net | str],
     ) -> Instance:
         """Instantiate a subcircuit: capture it, then bind its ports.
 
@@ -513,7 +809,12 @@ class Circuit:
         the capture declares must be bound by keyword to a parent net
         (``board.instance("WD1", Watchdog(), ka=ka_net, …)``); unknown
         or unconnected ports raise, so an interface drift breaks the
-        capture that introduced it, not a later stage.
+        capture that introduced it, not a later stage. A port array
+        binds to a sequence of equal width, element-wise; a bundle
+        binds to a same-membered ``Bundle`` or mapping, member-wise.
+        A port reached through two groups (the §3 power nets, aliased
+        into both segment-face bundles) must resolve to one parent net
+        — conflicting bindings raise.
 
         The instance is capture-time structure only — nothing is
         copied into this circuit until ``flatten`` runs.
@@ -527,26 +828,32 @@ class Circuit:
             raise DefinitionError(msg)
         child = Circuit(name, self._symbols)
         subcircuit(child)
+        expanded = _expand_connections(name, child, connections)
         ports = child.ports
-        unknown = sorted(set(connections) - set(ports), key=natural_key)
+        unknown = sorted(set(expanded) - set(ports), key=natural_key)
         if unknown:
             msg = (
                 f"instance {name!r}: the subcircuit has no ports {unknown} "
                 f"(declared: {sorted(ports, key=natural_key)})"
             )
             raise DefinitionError(msg)
-        missing = sorted(set(ports) - set(connections), key=natural_key)
+        missing = sorted(set(ports) - set(expanded), key=natural_key)
         if missing:
             msg = f"instance {name!r}: ports {missing} left unconnected"
             raise DefinitionError(msg)
         resolved: dict[str, Net] = {}
-        for port_name, net in connections.items():
-            if not isinstance(net, Net | str):
-                msg = (
-                    f"instance {name!r}: port {port_name!r} bound to {net!r}, not a net"
-                )
-                raise DefinitionError(msg)
-            resolved[port_name] = self._resolve_net(net)
+        sources: dict[str, str] = {}
+        for port_name, bindings in expanded.items():
+            for net, source in bindings:
+                target = self._resolve_net(net)
+                if port_name in resolved and resolved[port_name] is not target:
+                    msg = (
+                        f"instance {name!r}: port {port_name!r} bound by both "
+                        f"{sources[port_name]!r} and {source!r} to different nets"
+                    )
+                    raise DefinitionError(msg)
+                resolved[port_name] = target
+                sources[port_name] = source
         placed = Instance(name, child, resolved)
         self._instances[name] = placed
         return placed
@@ -622,6 +929,11 @@ class Circuit:
             )
             port = " [port]" if self._nets[name].is_port else ""
             lines.append(f"  {name}{port}: {members}")
+        for name, array in self._arrays.items():
+            lines.append(f"port array {name}[{len(array)}]")
+        for name, bundle in self._bundles.items():
+            members = " ".join(f"{member}={bundle[member].name}" for member in bundle)
+            lines.append(f"bundle {name}: {members}")
         for name in self._instances:
             lines.append(f"instance {name}:")
             child_dump = self._instances[name].circuit.dump()

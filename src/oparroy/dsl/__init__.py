@@ -20,6 +20,7 @@ from oparroy.dsl.check import (
 )
 from oparroy.dsl.dot import to_dot
 from oparroy.dsl.ir import (
+    Bundle,
     Circuit,
     DefinitionError,
     Instance,
@@ -27,6 +28,7 @@ from oparroy.dsl.ir import (
     Part,
     Pin,
     PinType,
+    PortArray,
     Symbol,
     SymbolPin,
     SymbolTable,
@@ -34,11 +36,13 @@ from oparroy.dsl.ir import (
 )
 from oparroy.dsl.kicad_emit import emit_netlist
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
-from oparroy.dsl.parts import Bat54s, Capacitor, Resistor, TypedPart
+from oparroy.dsl.parts import Bat54s, BundleConnector, Capacitor, Resistor, TypedPart
 from oparroy.dsl.subcircuit import Subcircuit
 
 __all__ = [
     "Bat54s",
+    "Bundle",
+    "BundleConnector",
     "Capacitor",
     "CheckError",
     "Circuit",
@@ -52,6 +56,7 @@ __all__ = [
     "Part",
     "Pin",
     "PinType",
+    "PortArray",
     "Resistor",
     "Severity",
     "Subcircuit",

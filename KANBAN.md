@@ -34,10 +34,9 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T7bb[T7bb DSL port arrays and bundles] --> T22[T22 node board design]
     T7bc[T7bc DSL multipacking and sockets] --> T24[T24 instrumentation with equivalence proof]
     T24 --> T10
-    T22 --> T10
+    T22[T22 node board design] --> T10
     T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
@@ -49,15 +48,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T7bb — DSL port arrays and bundles.** Split out of T7b (2026-09-28;
-  the core composition model — ports, instances, flattening,
-  hierarchical naming — shipped as T7ba). **Port arrays** with width
-  propagation (button matrix, LED arrays) and **bundles**: the §3
-  connector pinout as one connectable unit, a connector block mapping
-  bundle↔pin numbers declaratively (PolymorphicBlocks steals,
-  evaluated 2026-09-27 — rejected as a dependency, mined for ideas).
-  Extends T7ba's port/instance model. **Blocked by:** — ·
-  **Unblocks:** T22
 - **T7bc — DSL multipacking and component sockets.** Split out of T7b
   (2026-09-28). **Multipacking** for multi-unit packages (4066-class
   quad switches, BAT54ADW quad diodes — DESIGN.md §7 multi-unit model:
@@ -71,6 +61,18 @@ ______________________________________________________________________
   package-agnostic — with the caveat that packing across the ring-A/B
   redundancy boundary reintroduces a single point of failure (raised
   2026-09-27). **Blocked by:** — · **Unblocks:** T24
+- **T22 — Node board design.** The single ring node as its own small
+  board, designed **before** the CI board — the CI board is eight of
+  these tiles plus a supervisor (DESIGN.md §6). Full node circuit
+  captured in the DSL: CH32V003 + PHY front-end (§2), charge-pump
+  watchdog (§4), status LEDs (§4.1), terminal protection (§7
+  checklist), two segment connectors (§3 pinout — the T7bb
+  `design/segment.py` block); layout in KiCad, fabbed via JLCPCB (§6).
+  Settles the node-board stackup question (§9). First exercise of the
+  whole capture→layout round trip: footprint assignment and annotation
+  stages, real pcbnew netlist ingest (the T7a caveat, §7), and
+  back-annotation so refdes numbering follows physical placement (§7).
+  **Blocked by:** — · **Unblocks:** T10
 - **T19 — DSL layout property checker.** Parse `.kicad_pcb` and assert
   layout-level properties (DESIGN.md §7): bypass-path copper
   independence, LED-adjacent-to-connector placement contracts,
@@ -181,18 +183,6 @@ ______________________________________________________________________
   shipping, the hand-written DUT `.cir` files retire — the DSL becomes
   the single source of truth (§7), not a second copy of it.
   **Blocked by:** T7d · **Unblocks:** —
-- **T22 — Node board design.** The single ring node as its own small
-  board, designed **before** the CI board — the CI board is eight of
-  these tiles plus a supervisor (DESIGN.md §6). Full node circuit
-  captured in the DSL: CH32V003 + PHY front-end (§2), charge-pump
-  watchdog (§4), status LEDs (§4.1), terminal protection (§7
-  checklist), two segment connectors (§3 pinout); layout in KiCad,
-  fabbed via JLCPCB (§6). Settles the node-board stackup question
-  (§9). First exercise of the whole capture→layout round trip:
-  footprint assignment and annotation stages, real pcbnew netlist
-  ingest (the T7a caveat, §7), and back-annotation so refdes numbering
-  follows physical placement (§7). **Blocked by:** T7bb ·
-  **Unblocks:** T10
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts

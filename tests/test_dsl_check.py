@@ -96,6 +96,30 @@ def test_footprint_filter_mismatch_warns(circuit: Circuit) -> None:
     assert any("matches none of Stub:R's footprint filters" in w for w in warnings)
 
 
+def test_footprint_filter_matches_lib_qualified(
+    footprints: StubFootprints,
+) -> None:
+    # KiCad has lib-qualified filters ("Connector*:*_1x??_*") — they
+    # match against the full Lib:Name footprint reference, not only
+    # the bare footprint name (T7bb rider fix).
+    class ConnSymbols:
+        def lookup(self, ref: str) -> Symbol:
+            assert ref == "Stub:CONN6Q"
+            return make_symbol(
+                "CONN6Q",
+                {str(pin): PinType.PASSIVE for pin in range(1, 7)},
+                ("StubFP*:CONN_1x??",),
+            )
+
+    c = Circuit("conn", ConnSymbols())
+    c.part("J1", symbol="Stub:CONN6Q", value="x", footprint="StubFP:CONN_1x06")
+    warnings = messages(check(c, footprints=footprints), Severity.WARNING)
+    assert not any("footprint filters" in w for w in warnings)
+    c.part("J2", symbol="Stub:CONN6Q", value="x", footprint="StubFP:CONN_2x06")
+    warnings = messages(check(c), Severity.WARNING)
+    assert any("J2 footprint 'StubFP:CONN_2x06' matches none" in w for w in warnings)
+
+
 def test_missing_value_warns(circuit: Circuit, footprints: StubFootprints) -> None:
     r3 = circuit.part("R3", symbol="Stub:R", footprint="StubFP:R_0603")
     circuit.connect("a", r3[1])
