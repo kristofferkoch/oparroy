@@ -37,7 +37,6 @@ graph TD
     T7bc[T7bc DSL multipacking and sockets] --> T24[T24 instrumentation with equivalence proof]
     T24 --> T10
     T22[T22 node board design] --> T10
-    T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
     T16e[T16e coverage on release] --> T11[T11 node firmware v0]
@@ -101,13 +100,19 @@ ______________________________________________________________________
   assembler-stock status is a column *and* a checkable constraint.
   **Blocked by:** — ·
   **Unblocks:** —
-- **T7d — DSL ngspice emitter.** Simulation-netlist backend over the
-  T7a IR: emits the DUT netlist (`.subckt` wrappers matching the
-  hand-written interfaces in `circuits/`), with spice model bindings
-  declared ad hoc until T7c's parts DB owns them. Boundary: stimulus
-  and `.meas` assertions stay in external bench decks — the DSL emits
-  the circuit, benches drive it — so today's benches run unmodified
-  against either capture. **Blocked by:** — · **Unblocks:** T7e
+- **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
+  netlists of `circuits/phy-segment/` and
+  `circuits/watchdog-supervisor/` in the DSL — the charge pump's
+  capture landed with T7d (2026-09-28) and its three benches already
+  run unmodified against the DSL emission — with equivalence tests:
+  the existing benches run against the DSL-emitted netlists and
+  reproduce the measured numbers recorded in DESIGN.md §2/§4. Needs
+  spice bindings beyond T7d's R/C/BAT54S set: external-subckt
+  instantiations (`ch32v003_tx_pin`, `sn74lvc1g3157`), `.include` of
+  `circuits/lib/*.spi`, subckt `params:`. Device models stay
+  hand-written includes. On shipping, the hand-written DUT `.cir`
+  files retire — the DSL becomes the single source of truth (§7), not
+  a second copy of it. **Blocked by:** — · **Unblocks:** —
 - **T8 — DSL constraint checking / property verification.** Electrical
   rules beyond KiCad ERC: bypass-path continuity under single-fault
   models, watchdog default-state assertions. Typed ports carry
@@ -181,15 +186,6 @@ ______________________________________________________________________
   lexically-scoped `with`-block for implicit power/ground (scope stays
   explicit — the no-implicit-global-circuit rule holds). **Blocked
   by:** — · **Unblocks:** —
-- **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
-  netlists of `circuits/phy-segment/`, `circuits/watchdog-chargepump/`,
-  and `circuits/watchdog-supervisor/` in the DSL, with equivalence
-  tests: the existing benches run against the DSL-emitted netlists and
-  reproduce the measured numbers recorded in DESIGN.md §2/§4. Device
-  models (`circuits/lib/*.spi`) stay hand-written includes. On
-  shipping, the hand-written DUT `.cir` files retire — the DSL becomes
-  the single source of truth (§7), not a second copy of it.
-  **Blocked by:** T7d · **Unblocks:** —
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
