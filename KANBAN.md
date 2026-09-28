@@ -40,7 +40,6 @@ graph TD
     T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
-    T16e[T16e coverage on release] --> T11[T11 node firmware v0]
 ```
 
 ______________________________________________________________________
@@ -125,10 +124,6 @@ ______________________________________________________________________
   table feeds both this generator and the §5 GPIO-budget check
   (PolymorphicBlocks steal, 2026-09-27). **Blocked by:** — ·
   **Unblocks:** T11
-- **T16e — Coverage measured on the release build.** SQLite doctrine
-  (§8): branch coverage of the freestanding *release* configuration —
-  tests exercise what actually ships — wired as a script target in the
-  flake shell. **Blocked by:** — · **Unblocks:** T11
 - **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
   re-route vs hardware auto-bypass vs both (DESIGN.md §3). T5's
   detection hooks: supervisor frame-echo comparison, illegal-cell
@@ -252,7 +247,7 @@ ______________________________________________________________________
   target. Defines `lib::verify_failed`, the §4 VERIFY failure hook
   whose wiring point T18 landed (2026-09-28): report over the debug
   transport, then stop the keep-alive strobe so the charge-pump
-  watchdog engages RX→TX bypass. **Blocked by:** T16e ·
+  watchdog engages RX→TX bypass. **Blocked by:** — ·
   **Unblocks:** T12
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.

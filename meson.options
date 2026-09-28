@@ -1,0 +1,6 @@
+# Fuzz harness optimization (buildtype=plain injects no -O, and the
+# fuzzer wants some). scripts/coverage-release overrides this to -O2 so
+# the coverage build measures the release optimization — a target-level
+# -O1 in firmware/protocol would otherwise shadow -Dcpp_args="-O2".
+option('fuzz_optimization', type: 'string', value: '-O1',
+  description: 'Optimization flag for the fuzz harnesses (-O1 normally; -O2 under scripts/coverage-release)')

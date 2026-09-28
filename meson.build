@@ -59,3 +59,10 @@ subdir('circuits')
 run_target('check-reproducible',
   command: find_program('scripts/check-reproducible'),
 )
+
+# Coverage on the release build (DESIGN.md §8, SQLite doctrine): branch
+# coverage of the release-optimized freestanding configuration, driven
+# by the meson test suite.
+run_target('coverage-release',
+  command: find_program('scripts/coverage-release'),
+)

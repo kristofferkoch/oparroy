@@ -941,8 +941,12 @@ GCC node, arm GCC supervisor, clang host) × build flavours (host
 objects, LLVM bitcode for KLEE, fuzzers, coverage-instrumented release)
 plus custom outputs (KLEE runs, DSL-generated headers per T9). Meson
 covers that natively — one cross/native file per toolchain, per-target
-flag overrides, `custom_target()` for bitcode/KLEE, `b_coverage` and
-the built-in test runner for T16e's coverage-on-release. CMake was the
+flag overrides, `custom_target()` for bitcode/KLEE, and the built-in
+test runner driving T16e's coverage-on-release (2026-09-28, T16e:
+clang source-based instrumentation + llvm-cov branch reporting, chosen
+over `b_coverage`/gcov — gcov-format data degrades on C++ at -O2, and
+llvm-cov reports exact branch coverage with tools already in the
+flake's LLVM set). CMake was the
 runner-up (toolchain-file ceremony, verbose custom commands); GNU make
 loses on the multi-toolchain matrix; tup ruled out (FUSE dependency,
 thin ecosystem). Provisioned through the flake like everything else.
@@ -1000,3 +1004,10 @@ resolves each is in KANBAN.md):
   characteristics.
   Answered by simulation first, then measured on the test board.
   Card: T15.
+- **Coverage threshold gate** (§8) — T16e (2026-09-28) measures branch
+  coverage of the release build (llvm-cov, informational only: 82% of
+  122 branches at landing). Whether to gate the build on a threshold,
+  and at what red line, is undecided; the infrastructure supports it
+  (`llvm-cov export` JSON) once the suite matures. Also open: whether
+  the shipped node image builds at the measured `-O2` or at `-Os`
+  (16 KB flash). Card: none yet.

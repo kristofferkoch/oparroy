@@ -59,11 +59,13 @@ if not meson.is_cross_build()
 
   # Fuzz harnesses (DESIGN.md §8 — alongside KLEE, not instead of it):
   # libFuzzer + ASan/UBSan over the same protocol core, driven by the
-  # fault-injection shims in fuzz/fuzz.hpp. -O1 because buildtype=plain
-  # injects no optimization and the fuzzer wants some. The entry point
-  # is the engine-agnostic LLVMFuzzerTestOneInput, so AFL++'s compat
-  # driver can reuse these harnesses unchanged.
-  fuzz_flags = ['-fsanitize=fuzzer,address,undefined', '-O1']
+  # fault-injection shims in fuzz/fuzz.hpp. -O1 (the fuzz_optimization
+  # default) because buildtype=plain injects no optimization and the
+  # fuzzer wants some; scripts/coverage-release sets -O2 so coverage is
+  # measured at the release optimization. The entry point is the
+  # engine-agnostic LLVMFuzzerTestOneInput, so AFL++'s compat driver
+  # can reuse these harnesses unchanged.
+  fuzz_flags = ['-fsanitize=fuzzer,address,undefined', get_option('fuzz_optimization')]
   fuzz_runs = []
   foreach harness : ['cell', 'node', 'ring']
     fuzz_exe = executable('fuzz-' + harness, 'fuzz' / (harness + '.cpp'),
@@ -77,6 +79,14 @@ if not meson.is_cross_build()
         meson.current_source_dir() / 'fuzz' / 'corpus' / harness,
         fuzz_exe,
       ],
+    )
+    # The seed corpora double as the meson test suite: -runs=0 executes
+    # every seed once (no mutation, no corpus writes), so `meson test`
+    # is the regression pass scripts/coverage-release measures (§8:
+    # coverage of the release configuration, driven by the test suite).
+    test('fuzz-' + harness, fuzz_exe,
+      args: ['-runs=0', meson.current_source_dir() / 'fuzz' / 'corpus' / harness],
+      suite: 'firmware',
     )
   endforeach
 
