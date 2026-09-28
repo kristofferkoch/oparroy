@@ -2,6 +2,7 @@
 // GCC cross build (rv32ec) and clang-tidy compiling the same headers the
 // KLEE bitcode targets include directly.
 
+#include "../lib/error_or.hpp"
 #include "../lib/range.hpp"
 #include "../lib/span.hpp"
 #include "../lib/static_vector.hpp"
@@ -94,7 +95,8 @@ namespace {
             vec.push_back(i);
         }
         // Bounded: growth past capacity asks, and is refused.
-        if (vec.try_push_back(9) != lib::GrowthResult::OutOfCapacity ||
+        const lib::ErrorOr<void> refused = vec.try_push_back(9);
+        if (!refused.is_error() || refused.error() != lib::Error::OutOfCapacity ||
             vec.size() != vec.capacity()) {
             return false;
         }
