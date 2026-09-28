@@ -78,6 +78,14 @@ if not meson.is_cross_build()
         fuzz_exe,
       ],
     )
+    # The seed corpora double as the meson test suite: -runs=0 executes
+    # every seed once (no mutation, no corpus writes), so `meson test`
+    # is the regression pass scripts/coverage-release measures (§8:
+    # coverage of the release configuration, driven by the test suite).
+    test('fuzz-' + harness, fuzz_exe,
+      args: ['-runs=0', meson.current_source_dir() / 'fuzz' / 'corpus' / harness],
+      suite: 'firmware',
+    )
   endforeach
 
   # ninja fuzz: bounded regression runs of every fuzz harness.
