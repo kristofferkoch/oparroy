@@ -41,7 +41,6 @@ graph TD
     T10 --> T12[T12 test-hw harness]
     T11 --> T12
     T16e[T16e coverage on release] --> T11[T11 node firmware v0]
-    T18[T18 freestanding foundation library] --> T11
 ```
 
 ______________________________________________________________________
@@ -126,15 +125,6 @@ ______________________________________________________________________
   table feeds both this generator and the §5 GPIO-budget check
   (PolymorphicBlocks steal, 2026-09-27). **Blocked by:** — ·
   **Unblocks:** T11
-- **T18 — Freestanding foundation library.** AK-inspired (DESIGN.md
-  §8): `ErrorOr<T>`, `TRY` propagation macro, fallible `try_*` APIs,
-  fixed-capacity containers, ownership types over static arenas,
-  `VERIFY` hook wired to the watchdog policy (§4). 2026-09-26: `Span`,
-  `irange`, `StaticVector`, and the `VERIFY` macro itself landed in
-  `firmware/lib/`; what remains is `ErrorOr`/`TRY`, arenas, and wiring
-  VERIFY's target failure hook to §4. Host-compilable so
-  T16's KLEE/fuzz harnesses exercise it from day one. **Blocked by:**
-  — · **Unblocks:** T11
 - **T16e — Coverage measured on the release build.** SQLite doctrine
   (§8): branch coverage of the freestanding *release* configuration —
   tests exercise what actually ships — wired as a script target in the
@@ -242,7 +232,11 @@ ______________________________________________________________________
   Developed inside the verification harness (T16b–e) from the first
   commit. Trill pattern (docs/bela-lessons-2026-09-26.md §2): aim for
   **one firmware image, personality by node-type ID** — a single HIL
-  target. **Blocked by:** T16e, T18 · **Unblocks:** T12
+  target. Defines `lib::verify_failed`, the §4 VERIFY failure hook
+  whose wiring point T18 landed (2026-09-28): report over the debug
+  transport, then stop the keep-alive strobe so the charge-pump
+  watchdog engages RX→TX bypass. **Blocked by:** T16e ·
+  **Unblocks:** T12
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
