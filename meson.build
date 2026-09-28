@@ -50,6 +50,7 @@ repro_flags = [
 
 add_project_arguments(freestanding_flags + repro_flags, language: 'cpp')
 
+subdir('firmware/lib')
 subdir('firmware/protocol')
 subdir('circuits')
 

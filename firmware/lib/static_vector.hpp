@@ -17,19 +17,18 @@
 // split): push_back is the contract — full means the caller mis-sized,
 // a bug, so it VERIFYs and KLEE proves the trap unreachable;
 // try_push_back is for data-driven fills, where "full" is
-// environmental and the caller holds the policy. T18's ErrorOr<void>
-// subsumes GrowthResult when it lands. Bounds are carried, not checked
-// — same doctrine as Span (span.hpp).
+// environmental and the caller holds the policy — it returns
+// ErrorOr<void> (error_or.hpp, subsumed the original GrowthResult
+// 2026-09-28, T18). Bounds are carried, not checked — same doctrine as
+// Span (span.hpp).
 
+#include "error_or.hpp"
 #include "verify.hpp"
 
 #include <cstddef>
-#include <cstdint>
 #include <type_traits>
 
 namespace lib {
-
-enum class GrowthResult : uint8_t { Ok, OutOfCapacity };
 
 template <typename T, std::size_t Capacity> class StaticVector {
     static_assert(Capacity > 0, "T[0] is not ISO C++");
@@ -49,13 +48,13 @@ public:
         ++m_size;
     }
 
-    [[nodiscard]] constexpr GrowthResult try_push_back(const T& value) {
+    [[nodiscard]] constexpr ErrorOr<void> try_push_back(const T& value) {
         if (m_size == Capacity) {
-            return GrowthResult::OutOfCapacity;
+            return Error::OutOfCapacity;
         }
         m_storage[m_size] = value;
         ++m_size;
-        return GrowthResult::Ok;
+        return {};
     }
 
     constexpr void clear() {
