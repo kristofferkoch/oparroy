@@ -740,21 +740,25 @@ filters (`Connector*:*_1x??_*`) work.
 Port limit ranges and waivers (2026-09-28, card T8): typed ports carry
 electrical limit **ranges** — `Circuit.port(..., source=…, sink=…)`
 taking `Limits(voltage=Interval, current=…)` — and the validation pass
-checks **interval containment** at every instance binding: a sink's
-acceptable range must cover the connected source's output range
+checks **interval containment** over every net's declared endpoints: a
+sink's acceptable range must cover the connected source's output range
 (PolymorphicBlocks steal, 2026-09-27), so tolerance stackup becomes
 checkable data. Voltage is checked when declared, current when both
-sides carry it; an undeclared side is no data, not a finding. The check
-runs over the instance bindings before flattening, so findings and
-waivers address hierarchical paths (`WD1/ka`). **Waivers are capture
-data** — `Circuit.waive(check, path, reason=…)`, never comment-style
-suppression: a waived error degrades to a `WAIVED` finding (visible in
-the report, not erased, not blocking) and a waiver matching nothing
-warns as stale. `design/watchdog_chargepump.py` declares the first
-contracts (`ka` accepts 0..3.6 V, `sel` drives 0..3.3 V). Still open:
-the bypass-path single-fault and watchdog default-state checks, which
-need the board-level captures they inspect, and pin/part-level ranges
-(today only ports carry them).
+sides carry it; an undeclared side is no data, not a finding. Grouping
+per net — not per binding — covers sibling instances wired
+port-to-port through a plain net, the common board-level case. The
+check runs over the instance hierarchy before flattening, so findings
+and waivers address hierarchical paths (`WD1/ka`). **Waivers are
+capture data** — `Circuit.waive(check, path, reason=…)`, never
+comment-style suppression: a waived error degrades to a `WAIVED`
+finding (visible in the report, not erased, not blocking) and a waiver
+matching nothing warns as stale. A waiver declared inside a
+subcircuit is relative to it; instantiation prefixes the path.
+`design/watchdog_chargepump.py` declares the first contracts (`ka`
+accepts 0..3.6 V, `sel` drives 0..3.3 V). Still open: the bypass-path
+single-fault and watchdog default-state checks, which need the
+board-level captures they inspect, and pin/part-level ranges (today
+only ports carry them — port arrays and bundles not included).
 
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one

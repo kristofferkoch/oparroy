@@ -82,7 +82,7 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
     """
     issues: list[Issue] = []
     issues.extend(_check_port_ranges(circuit, ()))
-    waivers = circuit.waivers
+    waivers = tuple(_collect_waivers(circuit, ()))
     if circuit.instances:
         circuit = circuit.flatten()
     for ref in sorted(circuit.parts, key=natural_key):
@@ -92,41 +92,84 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
     return _apply_waivers(issues, waivers)
 
 
-def _check_port_ranges(circuit: Circuit, prefix: tuple[str, ...]) -> list[Issue]:
-    """Interval containment over instance port bindings (T8), recursively.
+def _collect_waivers(circuit: Circuit, prefix: tuple[str, ...]) -> list[Waiver]:
+    """Gather the circuit's and its instances' waivers, paths fully prefixed.
 
-    A bound pair is checked when both sides declare the matching range:
-    the sink's acceptable interval must cover the source's output
-    interval, per quantity — voltage when declared, current when both
-    sides carry one. An undeclared side is no data, not a finding.
+    A waiver declared inside a subcircuit addresses a path relative to
+    that subcircuit; instantiation prefixes it with the instance path,
+    so ``IN1/vin`` inside ``WD1`` addresses ``WD1/IN1/vin``.
+    """
+    base = "/".join(prefix)
+    collected = [
+        Waiver(w.check, f"{base}/{w.path}" if base else w.path, w.reason)
+        for w in circuit.waivers
+    ]
+    for instance in circuit.instances.values():
+        collected.extend(_collect_waivers(instance.circuit, (*prefix, instance.name)))
+    return collected
+
+
+def _check_port_ranges(circuit: Circuit, prefix: tuple[str, ...]) -> list[Issue]:
+    """Interval containment over the port ranges sharing a net (T8), recursively.
+
+    Every declared sink on a net — a bound port's or the net's own —
+    must cover every declared source on that net, per quantity: voltage
+    when declared, current when both sides carry one. An undeclared
+    side is no data, not a finding. Checking per net rather than per
+    binding covers the common board-level case: one instance's output
+    port wired straight into a sibling's input port over a plain net.
+    An endpoint is never checked against its own other face — a
+    pass-through port's two faces are each checked at their own level.
     """
     issues: list[Issue] = []
+    bindings: dict[Net, list[tuple[str, Net]]] = {}
     for instance in circuit.instances.values():
         child_ports = instance.circuit.ports
         for port_name, parent_net in instance.connections.items():
-            port = child_ports[port_name]
             path = "/".join((*prefix, instance.name, port_name))
-            if port.sink is not None and parent_net.source is not None:
-                issues.extend(
-                    _covers(
-                        path,
-                        f"port {path!r}",
-                        port.sink,
-                        f"net {parent_net.name!r}",
-                        parent_net.source,
-                    )
-                )
-            if port.source is not None and parent_net.sink is not None:
-                issues.extend(
-                    _covers(
-                        path,
-                        f"net {parent_net.name!r}",
-                        parent_net.sink,
-                        f"port {path!r}",
-                        port.source,
-                    )
-                )
+            bindings.setdefault(parent_net, []).append((path, child_ports[port_name]))
         issues.extend(_check_port_ranges(instance.circuit, (*prefix, instance.name)))
+    for net, ports in bindings.items():
+        issues.extend(_check_net_ranges(net, ports))
+    return issues
+
+
+def _check_net_ranges(net: Net, ports: list[tuple[str, Net]]) -> list[Issue]:
+    """Check every declared sink on ``net`` against every declared source.
+
+    ``ports`` are the (hierarchical path, port net) pairs bound to
+    ``net``. An endpoint is never checked against its own other face —
+    a pass-through port's two faces are each checked at their own
+    level.
+    """
+    # Each endpoint: (key, description, waiver path, limits). A net
+    # endpoint has no path of its own — the finding addresses the port
+    # it faces.
+    sinks: list[tuple[tuple[str, str], str, str, Limits]] = []
+    sources: list[tuple[tuple[str, str], str, str, Limits]] = []
+    if net.sink is not None:
+        sinks.append((("net", net.name), f"net {net.name!r}", "", net.sink))
+    if net.source is not None:
+        sources.append((("net", net.name), f"net {net.name!r}", "", net.source))
+    for path, port in ports:
+        if port.sink is not None:
+            sinks.append((("port", path), f"port {path!r}", path, port.sink))
+        if port.source is not None:
+            sources.append((("port", path), f"port {path!r}", path, port.source))
+    issues: list[Issue] = []
+    for sink_key, sink_desc, sink_path, sink in sinks:
+        for source_key, source_desc, source_path, source in sources:
+            if sink_key == source_key:
+                continue
+            issues.extend(
+                _covers(
+                    sink_path or source_path,
+                    sink_desc,
+                    sink,
+                    source_desc,
+                    source,
+                )
+            )
     return issues
 
 

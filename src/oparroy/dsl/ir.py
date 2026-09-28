@@ -661,9 +661,11 @@ class Circuit:
         auditable in review, never comment-style suppression (T8).
         ``check`` is the check id the finding carries (e.g.
         ``"range-containment"``); ``path`` is the '/'-separated
-        hierarchical path it reports (``WD1/ka``). A waived error
-        degrades to a WAIVED finding — visible, not erased — and a
-        waiver that matches no finding warns as stale.
+        hierarchical path it reports (``WD1/ka``), relative to this
+        circuit — declared inside a subcircuit, instantiation prefixes
+        it (``IN1/vin`` inside ``WD1`` addresses ``WD1/IN1/vin``). A
+        waived error degrades to a WAIVED finding — visible, not erased
+        — and a waiver that matches no finding warns as stale.
         """
         if not check:
             msg = "a waiver needs a check id"
