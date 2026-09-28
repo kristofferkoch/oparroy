@@ -52,6 +52,7 @@ add_project_arguments(freestanding_flags + repro_flags, language: 'cpp')
 
 subdir('firmware/lib')
 subdir('firmware/protocol')
+subdir('firmware/node')
 subdir('circuits')
 
 # Reproducibility gate (DESIGN.md §8): builds every configuration twice
