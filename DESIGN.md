@@ -1004,3 +1004,10 @@ resolves each is in KANBAN.md):
   characteristics.
   Answered by simulation first, then measured on the test board.
   Card: T15.
+- **Coverage threshold gate** (§8) — T16e (2026-09-28) measures branch
+  coverage of the release build (llvm-cov, informational only: 82% of
+  122 branches at landing). Whether to gate the build on a threshold,
+  and at what red line, is undecided; the infrastructure supports it
+  (`llvm-cov export` JSON) once the suite matures. Also open: whether
+  the shipped node image builds at the measured `-O2` or at `-Os`
+  (16 KB flash). Card: none yet.
