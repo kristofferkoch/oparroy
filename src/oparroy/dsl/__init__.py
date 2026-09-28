@@ -8,7 +8,8 @@ including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.kicad_emit`), Graphviz dot (:mod:`oparroy.dsl.dot`),
 ngspice DUT netlist (:mod:`oparroy.dsl.spice_emit`).
 Typed jellybean parts live in :mod:`oparroy.dsl.parts`; KiCad library
-access lives in :mod:`oparroy.dsl.kicadlib`.
+access lives in :mod:`oparroy.dsl.kicadlib`; the parts DB with
+assembler-stock status lives in :mod:`oparroy.dsl.parts_db`.
 """
 
 from oparroy.dsl.check import (
@@ -42,6 +43,15 @@ from oparroy.dsl.ir import (
 from oparroy.dsl.kicad_emit import emit_netlist
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
 from oparroy.dsl.parts import Bat54s, BundleConnector, Capacitor, Resistor, TypedPart
+from oparroy.dsl.parts_db import (
+    PartFilter,
+    PartRecord,
+    PartsDb,
+    PartsDbError,
+    SpiceModel,
+    Stock,
+    Tier,
+)
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 
@@ -63,15 +73,22 @@ __all__ = [
     "Limits",
     "Net",
     "Part",
+    "PartFilter",
+    "PartRecord",
+    "PartsDb",
+    "PartsDbError",
     "Pin",
     "PinType",
     "PortArray",
     "Resistor",
     "Severity",
+    "SpiceModel",
+    "Stock",
     "Subcircuit",
     "Symbol",
     "SymbolPin",
     "SymbolTable",
+    "Tier",
     "TypedPart",
     "UnknownSymbolError",
     "Waiver",

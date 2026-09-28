@@ -17,6 +17,11 @@ interface contracts: ``ka`` accepts 0..3.6 V (3V3 logic from the MCU),
 instantiating parent checks interval containment against its own
 declared ranges.
 
+Part bins resolve from the parts DB (``design/parts_db.py``, T7c):
+``R0603``/``C0603`` are the shared 0603 bins, and the BAT54S's
+symbol/value/footprint pair comes from the ``bat54s`` record rather
+than a per-capture declaration.
+
 Usage (in the nix dev shell):
 
     python -m design.watchdog_chargepump            # check + netlist
@@ -27,14 +32,15 @@ Usage (in the nix dev shell):
 import argparse
 import sys
 
+from design.parts_db import C0603, PARTS, R0603
 from oparroy.dsl import (
-    Bat54s,
-    Capacitor,
+    Bat54s as _Bat54s,
+)
+from oparroy.dsl import (
     Circuit,
     Interval,
     KiCadLibraries,
     Limits,
-    Resistor,
     Subcircuit,
     SymbolTable,
     check,
@@ -44,22 +50,14 @@ from oparroy.dsl import (
     to_dot,
 )
 
-# Ad-hoc spice model bindings (until T7c's parts DB owns them): the
-# BAT54S-class pump diodes, stand-in parameters from
+# Ad-hoc spice model bindings (the parts DB owns the records since
+# T7c, but emitter-side model resolution is T23's): the BAT54S-class
+# pump diodes, stand-in parameters from
 # circuits/watchdog-chargepump/watchdog-chargepump.cir's dpump model.
 SPICE_MODELS = {"BAT54S": "d(is=200n n=1.0 rs=5 tt=1n bv=30)"}
 
-
-class R0603(Resistor):
-    """The project's 0603 resistor bin: class-default footprint (§7)."""
-
-    default_footprint = "Resistor_SMD:R_0603_1608Metric"
-
-
-class C0603(Capacitor):
-    """The project's 0603 capacitor bin: class-default footprint (§7)."""
-
-    default_footprint = "Capacitor_SMD:C_0603_1608Metric"
+#: The §4 series pair, bound from the DB's ``bat54s`` record (T7c).
+Bat54s = PARTS.bind("bat54s", _Bat54s, class_name="Bat54s")
 
 
 class WatchdogChargePump(Subcircuit):
