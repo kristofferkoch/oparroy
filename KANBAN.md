@@ -104,11 +104,6 @@ ______________________________________________________________________
   construction: plain-Python capture semantics hold (PB's `IntLike`
   interleaving is the anti-pattern). **Blocked by:** — ·
   **Unblocks:** —
-- **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
-  re-route vs hardware auto-bypass vs both (DESIGN.md §3). T5's
-  detection hooks: supervisor frame-echo comparison, illegal-cell
-  detection, and the pull-down-parked idle-low segment (§2 measured
-  block). **Blocked by:** — · **Unblocks:** —
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
   in PR #17 review, 2026-09-28): `TEST_CASE`/`EXPECT` macros over a
   tiny report hook — failure index as exit code freestanding,
@@ -214,7 +209,7 @@ ______________________________________________________________________
   whose wiring point T18 landed (2026-09-28): report over the debug
   transport, then stop the keep-alive strobe so the charge-pump
   watchdog engages RX→TX bypass. **Blocked by:** — ·
-  **Unblocks:** T12
+  **Unblocks:** T12, T13
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
@@ -245,3 +240,25 @@ ______________________________________________________________________
   block, resolve the §9 cable-reach open question, and decide the
   broken-loop power policy (≤ 5 m segments vs §2.1 second-tap
   injection). **Blocked by:** T10 · **Unblocks:** —
+- **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
+  re-route vs hardware auto-bypass vs both (DESIGN.md §3, §9).
+  **Postponed 2026-09-28:** the decision is unratifiable before the
+  substrate it polices exists — no frame format, no firmware
+  prototype, no node schematic. PR #6's analysis
+  (`docs/intermittent-fault-strategy-2026-09-28.md`, on the retained
+  branch `t13-intermittent-fault-strategy`; PR closed unmerged) is
+  the starting point on pickup: it recommends a layered split —
+  protocol re-route with anti-flap hysteresis for segment faults, the
+  §4 charge-pump bypass for MCU death, deliberate self-bypass as the
+  escalation rung, no new hardware. Open questions recorded in PR
+  #6's closing discussion, to be answered before ratification:
+  hysteresis observability under one-direction RX source select,
+  flap-latch semantics on subsequent faults, flap contagion between
+  adjacent nodes, escalation-command delivery over the flapping
+  fabric, and ring-level convergence as a proof obligation. Direction
+  to design for in T11: **protocol-level keepalive** — a healthy line
+  is never silent longer than ~1 s — so silence is an unambiguous
+  fault signal and flip policy keys on edge presence, not decode
+  quality. T5's detection hooks: supervisor frame-echo comparison,
+  illegal-cell detection, and the pull-down-parked idle-low segment
+  (§2 measured block). **Blocked by:** T11 · **Unblocks:** —
