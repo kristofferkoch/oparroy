@@ -98,13 +98,6 @@ ______________________________________________________________________
   construction: plain-Python capture semantics hold (PB's `IntLike`
   interleaving is the anti-pattern). **Blocked by:** — ·
   **Unblocks:** —
-- **T9 — Firmware header generation from the DSL.** Pin maps and
-  peripheral assignments emitted for the CH32V003 (DESIGN.md §5).
-  Captures request pins by function (`gpio.request("keepalive")`),
-  pin numbers bind late as refinement data — one authoritative pin
-  table feeds both this generator and the §5 GPIO-budget check
-  (PolymorphicBlocks steal, 2026-09-27). **Blocked by:** — ·
-  **Unblocks:** T11
 - **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
   re-route vs hardware auto-bypass vs both (DESIGN.md §3). T5's
   detection hooks: supervisor frame-echo comparison, illegal-cell
@@ -231,7 +224,12 @@ ______________________________________________________________________
   (vsync) output apply and input sampling per §2's global-shutter
   rule.
   Developed inside the verification harness (T16b–e) from the first
-  commit. Trill pattern (docs/bela-lessons-2026-09-26.md §2): aim for
+  commit. First consumer of the T9 pin map: wire
+  `firmware/node/pins.hpp` regeneration into meson as a
+  `custom_target()` (a documented manual step since 2026-09-28 —
+  `python -m design.node_pins > firmware/node/pins.hpp`, drift caught
+  by the golden + firmware-copy tests). Trill pattern
+  (docs/bela-lessons-2026-09-26.md §2): aim for
   **one firmware image, personality by node-type ID** — a single HIL
   target. Defines `lib::verify_failed`, the §4 VERIFY failure hook
   whose wiring point T18 landed (2026-09-28): report over the debug

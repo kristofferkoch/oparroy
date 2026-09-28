@@ -77,6 +77,17 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
+- **Pin-map scarcity lint / auto-assignment** (2026-09-28, follows T9):
+  `check_pin_map` verifies a hand-written binding; it does not yet
+  *judge* it. A scarcity pass could warn when a pad with rare
+  capabilities (the four OPA inputs, ADC channels, FT pins) is burned
+  on a plain GPIO function that any pad could serve — and eventually
+  solve the binding itself, PolymorphicBlocks-style (the same steal as
+  T9's late binding): requests declare constraints, the solver picks
+  pads, the human reviews the diff. Deferred: at 18 pads the
+  assignment is a pleasant puzzle by hand and an explicit binding
+  reviews better; revisit when the CI board's supervisor (RP2040, 30
+  GPIO) or a second node MCU makes the table big enough to drift.
 - **Fanout-driven net-label elision for generated drawings**
   (2026-09-27): when generating circuit drawings (feeds T21's survey
   and whatever renderer follows the dot dump), the highest-fanout nets

@@ -6,7 +6,8 @@ including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.subcircuit`) — a validation pass
 (:mod:`oparroy.dsl.check`), and emitters — KiCad netlist
 (:mod:`oparroy.dsl.kicad_emit`), Graphviz dot (:mod:`oparroy.dsl.dot`),
-ngspice DUT netlist (:mod:`oparroy.dsl.spice_emit`).
+ngspice DUT netlist (:mod:`oparroy.dsl.spice_emit`), freestanding-C++
+pin headers (:mod:`oparroy.dsl.pinmap`).
 Typed jellybean parts live in :mod:`oparroy.dsl.parts`; KiCad library
 access lives in :mod:`oparroy.dsl.kicadlib`; the parts DB with
 assembler-stock status lives in :mod:`oparroy.dsl.parts_db`. The
@@ -51,7 +52,6 @@ from oparroy.dsl.kicad_pcb import (
     EdgeKind,
     Footprint,
     NetClass,
-    Pad,
     PcbError,
     Point,
     Rect,
@@ -60,6 +60,9 @@ from oparroy.dsl.kicad_pcb import (
     Via,
     Zone,
     parse_board,
+)
+from oparroy.dsl.kicad_pcb import (
+    Pad as PcbPad,
 )
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
 from oparroy.dsl.layout_check import (
@@ -85,10 +88,20 @@ from oparroy.dsl.pcb_emit import (
     PcbSpecError,
     emit_pcb,
 )
+from oparroy.dsl.pinmap import (
+    CH32V003F4P6,
+    Chip,
+    Pad,
+    PinMap,
+    PinRequest,
+    check_pin_map,
+    emit_pin_header,
+)
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 
 __all__ = [
+    "CH32V003F4P6",
     "RANGE_CONTAINMENT",
     "AdjacencyRule",
     "Bat54s",
@@ -98,6 +111,7 @@ __all__ = [
     "BypassRule",
     "Capacitor",
     "CheckError",
+    "Chip",
     "Circuit",
     "DefinitionError",
     "Edge",
@@ -122,9 +136,12 @@ __all__ = [
     "PartsDb",
     "PartsDbError",
     "PcbError",
+    "PcbPad",
     "PcbSpec",
     "PcbSpecError",
     "Pin",
+    "PinMap",
+    "PinRequest",
     "PinType",
     "Point",
     "PortArray",
@@ -147,8 +164,10 @@ __all__ = [
     "Zone",
     "check",
     "check_layout",
+    "check_pin_map",
     "emit_netlist",
     "emit_pcb",
+    "emit_pin_header",
     "emit_spice",
     "parse_board",
     "raise_on_errors",

@@ -60,7 +60,8 @@ port arrays and bundles, and a flattening pass,
 validation pass, KiCad netlist emitter, ngspice simulation-netlist
 emitter, KiCad library access, typed
 jellybean parts and connector blocks, the parts DB with
-assembler-stock status, dot dump) lives in `src/oparroy/dsl/`; circuit captures
+assembler-stock status, dot dump, firmware pin-header
+generation with the GPIO-budget check) lives in `src/oparroy/dsl/`; circuit captures
 live in `design/` (DESIGN.md §7 DSL shape). Firmware is freestanding
 C++ (no standard library; RAII, placement new on memory-mapped I/O)
 under an aviation-grade rule set, statically checked, KLEE-verified

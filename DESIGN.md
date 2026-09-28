@@ -803,6 +803,27 @@ snapshots with provenance, never live data — re-query JLCPCB before
 ordering. Full emitter-side resolution against value bins is T23's
 solve pass.
 
+Firmware pin maps (2026-09-28, card T9): `pinmap.py` — pins are
+requested by function (`gpio.request("keepalive")`), pads bind late as
+refinement data (`gpio.bind(keepalive="PD3")`), and the one
+authoritative table feeds both consumers: `emit_pin_header` (the
+freestanding-C++ header — `constexpr` pads plus peripheral-channel
+constants, code-std.md §7 style) and `check_pin_map` (the §5
+GPIO-budget check: the bound pad carries every used signal, one
+function per pad, reservations honored, requests + reservations inside
+the chip's GPIO count). Chip data (`Chip`/`Pad`) is datasheet-derived —
+the CH32V003F4P6 table covers the default alternates only (DS0 §2.1,
+datasheets/CH32V003/notes/gpio-pinout.md); AFIO remaps are refinement
+room, added when a binding needs one. `design/node_pins.py` is the
+node table — 16 function requests plus the SWIO reservation = **17 of
+18 GPIO, PC7 spare**, verifying §3's "~16–17 of 18" at pin-map time as
+§3 predicted (T9/T11) — and `firmware/node/pins.hpp` is the generated
+header, byte-pinned by `tests/golden/node-pins.hpp` and compile-proven
+on both toolchains (`firmware/node/pins.cpp`: host clang + rv32ec
+GCC). Regeneration stays a manual step
+(`python -m design.node_pins > firmware/node/pins.hpp`); meson
+`custom_target()` wiring lands with the first consumer (T11).
+
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one
 unit), composed into boards — not drawn flat into a board schematic.
