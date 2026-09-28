@@ -870,7 +870,16 @@ have modern C++ ergonomics without exceptions:
 
 Not copied from AK: anything POSIX-flavored, hidden allocation,
 infinite growth. The node library's spine is fixed-capacity containers
-with explicit `try_` growth. Rule set: **project-owned** (decided
+with explicit `try_` growth. Landed in `firmware/lib/`: `Span`,
+`irange`, `StaticVector`, `VERIFY` (2026-09-26); `Error`/`ErrorOr<T>`/
+`ErrorOr<void>` + `TRY` (`GrowthResult` subsumed — `try_*` now returns
+`ErrorOr<void>`), `StaticArena` + `ArenaPtr` ownership over static
+slot pools, `UNREACHABLE`, and VERIFY's target personality
+(`-DOPARROY_TARGET` → `lib::verify_failed`, the §4 wiring point — the
+node firmware's hook definition lands with T11) (2026-09-28, T18).
+`Error` is a bare `enum class` code, not AK's string-carrying class —
+widen to a payload-carrying class the day an error needs more than a
+code. Rule set: **project-owned** (decided
 2026-09-26, T16b) — `code-std.md` at the repo root, borrowing the
 defect-preventing rules from JSF AV C++ / MISRA C++:2023 / AUTOSAR
 C++14 / CERT and dropping checker-driven superstition (single-exit,
