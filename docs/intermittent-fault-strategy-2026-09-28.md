@@ -142,9 +142,14 @@ to be tuned on the test board (T10/T12), not decisions:
    circulation) on a direction before it may be re-selected. "Clean" =
    no illegal-cell trip, no frame-cap mute, break where expected.
 1. **Flip-rate cap** — at most 1 flip per 32 frames. A second silence
-   inside the window is absorbed by staying put: the other direction
-   still carries the frame (symmetric rebroadcast, §3), so staying put
-   costs nothing.
+   inside the window is absorbed by staying put. The cost is not zero:
+   the staying node is deaf on its selected source (RX source select
+   listens to one direction at a time, §3), so it misses frames for the
+   rest of the window — a bounded, single-node outage, ≤ 32 frames
+   ≈ 19 ms at the baseline circulation. Symmetric rebroadcast (§3)
+   confines the cost to that one node: every other node still has a
+   live direction to select. Cheap against re-entering a flap, and the
+   flap latch (next item) bounds the repetition.
 1. **Flap latch** — F flips inside a window (start: 8 flips/s) latches
    the node onto its current direction and raises a fault flag in its
    telemetry slot; the supervisor's echo comparison plus the §4.1
