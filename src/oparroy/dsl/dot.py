@@ -3,7 +3,8 @@
 Parts and nets form a bipartite graph — part records on one side, net
 ellipses on the other, edges labeled with pin numbers (and names, when
 the symbol gives one). Deliberately simple; abstraction-level block
-views are T21's research question (DESIGN.md §7 DSL shape).
+views are card T25 (prior art:
+docs/prior-art-schematic-gen-2026-09-28.md, DESIGN.md §7 DSL shape).
 """
 
 from oparroy.dsl.ir import Circuit, Pin, natural_key
@@ -13,7 +14,7 @@ def to_dot(circuit: Circuit) -> str:
     """Render the circuit as a Graphviz dot graph.
 
     A hierarchical circuit (one with instances) is flattened first —
-    the flat bipartite view; cluster rendering is T21 territory.
+    the flat bipartite view; cluster rendering is T25 territory.
     """
     if circuit.instances:
         circuit = circuit.flatten()

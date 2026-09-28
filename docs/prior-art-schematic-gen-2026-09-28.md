@@ -160,18 +160,28 @@ Layout-engine candidates, ranked for oparroy:
 
 1. **grandalf** ([GitHub](https://github.com/bdcht/grandalf),
    [PyPI](https://pypi.org/project/grandalf/)) — pure-Python Sugiyama
-   layered layout with an orthogonal edge router, uv-installable, no
-   runtime beyond Python, deliberately hackable ("simple enough to
-   tweak and hack any part"). Slower and less featured than ELK, but
-   our graphs are tiny: a board is tens of subcircuit boxes, a
-   subcircuit is tens of parts. Fits the own-the-IR philosophy (§7):
-   patching a pure-Python Sugiyama for schematic-specific rules (port
-   sides, power stubs) is feasible where patching ELK is not.
+   layered layout, uv-installable, no runtime beyond Python,
+   deliberately hackable ("simple enough to tweak and hack any
+   part"). Two caveats verified against the 0.8 source (2026-09-28):
+   **no orthogonal router** — the shipped edge routers are
+   straight-line, spline, and rounded-corner, so the 90° wiring is the
+   piece we'd patch in — and the license is **GPLv2 | EPLv1**: take
+   EPL-1.0 and depend on it unmodified via uv, because distributing a
+   patched copy drags our patches under EPL (patching stays feasible,
+   but as an upstreamed or separately-published change, never vendored
+   into this MIT tree). Latest release 0.8 (2023-01) — quiet, like
+   netlistsvg; pure Python over tiny graphs makes that low-risk.
+   Slower and less featured than ELK, but our graphs are tiny: a board
+   is tens of subcircuit boxes, a subcircuit is tens of parts. Fits
+   the own-the-IR philosophy (§7): a pure-Python Sugiyama takes
+   schematic-specific rules (port sides, power stubs) where patching
+   ELK does not.
 1. **ELK via elkjs** — the capability leader (ports, hyperedges,
    hierarchy, orthogonal routing — everything netlistsvg uses), but
    drags Node.js into a Python pipeline; provisionable via the flake,
    still friction, and netlistsvg itself is unmaintained. The fallback
-   if grandalf's output quality disappoints.
+   if grandalf's output quality disappoints, and the only candidate
+   with orthogonal routing built in.
 1. **Graphviz dot** — already the baseline. No real port support, weak
    hyperedges; `splines=ortho` exists but fights record nodes. Keep for
    the flat dump; don't extend it.
@@ -192,8 +202,11 @@ Build (oparroy-owned, deliberately thin):
 - **Symbol graphics**: reuse KiCad symbol geometry. `kicadlib.py`
   parses pins today, not graphics — extending it to read symbol drawing
   primitives yields netlistsvg-style skins for free, from the same
-  libraries the netlist emitter validates against. Until then, generic
-  boxes with pin names suffice for review.
+  libraries the netlist emitter validates against. Prior art exists:
+  SKiDL's `generate_svg()` already converts KiCad library symbols into
+  netlistsvg skins — the conversion is proven; ours would live
+  in-tree. Until then, generic boxes with pin names suffice for
+  review.
 - **Output**: static SVG, golden-tested like the netlist emitter's
   byte-identical goldens. Not `.kicad_sch` — editable output is
   SKiDL's trap and buys review nothing.
@@ -205,5 +218,5 @@ Sequencing: **block view first** — small graphs, highest review value,
 exercises extraction before layout quality matters. Then the detail
 view on grandalf, golden-SVG tests in the house style.
 
-Follow-up: this wants a KANBAN card ("DSL review views: block +
-detail"). Not filed in this change — cards are the maintainer's call.
+Follow-up filed as KANBAN card **T25 — DSL review views: block +
+detail** (2026-09-28), blocked by T7bd.
