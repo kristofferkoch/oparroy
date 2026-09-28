@@ -62,15 +62,16 @@ ______________________________________________________________________
   2026-09-27). **Blocked by:** — · **Unblocks:** T24
 - **T22 — Node board design.** The single ring node as its own small
   board, designed **before** the CI board — the CI board is eight of
-  these tiles plus a supervisor (DESIGN.md §6). Full node circuit
-  captured in the DSL: CH32V003 + PHY front-end (§2), charge-pump
-  watchdog (§4), status LEDs (§4.1), terminal protection (§7
-  checklist), two segment connectors (§3 pinout — the T7bb
-  `design/segment.py` block); layout in KiCad, fabbed via JLCPCB (§6).
-  Settles the node-board stackup question (§9). First exercise of the
-  whole capture→layout round trip: footprint assignment and annotation
-  stages, real pcbnew netlist ingest (the T7a caveat, §7), and
-  back-annotation so refdes numbering follows physical placement (§7).
+  these tiles plus a supervisor (DESIGN.md §6). The DSL capture landed
+  2026-09-28: CH32V003 + PHY front-end (§2), charge-pump watchdog (§4),
+  status LEDs (§4.1), terminal protection (§7 checklist), two segment
+  connectors (§3 pinout — the T7bb `design/segment.py` block), plus the
+  footprint-assignment and annotation/back-annotation stages (§7).
+  Remaining: lay out the board in KiCad — the first real pcbnew netlist
+  ingest (the T7a caveat, §7) — validate the back-annotation join
+  against the real `.kicad_pcb` (so far tested against synthetic input
+  only), fab via JLCPCB (§6), and settle the node-board stackup
+  question (§9) at quote time.
   **Blocked by:** — · **Unblocks:** T10
 - **T19 — DSL layout property checker.** Parse `.kicad_pcb` and assert
   layout-level properties (DESIGN.md §7): bypass-path copper
