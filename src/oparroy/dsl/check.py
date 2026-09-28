@@ -54,7 +54,14 @@ class FootprintTable(Protocol):
 
 
 def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list[Issue]:
-    """Validate a finished circuit; returns the issue list."""
+    """Validate a finished circuit; returns the issue list.
+
+    A hierarchical circuit (one with instances) is flattened first, so
+    findings report hierarchical paths (``WD1/Rs``, net ``WD1/x``) and
+    bound port nets are checked as the merged parent net.
+    """
+    if circuit.instances:
+        circuit = circuit.flatten()
     issues: list[Issue] = []
     for ref in sorted(circuit.parts, key=natural_key):
         issues.extend(_check_part(circuit.parts[ref], footprints))
@@ -131,16 +138,19 @@ def _footprint_found(footprints: FootprintTable | None, footprint: str) -> bool 
 
 def _check_net(net: Net) -> list[Issue]:
     issues: list[Issue] = []
-    if not net.pins:
-        issues.append(Issue(Severity.WARNING, f"net {net.name!r} has no pins"))
-    elif len(net.pins) < _MIN_NET_PINS:
-        pin = net.pins[0]
-        issues.append(
-            Issue(
-                Severity.WARNING,
-                f"net {net.name!r} has a single pin ({pin.part.ref}.{pin.number})",
+    if not net.is_port:
+        # Port nets dangle by design — the instantiating parent binds
+        # them; pin-count and driver rules apply to the merged net.
+        if not net.pins:
+            issues.append(Issue(Severity.WARNING, f"net {net.name!r} has no pins"))
+        elif len(net.pins) < _MIN_NET_PINS:
+            pin = net.pins[0]
+            issues.append(
+                Issue(
+                    Severity.WARNING,
+                    f"net {net.name!r} has a single pin ({pin.part.ref}.{pin.number})",
+                )
             )
-        )
     drivers = [pin for pin in net.pins if pin.type is PinType.POWER_OUT]
     if len(drivers) > 1:
         refs = ", ".join(f"{p.part.ref}.{p.number}" for p in drivers)
@@ -154,7 +164,7 @@ def _check_net(net: Net) -> list[Issue]:
     # by a power-symbol pin (power:+3V3-class, whose pins are power_in).
     driven = bool(drivers) or any(pin.part.symbol.is_power for pin in net.pins)
     sinks = [pin for pin in net.pins if pin.type is PinType.POWER_IN]
-    if sinks and not driven:
+    if sinks and not driven and not net.is_port:
         issues.append(
             Issue(
                 Severity.WARNING,

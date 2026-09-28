@@ -7,6 +7,13 @@ flavor, references are explicit instance names), validated by
 ``oparroy.dsl.check``, and consumed by the emitters. Structural
 invariants (unique reference names, a pin on at most one net) raise at
 construction; everything electrical is the validation pass's job.
+
+Hierarchy is capture-time structure (§7): a circuit instantiates
+subcircuits (``Circuit.instance``) with declared port interfaces
+(``Circuit.port``), and ``Circuit.flatten`` is the pass that reduces
+the hierarchy to the flat IR checks and emitters consume — instance
+names prefix part references and internal nets, so identities stay
+stable across source edits and findings report hierarchical paths.
 """
 
 from __future__ import annotations
@@ -17,6 +24,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from oparroy.dsl.parts import TypedPart
 
 _NAT_SPLIT = re.compile(r"(\d+)")
@@ -58,6 +67,19 @@ class PinType(StrEnum):
 
 class DefinitionError(Exception):
     """A structural IR invariant was violated during capture."""
+
+
+def _reject_separator(kind: str, name: str) -> None:
+    """Reject '/', the hierarchy path separator, in a captured name.
+
+    Instance names, part references, and net names all become path
+    elements under flattening (``WD1/Rs``, ``WD1/x``), so none may
+    carry the separator — a '/' smuggled in at capture would collide
+    with, or masquerade as, a flattened path.
+    """
+    if "/" in name:
+        msg = f"{kind} {name!r} must not contain '/', the hierarchy path separator"
+        raise DefinitionError(msg)
 
 
 class UnknownSymbolError(DefinitionError):
@@ -156,17 +178,30 @@ class Part:
         symbol: Symbol,
         value: str | None,
         footprint: str | None,
+        *,
+        path: tuple[str, ...] = (),
     ) -> None:
         self._ref = ref
         self._symbol = symbol
         self.value = value
         self.footprint = footprint
+        self._path = path
         self._pins = {sp.number: Pin(self, sp) for sp in symbol.pins}
 
     @property
     def ref(self) -> str:
         """The reference designator, assigned explicitly at capture."""
         return self._ref
+
+    @property
+    def path(self) -> tuple[str, ...]:
+        """The instance path this part was flattened through.
+
+        Empty for a directly placed part; set by ``Circuit.flatten`` on
+        the flat copy — the hierarchy metadata (sheetpath) the KiCad
+        emitter and the layout checker key channelization on.
+        """
+        return self._path
 
     @property
     def symbol(self) -> Symbol:
@@ -197,14 +232,24 @@ class Part:
 class Net:
     """A named equipotential: the set of pins joined together."""
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, *, is_port: bool = False) -> None:
         self._name = name
+        self._is_port = is_port
         self._pins: list[Pin] = []
 
     @property
     def name(self) -> str:
         """The net name as it appears in emitted netlists."""
         return self._name
+
+    @property
+    def is_port(self) -> bool:
+        """True for ports — external-facing nets (``Circuit.port``).
+
+        A port is the subcircuit interface: ``Circuit.instance`` binds
+        every port to a parent net, and flattening merges the two.
+        """
+        return self._is_port
 
     @property
     def pins(self) -> tuple[Pin, ...]:
@@ -228,6 +273,43 @@ class Net:
         return f"<Net {self._name} ({len(self._pins)} pins)>"
 
 
+class Instance:
+    """One placed subcircuit: a captured child with its ports bound.
+
+    Built by ``Circuit.instance``; carries the child circuit and the
+    port bindings (port name → parent net) that ``Circuit.flatten``
+    consumes.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        circuit: Circuit,
+        connections: dict[str, Net],
+    ) -> None:
+        self._name = name
+        self._circuit = circuit
+        self._connections = dict(connections)
+
+    @property
+    def name(self) -> str:
+        """The instance name — the hierarchy path element."""
+        return self._name
+
+    @property
+    def circuit(self) -> Circuit:
+        """The captured child circuit."""
+        return self._circuit
+
+    @property
+    def connections(self) -> dict[str, Net]:
+        """Port bindings: port name → the parent net it sits on."""
+        return dict(self._connections)
+
+    def __repr__(self) -> str:
+        return f"<Instance {self._name} of {self._circuit.name!r}>"
+
+
 class Circuit:
     """One captured circuit: parts and nets, the unit of check and emit."""
 
@@ -239,6 +321,7 @@ class Circuit:
         self._symbols = symbols
         self._parts: dict[str, Part] = {}
         self._nets: dict[str, Net] = {}
+        self._instances: dict[str, Instance] = {}
 
     @property
     def name(self) -> str:
@@ -254,6 +337,16 @@ class Circuit:
     def nets(self) -> dict[str, Net]:
         """All nets by name (insertion order)."""
         return dict(self._nets)
+
+    @property
+    def ports(self) -> dict[str, Net]:
+        """Port nets by name — the subcircuit interface (insertion order)."""
+        return {name: net for name, net in self._nets.items() if net.is_port}
+
+    @property
+    def instances(self) -> dict[str, Instance]:
+        """All subcircuit instances by name (insertion order)."""
+        return dict(self._instances)
 
     def part(
         self,
@@ -273,6 +366,7 @@ class Circuit:
         A ``symbol`` string places an unwired part; wiring is
         ``connect``'s job. ``footprint`` overrides the spec's default.
         """
+        _reject_separator("part reference", ref)
         if isinstance(spec, str):
             msg = f"symbol {spec!r} must be passed as symbol={spec!r}"
             raise DefinitionError(msg)
@@ -334,20 +428,37 @@ class Circuit:
         resolved: Symbol,
         value: str | None,
         footprint: str | None,
+        *,
+        path: tuple[str, ...] = (),
     ) -> Part:
         if ref in self._parts:
             msg = f"duplicate part reference {ref!r}"
             raise DefinitionError(msg)
-        placed = Part(ref, resolved, value, footprint)
+        placed = Part(ref, resolved, value, footprint, path=path)
         self._parts[ref] = placed
         return placed
 
     def net(self, name: str) -> Net:
         """Declare a net by name; duplicate names are an error."""
+        _reject_separator("net name", name)
+        return self._add_net(name, is_port=False)
+
+    def port(self, name: str) -> Net:
+        """Declare a port: an external-facing net, the subcircuit interface.
+
+        A port wires like any net inside the subcircuit; a parent
+        instantiating it binds every port (``Circuit.instance``), and
+        flattening merges port and bound net. Port nets are exempt from
+        the dangling-net checks — reaching outside is their job.
+        """
+        _reject_separator("net name", name)
+        return self._add_net(name, is_port=True)
+
+    def _add_net(self, name: str, *, is_port: bool) -> Net:
         if name in self._nets:
             msg = f"duplicate net name {name!r}"
             raise DefinitionError(msg)
-        created = Net(name)
+        created = Net(name, is_port=is_port)
         self._nets[name] = created
         return created
 
@@ -388,6 +499,107 @@ class Circuit:
             msg = f"no net named {net!r} in circuit {self._name!r}"
             raise DefinitionError(msg) from None
 
+    def instance(
+        self,
+        name: str,
+        subcircuit: Callable[[Circuit], None],
+        /,
+        **connections: Net | str,
+    ) -> Instance:
+        """Instantiate a subcircuit: capture it, then bind its ports.
+
+        ``subcircuit`` is a capture — a ``Subcircuit`` or any callable
+        taking the fresh child circuit — run under ``name``. Every port
+        the capture declares must be bound by keyword to a parent net
+        (``board.instance("WD1", Watchdog(), ka=ka_net, …)``); unknown
+        or unconnected ports raise, so an interface drift breaks the
+        capture that introduced it, not a later stage.
+
+        The instance is capture-time structure only — nothing is
+        copied into this circuit until ``flatten`` runs.
+        """
+        if not name:
+            msg = "instance name must not be empty"
+            raise DefinitionError(msg)
+        _reject_separator("instance name", name)
+        if name in self._instances:
+            msg = f"duplicate instance name {name!r}"
+            raise DefinitionError(msg)
+        child = Circuit(name, self._symbols)
+        subcircuit(child)
+        ports = child.ports
+        unknown = sorted(set(connections) - set(ports), key=natural_key)
+        if unknown:
+            msg = (
+                f"instance {name!r}: the subcircuit has no ports {unknown} "
+                f"(declared: {sorted(ports, key=natural_key)})"
+            )
+            raise DefinitionError(msg)
+        missing = sorted(set(ports) - set(connections), key=natural_key)
+        if missing:
+            msg = f"instance {name!r}: ports {missing} left unconnected"
+            raise DefinitionError(msg)
+        resolved: dict[str, Net] = {}
+        for port_name, net in connections.items():
+            if not isinstance(net, Net | str):
+                msg = (
+                    f"instance {name!r}: port {port_name!r} bound to {net!r}, not a net"
+                )
+                raise DefinitionError(msg)
+            resolved[port_name] = self._resolve_net(net)
+        placed = Instance(name, child, resolved)
+        self._instances[name] = placed
+        return placed
+
+    def flatten(self) -> Circuit:
+        """Reduce the instance hierarchy to a new flat circuit.
+
+        Flattening is a pass (§7): the hierarchical capture stays the
+        source, this produces the flat IR checks and emitters consume.
+        Instance names prefix part references and internal nets
+        (``WD1/Rs``, ``WD1/x``) — explicit names at every level keep
+        identities stable across source edits — while each port net
+        merges into the net its instance bound. Ports left unbound at
+        the top level keep their port flag, so the dangling-net
+        exemption survives the pass. The flat parts carry their
+        instance path as hierarchy metadata (``Part.path``).
+        """
+        flat = Circuit(self._name, self._symbols)
+        self._flatten_into(flat, (), {})
+        return flat
+
+    def _flatten_into(
+        self,
+        flat: Circuit,
+        path: tuple[str, ...],
+        bindings: dict[str, Net],
+    ) -> None:
+        prefix = "".join(f"{level}/" for level in path)
+        nets: dict[Net, Net] = {}
+        for name, net in self._nets.items():
+            if net.is_port and name in bindings:
+                nets[net] = bindings[name]
+            else:
+                # Prefixed names carry '/' — bypass the capture-time
+                # separator check (it guards captured names only).
+                nets[net] = flat._add_net(f"{prefix}{name}", is_port=net.is_port)
+        for part in self._parts.values():
+            placed = flat._place(
+                f"{prefix}{part.ref}",
+                part.symbol,
+                part.value,
+                part.footprint,
+                path=path,
+            )
+            for pin in part.pins:
+                if pin.net is not None:
+                    nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
+        for inst in self._instances.values():
+            child_bindings = {
+                port_name: nets[net] for port_name, net in inst.connections.items()
+            }
+            inst.circuit._flatten_into(flat, (*path, inst.name), child_bindings)  # noqa: SLF001
+
     def dump(self) -> str:
         """Pretty-print the IR for humans; not a round-trip format."""
         header = (
@@ -408,7 +620,12 @@ class Circuit:
             members = " ".join(
                 f"{p.part.ref}.{p.number}" for p in self._nets[name].pins
             )
-            lines.append(f"  {name}: {members}")
+            port = " [port]" if self._nets[name].is_port else ""
+            lines.append(f"  {name}{port}: {members}")
+        for name in self._instances:
+            lines.append(f"instance {name}:")
+            child_dump = self._instances[name].circuit.dump()
+            lines.extend(f"  {line}" for line in child_dump.splitlines())
         return "\n".join(lines)
 
     def __str__(self) -> str:

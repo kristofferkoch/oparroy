@@ -10,7 +10,13 @@ from oparroy.dsl.ir import Circuit, Pin, natural_key
 
 
 def to_dot(circuit: Circuit) -> str:
-    """Render the circuit as a Graphviz dot graph."""
+    """Render the circuit as a Graphviz dot graph.
+
+    A hierarchical circuit (one with instances) is flattened first —
+    the flat bipartite view; cluster rendering is T21 territory.
+    """
+    if circuit.instances:
+        circuit = circuit.flatten()
     lines = [
         f'graph "{_escape(circuit.name)}" {{',
         "  rankdir=LR;",

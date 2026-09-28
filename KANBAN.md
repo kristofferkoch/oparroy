@@ -34,9 +34,8 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T7b[T7b DSL subcircuit composition] --> T19[T19 layout property checker]
-    T7b --> T22[T22 node board design]
-    T7b --> T24[T24 instrumentation with equivalence proof]
+    T7bb[T7bb DSL port arrays and bundles] --> T22[T22 node board design]
+    T7bc[T7bc DSL multipacking and sockets] --> T24[T24 instrumentation with equivalence proof]
     T24 --> T10
     T22 --> T10
     T7d[T7d DSL ngspice emitter] --> T7e[T7e port existing spice to DSL]
@@ -50,36 +49,44 @@ ______________________________________________________________________
 
 ## Next
 
-- **T7b — DSL subcircuit composition.** Functional circuits as instanced
-  units with declared port interfaces (§7): hierarchy carried into
-  refdes/net naming, refdes stability across source edits, multi-instance
-  capture — the test board's 8 identical node circuits as the proving
-  case. Design mined from PolymorphicBlocks (evaluated 2026-09-27,
-  rejected as a dependency — JVM core vs §8 tooling discipline — mined
-  for ideas): hierarchy is capture-time structure, **flattening is a
-  pass**, hierarchy survives as metadata (hierarchical refdes,
-  sheetpaths) enabling **channelization — lay out one node, replicate
-  placement/routing 8×**; `Export`-style ports bind a subcircuit's
-  external port to an internal one; **port arrays** with width
-  propagation (button matrix, LED arrays); **bundles** — the §3
+- **T7bb — DSL port arrays and bundles.** Split out of T7b (2026-09-28;
+  the core composition model — ports, instances, flattening,
+  hierarchical naming — shipped as T7ba). **Port arrays** with width
+  propagation (button matrix, LED arrays) and **bundles**: the §3
   connector pinout as one connectable unit, a connector block mapping
-  bundle↔pin numbers declaratively; **multipacking** for multi-unit
-  packages (4066-class quad switches, BAT54ADW quad diodes — DESIGN.md
-  §7 multi-unit model: `Symbol` preserves KiCad's unit structure, parts
-  instantiate unit subsets, a physical pin shared by placed units sits
-  on one net); **component sockets** — a subcircuit declares it needs
-  a *part*, not just nets (a `DiodeSocket` protocol of pin handles;
-  satisfied by a standalone typed part or by one unit of a parent-
-  placed multi-unit package), so packing is the parent's directed
-  choice and the subcircuit stays package-agnostic — with the caveat
-  that packing across the ring-A/B redundancy boundary reintroduces a
-  single point of failure (raised 2026-09-27); checks report
-  hierarchical paths (`U1/Rs: …`). Connection sugar, added only as the flat style proves
-  tedious: `chain()` over `Input`/`Output`/`InOut`-tagged ports (the
-  ring *is* a chain; `InOut` is the tapped RX-in-bypass semantics, §4),
-  named connections naming nets, a lexically-scoped `with`-block for
-  implicit power/ground (scope stays explicit — the no-implicit-global-
-  circuit rule holds). **Blocked by:** — · **Unblocks:** T19
+  bundle↔pin numbers declaratively (PolymorphicBlocks steals,
+  evaluated 2026-09-27 — rejected as a dependency, mined for ideas).
+  Extends T7ba's port/instance model. **Blocked by:** — ·
+  **Unblocks:** T22
+- **T7bc — DSL multipacking and component sockets.** Split out of T7b
+  (2026-09-28). **Multipacking** for multi-unit packages (4066-class
+  quad switches, BAT54ADW quad diodes — DESIGN.md §7 multi-unit model:
+  `Symbol` preserves KiCad's unit structure — kicadlib flattens it
+  today, fixed here — parts instantiate unit subsets, a physical pin
+  shared by placed units sits on one net); **component sockets** — a
+  subcircuit declares it needs a *part*, not just nets (a
+  `DiodeSocket` protocol of pin handles; satisfied by a standalone
+  typed part or by one unit of a parent-placed multi-unit package), so
+  packing is the parent's directed choice and the subcircuit stays
+  package-agnostic — with the caveat that packing across the ring-A/B
+  redundancy boundary reintroduces a single point of failure (raised
+  2026-09-27). **Blocked by:** — · **Unblocks:** T24
+- **T19 — DSL layout property checker.** Parse `.kicad_pcb` and assert
+  layout-level properties (DESIGN.md §7): bypass-path copper
+  independence, LED-adjacent-to-connector placement contracts,
+  net-class width/clearance compliance, trace-length budgets (feeds
+  T15), mechanical contracts (min corner radius for handling,
+  standoff mounting holes + keepouts, stackup contract — layer count
+  and board thickness per §6/§9), board-level checklist
+  conformance (power LED present, silkscreen board-ID fields —
+  project/PCB name, author, date, version tied to git tag,
+  handwritten serial-number box, CI-board protection subcircuit
+  instantiated). Includes emitting net
+  classes/keepouts into the
+  `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
+  T7ba's hierarchical refdes/sheetpath metadata is the channelization
+  hook: one instance's layout replicates across the rest.
+  **Blocked by:** — · **Unblocks:** T10
 - **T7c — DSL parts DB with assembler-stock status.** One record per
   part: LCSC number, JLCPCB Basic/Extended tier, stock count with as-of
   date, KiCad symbol/footprint pair, spice model binding, datasheet
@@ -157,6 +164,14 @@ ______________________________________________________________________
 
 ## Backlog
 
+- **T7bd — DSL connection sugar.** Split out of T7b (2026-09-28); added
+  only as the flat style proves tedious: `chain()` over
+  `Input`/`Output`/`InOut`-tagged ports (the ring *is* a chain; `InOut`
+  is the tapped RX-in-bypass semantics, §4) — requires port direction
+  tags on T7ba's ports — named connections naming nets, a
+  lexically-scoped `with`-block for implicit power/ground (scope stays
+  explicit — the no-implicit-global-circuit rule holds). **Blocked
+  by:** — · **Unblocks:** —
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/`, `circuits/watchdog-chargepump/`,
   and `circuits/watchdog-supervisor/` in the DSL, with equivalence
@@ -166,20 +181,6 @@ ______________________________________________________________________
   shipping, the hand-written DUT `.cir` files retire — the DSL becomes
   the single source of truth (§7), not a second copy of it.
   **Blocked by:** T7d · **Unblocks:** —
-- **T19 — DSL layout property checker.** Parse `.kicad_pcb` and assert
-  layout-level properties (DESIGN.md §7): bypass-path copper
-  independence, LED-adjacent-to-connector placement contracts,
-  net-class width/clearance compliance, trace-length budgets (feeds
-  T15), mechanical contracts (min corner radius for handling,
-  standoff mounting holes + keepouts, stackup contract — layer count
-  and board thickness per §6/§9), board-level checklist
-  conformance (power LED present, silkscreen board-ID fields —
-  project/PCB name, author, date, version tied to git tag,
-  handwritten serial-number box, CI-board protection subcircuit
-  instantiated). Includes emitting net
-  classes/keepouts into the
-  `.kicad_pcb` so KiCad guides layout toward compliance pre-audit.
-  **Blocked by:** T7b · **Unblocks:** T10
 - **T22 — Node board design.** The single ring node as its own small
   board, designed **before** the CI board — the CI board is eight of
   these tiles plus a supervisor (DESIGN.md §6). Full node circuit
@@ -190,7 +191,7 @@ ______________________________________________________________________
   (§9). First exercise of the whole capture→layout round trip:
   footprint assignment and annotation stages, real pcbnew netlist
   ingest (the T7a caveat, §7), and back-annotation so refdes numbering
-  follows physical placement (§7). **Blocked by:** T7b ·
+  follows physical placement (§7). **Blocked by:** T7bb ·
   **Unblocks:** T10
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
@@ -224,7 +225,7 @@ ______________________________________________________________________
   in the §2 decode-margin budget, tap capacitance on the §6 short-stub
   contract) are enumerated and budgeted, not assumed away. "Almost
   equivalent" is exactly the set of those enumerated residuals.
-  **Blocked by:** T7b · **Unblocks:** T10
+  **Blocked by:** T7bc · **Unblocks:** T10
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
   all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**

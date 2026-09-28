@@ -56,11 +56,16 @@ def test_bat54s_orientation_by_pin_name(kicad_libs: KiCadLibraries) -> None:
     assert d1_names["GND"] == {"A"}
 
 
+def test_capture_declares_its_ports(kicad_libs: KiCadLibraries) -> None:
+    circuit = capture(kicad_libs)
+    assert set(circuit.ports) == {"ka", "sel", "GND"}
+
+
 def test_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
     circuit = capture(kicad_libs)
     issues = check(circuit, footprints=kicad_libs)
-    # ka is the subcircuit's input port — a single-pin net by design.
-    assert [str(i) for i in issues] == ["warning: net 'ka' has a single pin (Rs.1)"]
+    # ka/sel/GND are ports now — dangling is their job (T7ba).
+    assert issues == []
     raise_on_errors(issues)
 
 

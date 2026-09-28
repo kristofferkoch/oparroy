@@ -1,15 +1,17 @@
 """Charge-pump bypass watchdog, captured in the DSL (DESIGN.md §4, §7).
 
-Flat re-capture of ``circuits/watchdog-chargepump/watchdog-chargepump.cir``
-— the T7a proving circuit. The edge-sensitive charge pump: the MCU
-emits a 20 kHz keep-alive on ``ka``; only transitions pump charge into
-Cs, so a hung MCU lets Rb pull ``sel`` below VIL and the bypass switch
-relaxes closed — bypass is the default state. D1 is one BAT54S series
-pair: pin 3 (COM) is the shared middle (cathode of the clamp diode,
-anode of the pump diode); pin 2 (K) is the pump cathode.
+``WatchdogChargePump`` is the §7 subcircuit form of
+``circuits/watchdog-chargepump/watchdog-chargepump.cir`` — the T7a
+proving circuit, re-cast as T7ba's reusable unit. The edge-sensitive
+charge pump: the MCU emits a 20 kHz keep-alive on ``ka``; only
+transitions pump charge into Cs, so a hung MCU lets Rb pull ``sel``
+below VIL and the bypass switch relaxes closed — bypass is the default
+state. D1 is one BAT54S series pair: pin 3 (COM) is the shared middle
+(cathode of the clamp diode, anode of the pump diode); pin 2 (K) is
+the pump cathode.
 
-``ka`` is the subcircuit's input port, so the validation pass reports
-it as a single-pin net by design; ports are T7b's concept.
+Ports (the subcircuit interface): ``ka`` (keep-alive input), ``sel``
+(bypass-select output), ``GND``.
 
 Usage (in the nix dev shell):
 
@@ -26,6 +28,7 @@ from oparroy.dsl import (
     Circuit,
     KiCadLibraries,
     Resistor,
+    Subcircuit,
     SymbolTable,
     check,
     emit_netlist,
@@ -46,19 +49,27 @@ class C0603(Capacitor):
     default_footprint = "Capacitor_SMD:C_0603_1608Metric"
 
 
+class WatchdogChargePump(Subcircuit):
+    """The §4 edge-sensitive charge pump, as a reusable subcircuit."""
+
+    def capture(self, circuit: Circuit) -> None:
+        """Build the charge pump: ports ka/sel/GND, internal kap/x."""
+        ka = circuit.port("ka")
+        sel = circuit.port("sel")
+        gnd = circuit.port("GND")
+        kap = circuit.net("kap")
+        x = circuit.net("x")
+        circuit.part("Rs", R0603("220", a=ka, b=kap))
+        circuit.part("Cp", C0603("22n", a=kap, b=x))
+        circuit.part("D1", Bat54s(anode=gnd, com=x, cathode=sel))
+        circuit.part("Cs", C0603("10n", a=sel, b=gnd))
+        circuit.part("Rb", R0603("47k", a=sel, b=gnd))
+
+
 def capture(symbols: SymbolTable) -> Circuit:
-    """Build the watchdog circuit IR."""
+    """Build the standalone watchdog circuit IR."""
     circuit = Circuit("watchdog-chargepump", symbols)
-    ka = circuit.net("ka")
-    kap = circuit.net("kap")
-    x = circuit.net("x")
-    sel = circuit.net("sel")
-    gnd = circuit.net("GND")
-    circuit.part("Rs", R0603("220", a=ka, b=kap))
-    circuit.part("Cp", C0603("22n", a=kap, b=x))
-    circuit.part("D1", Bat54s(anode=gnd, com=x, cathode=sel))
-    circuit.part("Cs", C0603("10n", a=sel, b=gnd))
-    circuit.part("Rb", R0603("47k", a=sel, b=gnd))
+    WatchdogChargePump().capture(circuit)
     return circuit
 
 
