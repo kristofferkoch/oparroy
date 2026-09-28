@@ -4,6 +4,8 @@
 exclude = [
   # 403 to non-browser clients (bot filter), fine in a browser.
   '^https?://(www\.)?eevblog\.com/',
+  # 403 from GitHub Actions IPs (Cloudflare bot filter), 200 locally.
+  '^https?://(www\.)?silabs\.com/',
 ]
 include_fragments = 'anchor-only'
 max_concurrency = 12
