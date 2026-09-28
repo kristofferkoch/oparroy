@@ -5,7 +5,8 @@ Single source of truth for schematic capture: a separable IR
 including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.subcircuit`) — a validation pass
 (:mod:`oparroy.dsl.check`), and emitters — KiCad netlist
-(:mod:`oparroy.dsl.kicad_emit`), Graphviz dot (:mod:`oparroy.dsl.dot`).
+(:mod:`oparroy.dsl.kicad_emit`), Graphviz dot (:mod:`oparroy.dsl.dot`),
+freestanding-C++ pin headers (:mod:`oparroy.dsl.pinmap`).
 Typed jellybean parts live in :mod:`oparroy.dsl.parts`; KiCad library
 access lives in :mod:`oparroy.dsl.kicadlib`.
 """
@@ -37,14 +38,25 @@ from oparroy.dsl.ir import (
 from oparroy.dsl.kicad_emit import emit_netlist
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
 from oparroy.dsl.parts import Bat54s, BundleConnector, Capacitor, Resistor, TypedPart
+from oparroy.dsl.pinmap import (
+    CH32V003F4P6,
+    Chip,
+    Pad,
+    PinMap,
+    PinRequest,
+    check_pin_map,
+    emit_pin_header,
+)
 from oparroy.dsl.subcircuit import Subcircuit
 
 __all__ = [
+    "CH32V003F4P6",
     "Bat54s",
     "Bundle",
     "BundleConnector",
     "Capacitor",
     "CheckError",
+    "Chip",
     "Circuit",
     "DefinitionError",
     "FootprintTable",
@@ -53,8 +65,11 @@ __all__ = [
     "KiCadLibraries",
     "LibraryError",
     "Net",
+    "Pad",
     "Part",
     "Pin",
+    "PinMap",
+    "PinRequest",
     "PinType",
     "PortArray",
     "Resistor",
@@ -66,7 +81,9 @@ __all__ = [
     "TypedPart",
     "UnknownSymbolError",
     "check",
+    "check_pin_map",
     "emit_netlist",
+    "emit_pin_header",
     "raise_on_errors",
     "to_dot",
 ]
