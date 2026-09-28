@@ -817,6 +817,25 @@ either a layout-checker assertion or a subcircuit):
   revision are on the bench. Layout-checkable: a silkscreen box of
   minimum area, kept clear of pads and other silkscreen text.
 
+Landed (2026-09-28, card T19, first slice): the layout checker in
+`src/oparroy/dsl/` — `kicad_pcb.py` (a tolerant `.kicad_pcb` parser on
+top of `sexpr`: stackup, net classes, footprints/pads, copper, board
+outline, silkscreen texts/rects, zones), `layout_check.py`
+(`LayoutRules` as the contract, `check_layout` reporting batched
+`Issue`s like the schematic pass: copper-layer count and thickness,
+net-class width/via compliance, per-net trace-length budgets, min
+corner radius with collinear-junction exemption, required silkscreen
+board-ID fields, serial-box area, mounting-hole count and keepout
+coverage, footprint adjacency and presence, and bypass-net pad
+whitelisting — the §4 independence check), and `pcb_emit.py` (a
+byte-identical `.kicad_pcb` skeleton emitter pushing stackup, net
+classes, and keepouts into pcbnew pre-audit; round-trips through the
+parser). Proven against `tests/fixtures/board_pass.kicad_pcb`. Not yet
+landed: copper-geometry independence beyond pad whitelisting, serial
+box pad/silkscreen clearance, TVS/series-R placement contracts, and
+the channelization hook (per-instance layout replication over T7ba
+sheetpaths) — these wait for the first real board (T22).
+
 ## 8. Verification strategy
 
 Layers: DSL property checks (schematic **and physical layout**, §7),

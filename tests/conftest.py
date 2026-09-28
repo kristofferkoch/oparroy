@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from oparroy.dsl import (
+    Board,
     Circuit,
     KiCadLibraries,
     LibraryError,
@@ -12,7 +15,10 @@ from oparroy.dsl import (
     Symbol,
     SymbolPin,
     UnknownSymbolError,
+    parse_board,
 )
+
+_FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def make_symbol(
@@ -130,3 +136,9 @@ def kicad_libs() -> KiCadLibraries:
         return KiCadLibraries.from_env()
     except LibraryError:
         pytest.skip("KiCad libraries not provisioned (outside the nix dev shell)")
+
+
+@pytest.fixture
+def board_pass() -> Board:
+    """Parse the compliant reference board (tests/fixtures/)."""
+    return parse_board((_FIXTURES / "board_pass.kicad_pcb").read_text())
