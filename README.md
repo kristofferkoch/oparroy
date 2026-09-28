@@ -78,7 +78,8 @@ infrastructure, by contrast, may cost freely.
 - The node pin map is captured in the DSL — 17 of 18 CH32V003 GPIO
   assigned with a budget check — and emits `firmware/node/pins.hpp`
   directly (DESIGN.md §7).
-- All of it under the project-owned coding standard in `code-std.md`
+- All of it under the project-owned coding standard in
+  [code-std.md](code-std.md)
   (borrows from JSF AV / MISRA / AUTOSAR / CERT), statically checked
   from the first commit (DESIGN.md §8).
 
