@@ -33,6 +33,7 @@
 // itself must stay an expression, so the do-while question doesn't
 // arise.
 
+#include "utility.hpp"
 #include "verify.hpp"
 
 #include <cstdint>
@@ -50,10 +51,9 @@ template <typename T> class [[nodiscard]] ErrorOr {
 
 public:
     constexpr ErrorOr(const T& value) : m_value(value) {}
-    // static_cast<T&&> is std::move spelled without <utility>, which is
-    // outside the freestanding header set (code-std.md §2).
+    // The param-not-moved check only recognizes std::move, not lib's.
     // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
-    constexpr ErrorOr(T&& value) : m_value(static_cast<T&&>(value)) {}
+    constexpr ErrorOr(T&& value) : m_value(move(value)) {}
     constexpr ErrorOr(Error error) : m_error(error), m_is_error(true) {}
 
     constexpr ErrorOr(const ErrorOr&) = default;
@@ -76,9 +76,9 @@ public:
         VERIFY(!m_is_error);
         return m_value;
     }
-    constexpr T release_value() {
+    constexpr T release_value() && {
         VERIFY(!m_is_error);
-        return static_cast<T&&>(m_value);
+        return move(m_value);
     }
     [[nodiscard]] constexpr Error error() const {
         VERIFY(m_is_error);
@@ -101,7 +101,7 @@ public:
     [[nodiscard]] constexpr bool is_error() const {
         return m_is_error;
     }
-    constexpr void release_value() const {
+    constexpr void release_value() const&& {
         VERIFY(!m_is_error);
     }
     [[nodiscard]] constexpr Error error() const {
@@ -121,7 +121,7 @@ private:
         if (_temporary_result.is_error()) {                                                        \
             return _temporary_result.error();                                                      \
         }                                                                                          \
-        _temporary_result.release_value();                                                         \
+        move(_temporary_result).release_value();                                                   \
     })
 
 } // namespace lib
