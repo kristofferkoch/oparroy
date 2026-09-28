@@ -12,6 +12,7 @@ access lives in :mod:`oparroy.dsl.kicadlib`.
 """
 
 from oparroy.dsl.check import (
+    RANGE_CONTAINMENT,
     CheckError,
     FootprintTable,
     Issue,
@@ -25,6 +26,8 @@ from oparroy.dsl.ir import (
     Circuit,
     DefinitionError,
     Instance,
+    Interval,
+    Limits,
     Net,
     Part,
     Pin,
@@ -34,6 +37,7 @@ from oparroy.dsl.ir import (
     SymbolPin,
     SymbolTable,
     UnknownSymbolError,
+    Waiver,
 )
 from oparroy.dsl.kicad_emit import emit_netlist
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
@@ -42,6 +46,7 @@ from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 
 __all__ = [
+    "RANGE_CONTAINMENT",
     "Bat54s",
     "Bundle",
     "BundleConnector",
@@ -51,9 +56,11 @@ __all__ = [
     "DefinitionError",
     "FootprintTable",
     "Instance",
+    "Interval",
     "Issue",
     "KiCadLibraries",
     "LibraryError",
+    "Limits",
     "Net",
     "Part",
     "Pin",
@@ -67,6 +74,7 @@ __all__ = [
     "SymbolTable",
     "TypedPart",
     "UnknownSymbolError",
+    "Waiver",
     "check",
     "emit_netlist",
     "emit_spice",

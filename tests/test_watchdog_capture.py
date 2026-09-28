@@ -10,9 +10,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from design.watchdog_chargepump import capture
+from design.watchdog_chargepump import WatchdogChargePump, capture
 from oparroy.dsl import (
+    Circuit,
+    Interval,
     KiCadLibraries,
+    Limits,
+    Severity,
     check,
     emit_netlist,
     raise_on_errors,
@@ -23,6 +27,16 @@ GOLDEN = Path(__file__).parent / "golden" / "watchdog-chargepump.net"
 
 # Rs(2) + Cp(2) + D1(3) + Cs(2) + Rb(2) — every pin connected.
 EXPECTED_PIN_COUNT = 11
+
+
+def board_driving(kicad_libs: KiCadLibraries, ka_source: Interval) -> Circuit:
+    """Build a board driving the watchdog: KA sources ``ka_source``, SEL accepts."""
+    board = Circuit("board", kicad_libs)
+    ka = board.port("KA", source=Limits(voltage=ka_source))
+    sel = board.port("SEL", sink=Limits(voltage=Interval(0, 3.6)))
+    gnd = board.port("GND")
+    board.instance("WD1", WatchdogChargePump(), ka=ka, sel=sel, GND=gnd)
+    return board
 
 
 def test_capture_matches_handwritten_cir(kicad_libs: KiCadLibraries) -> None:
@@ -67,6 +81,24 @@ def test_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
     # ka/sel/GND are ports now — dangling is their job (T7ba).
     assert issues == []
     raise_on_errors(issues)
+
+
+def test_board_covering_port_ranges_checks_clean(kicad_libs: KiCadLibraries) -> None:
+    # T8: the board's 0..3.3 V driver fits the watchdog's ka contract
+    # (0..3.6 V), and sel's 0..3.3 V output fits the board's accept.
+    board = board_driving(kicad_libs, Interval(0, 3.3))
+    assert check(board, footprints=kicad_libs) == []
+
+
+def test_board_source_outside_sink_range_errors(kicad_libs: KiCadLibraries) -> None:
+    # A 5 V keep-alive driver violates ka's 0..3.6 V contract.
+    board = board_driving(kicad_libs, Interval(0, 5))
+    issues = check(board, footprints=kicad_libs)
+    errors = [i for i in issues if i.severity is Severity.ERROR]
+    (error,) = errors
+    assert error.path == "WD1/ka"
+    assert "accepts 0..3.6 V" in error.message
+    assert "drives 0..5 V" in error.message
 
 
 def test_netlist_matches_golden(kicad_libs: KiCadLibraries) -> None:

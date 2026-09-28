@@ -112,16 +112,6 @@ ______________________________________________________________________
   hand-written includes. On shipping, the hand-written DUT `.cir`
   files retire — the DSL becomes the single source of truth (§7), not
   a second copy of it. **Blocked by:** — · **Unblocks:** —
-- **T8 — DSL constraint checking / property verification.** Electrical
-  rules beyond KiCad ERC: bypass-path continuity under single-fault
-  models, watchdog default-state assertions. Typed ports carry
-  voltage/current-limit **ranges**; checks are interval containment —
-  a sink's acceptable range must cover the connected source's output
-  range — so tolerance stackup becomes checkable (PolymorphicBlocks
-  steal, 2026-09-27). Waivers are explicit, path-addressed data in the
-  capture — auditable in review — never comment-style suppression.
-  **Blocked by:** — ·
-  **Unblocks:** —
 - **T9 — Firmware header generation from the DSL.** Pin maps and
   peripheral assignments emitted for the CH32V003 (DESIGN.md §5).
   Captures request pins by function (`gpio.request("keepalive")`),
@@ -261,4 +251,15 @@ ______________________________________________________________________
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
+  **Unblocks:** —
+- **T8 — DSL constraint checking: board-level property checks.**
+  Partially shipped 2026-09-28: range-carrying typed ports, the per-net
+  interval-containment check, and waivers-as-data are landed
+  (DESIGN.md §7). Remaining: **bypass-path continuity under
+  single-fault models** and **watchdog default-state assertions** —
+  both inspect board-level topology (the bypass switch, the
+  supervisor) that only the T22 node-board capture provides. Also
+  **pin/part-level ranges**: a regulator's output range, an MCU pin's
+  input range — declarations fed by the T7c parts DB, extending ranges
+  beyond scalar ports (port arrays, bundles). **Blocked by:** T22 ·
   **Unblocks:** —

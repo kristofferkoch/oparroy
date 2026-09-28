@@ -11,7 +11,11 @@ state. D1 is one BAT54S series pair: pin 3 (COM) is the shared middle
 the pump cathode.
 
 Ports (the subcircuit interface): ``ka`` (keep-alive input), ``sel``
-(bypass-select output), ``GND``.
+(bypass-select output), ``GND``. The ports carry T8 limit ranges as
+interface contracts: ``ka`` accepts 0..3.6 V (3V3 logic from the MCU),
+``sel`` drives 0..3.3 V toward the bypass switch's select input — an
+instantiating parent checks interval containment against its own
+declared ranges.
 
 Usage (in the nix dev shell):
 
@@ -27,7 +31,9 @@ from oparroy.dsl import (
     Bat54s,
     Capacitor,
     Circuit,
+    Interval,
     KiCadLibraries,
+    Limits,
     Resistor,
     Subcircuit,
     SymbolTable,
@@ -61,8 +67,8 @@ class WatchdogChargePump(Subcircuit):
 
     def capture(self, circuit: Circuit) -> None:
         """Build the charge pump: ports ka/sel/GND, internal kap/x."""
-        ka = circuit.port("ka")
-        sel = circuit.port("sel")
+        ka = circuit.port("ka", sink=Limits(voltage=Interval(0, 3.6)))
+        sel = circuit.port("sel", source=Limits(voltage=Interval(0, 3.3)))
         gnd = circuit.port("GND")
         kap = circuit.net("kap")
         x = circuit.net("x")
