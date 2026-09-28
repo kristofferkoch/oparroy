@@ -119,6 +119,22 @@ def test_keepout_zones(board_pass: Board) -> None:
     assert keepouts[0].layers == ("F.Cu", "B.Cu")
 
 
+def test_power_and_mixed_inner_layers_count_as_copper() -> None:
+    board = parse_board(
+        '(kicad_pcb (layers (0 "F.Cu" signal) (1 "In1.Cu" power)'
+        ' (2 "In2.Cu" mixed) (31 "B.Cu" signal)))'
+    )
+    assert board.copper_layers == ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
+
+
+def test_malformed_net_code_raises_pcb_error() -> None:
+    with pytest.raises(PcbError, match="expected an integer for net code"):
+        parse_board(
+            '(kicad_pcb (layers) (net 1 "GND")'
+            ' (segment (start 0 0) (end 1 1) (width 0.2) (layer "F.Cu") (net xx)))'
+        )
+
+
 def test_unknown_content_is_tolerated() -> None:
     board = parse_board(
         '(kicad_pcb (version 20240108) (generator "future-kicad")'

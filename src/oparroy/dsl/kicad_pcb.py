@@ -44,7 +44,12 @@ class Point:
 
 @dataclass(frozen=True)
 class Pad:
-    """One footprint pad: number, shape kind, position, attached net."""
+    """One footprint pad: number, shape kind, position, attached net.
+
+    ``at`` is footprint-local (the pad's ``at`` inside its footprint);
+    footprint rotation is not modeled, so board-absolute pad positions
+    are not yet recoverable.
+    """
 
     number: str
     kind: str
@@ -54,7 +59,11 @@ class Pad:
 
 @dataclass(frozen=True)
 class Footprint:
-    """A placed footprint: library reference, refdes, position, pads."""
+    """A placed footprint: library reference, refdes, position, pads.
+
+    ``at`` is the board-absolute anchor; the rotation component of the
+    footprint's ``at`` is not modeled.
+    """
 
     lib: str
     ref: str
@@ -266,6 +275,17 @@ def _float(atom: Sexp, what: str) -> float:
         raise PcbError(msg) from None
 
 
+def _int(atom: Sexp, what: str) -> int:
+    if not isinstance(atom, str):
+        msg = f"expected an integer for {what}"
+        raise PcbError(msg)
+    try:
+        return int(atom)
+    except ValueError:
+        msg = f"expected an integer for {what}, got {atom!r}"
+        raise PcbError(msg) from None
+
+
 def _opt_float(node: list[Sexp] | None, what: str) -> float | None:
     if node is None or _atom(node, 1) is None:
         return None
@@ -286,7 +306,7 @@ def _parse_nets(root: list[Sexp]) -> dict[int, str]:
         code = _atom(node, 1)
         name = _atom(node, 2)
         if code is not None and name is not None:
-            codes[int(code)] = name
+            codes[_int(code, "net code")] = name
     return codes
 
 
@@ -300,7 +320,7 @@ def _parse_layers(root: list[Sexp]) -> tuple[tuple[str, ...], tuple[str, ...]]:
         name, kind = _atom(entry, 1), _atom(entry, 2)
         if name is None:
             continue
-        if kind == "signal":
+        if kind in {"signal", "power", "mixed"}:
             copper.append(name)
         if "SilkS" in name:
             silkscreen.append(name)
@@ -374,7 +394,7 @@ def _net_name(node: list[Sexp], net_codes: Mapping[int, str], *, numbered: bool)
     code = _atom(net_node, 1)
     if code is None:
         return ""
-    return net_codes.get(int(code), "") if numbered else code
+    return net_codes.get(_int(code, "net code"), "") if numbered else code
 
 
 def _parse_segment(node: list[Sexp], net_codes: Mapping[int, str]) -> Segment:
