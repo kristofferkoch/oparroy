@@ -737,6 +737,24 @@ nets only. One checker fix rode along: footprint filters match against
 the full `Lib:Name` as well as the bare name, so KiCad's lib-qualified
 filters (`Connector*:*_1x??_*`) work.
 
+ngspice emitter (2026-09-28, card T7d): `spice_emit.py` (`emit_spice`)
+is the simulation-netlist backend over the flat IR. It emits the DUT
+as a `.subckt` with ports in declaration order; stimulus and `.meas`
+assertions stay in the external bench decks (`circuits/**/tb_*.cir`) —
+the DSL emits the circuit, benches drive it — so a capture whose ports
+match a hand-written `circuits/` interface drops into the same benches
+unmodified, and either capture can drive the run while T7e ports the
+DUTs over. Spice bindings are ad hoc until T7c's parts DB owns them: a
+symbol-keyed table (R/C two-pin primitives, the BAT54S series-pair
+expansion) plus caller-passed `.model` definitions, a part's value
+naming its model as in a hand-written deck. Emission is byte-identical
+like the KiCad emitter's, hierarchy flattens implicitly (ngspice
+accepts `/` in element and node names verbatim), and element names
+keep the ref, gaining a kind-letter prefix only when flattening hid it
+(`WD1/Rs` → `RWD1/Rs`). Proven by `design/watchdog_chargepump.py --spice`: the emitted `wd_chargepump` passes all three §4 benches
+(`tb_engage`, `tb_missed_pulse`, `tb_glitch`) through
+`scripts/sim-run` — the T7e equivalence pattern, rehearsed.
+
 Circuit organization (2026-09-26): **functional circuits live in their
 own subcircuit files** (e.g. the RC pulse watchdog is one file, one
 unit), composed into boards — not drawn flat into a board schematic.
