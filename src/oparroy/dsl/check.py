@@ -2,9 +2,11 @@
 
 Structural invariants raise during capture (see ir.py); everything here
 is a *semantic* check over the finished IR, reported as a batch of
-issues rather than a first-failure exception. ERC-depth electrical
-rules are T8's scope; this pass covers what the emitters and pcbnew
-need to be true.
+issues rather than a first-failure exception. Beyond what the emitters
+and pcbnew need to be true, this pass carries T8's first electrical
+rules: interval containment over port limit ranges (a sink's acceptable
+range must cover the connected source's output range), with waivers as
+explicit, path-addressed capture data.
 """
 
 import fnmatch
@@ -12,25 +14,40 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from oparroy.dsl.ir import Circuit, Net, Part, PinType, natural_key
+from oparroy.dsl.ir import Circuit, Limits, Net, Part, PinType, Waiver, natural_key
 from oparroy.dsl.kicadlib import LibraryError
 
 _MIN_NET_PINS = 2
 
+#: Check id of the T8 port-range containment check; waivers address it.
+RANGE_CONTAINMENT = "range-containment"
+
 
 class Severity(StrEnum):
-    """How bad an issue is; errors block pcbnew ingest, warnings don't."""
+    """How bad an issue is; errors block pcbnew ingest, warnings don't.
+
+    WAIVED is an error the capture explicitly waived (``Circuit.waive``)
+    — it stays in the report, auditable, but does not block.
+    """
 
     WARNING = "warning"
     ERROR = "error"
+    WAIVED = "waived"
 
 
 @dataclass(frozen=True)
 class Issue:
-    """One validation finding."""
+    """One validation finding.
+
+    ``check`` and ``path`` address the finding for waivers: the check
+    id (``"range-containment"``) and the hierarchical path it fired at
+    (``WD1/ka``). Findings without them cannot be waived.
+    """
 
     severity: Severity
     message: str
+    check: str | None = None
+    path: str | None = None
 
     def __str__(self) -> str:
         return f"{self.severity}: {self.message}"
@@ -58,15 +75,94 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
 
     A hierarchical circuit (one with instances) is flattened first, so
     findings report hierarchical paths (``WD1/Rs``, net ``WD1/x``) and
-    bound port nets are checked as the merged parent net.
+    bound port nets are checked as the merged parent net. The T8
+    port-range containment check runs before flattening, over the
+    instance bindings themselves; the capture's waivers
+    (``Circuit.waive``) apply last.
     """
+    issues: list[Issue] = []
+    issues.extend(_check_port_ranges(circuit, ()))
+    waivers = circuit.waivers
     if circuit.instances:
         circuit = circuit.flatten()
-    issues: list[Issue] = []
     for ref in sorted(circuit.parts, key=natural_key):
         issues.extend(_check_part(circuit.parts[ref], footprints))
     for name in sorted(circuit.nets, key=natural_key):
         issues.extend(_check_net(circuit.nets[name]))
+    return _apply_waivers(issues, waivers)
+
+
+def _check_port_ranges(circuit: Circuit, prefix: tuple[str, ...]) -> list[Issue]:
+    """Interval containment over instance port bindings (T8), recursively.
+
+    A bound pair is checked when both sides declare the matching range:
+    the sink's acceptable interval must cover the source's output
+    interval, per quantity — voltage when declared, current when both
+    sides carry one. An undeclared side is no data, not a finding.
+    """
+    issues: list[Issue] = []
+    for instance in circuit.instances.values():
+        child_ports = instance.circuit.ports
+        for port_name, parent_net in instance.connections.items():
+            port = child_ports[port_name]
+            path = "/".join((*prefix, instance.name, port_name))
+            if port.sink is not None and parent_net.source is not None:
+                issues.extend(
+                    _covers(
+                        path,
+                        f"port {path!r}",
+                        port.sink,
+                        f"net {parent_net.name!r}",
+                        parent_net.source,
+                    )
+                )
+            if port.source is not None and parent_net.sink is not None:
+                issues.extend(
+                    _covers(
+                        path,
+                        f"net {parent_net.name!r}",
+                        parent_net.sink,
+                        f"port {path!r}",
+                        port.source,
+                    )
+                )
+        issues.extend(_check_port_ranges(instance.circuit, (*prefix, instance.name)))
+    return issues
+
+
+def _covers(
+    path: str,
+    sink_desc: str,
+    sink: Limits,
+    source_desc: str,
+    source: Limits,
+) -> list[Issue]:
+    """Check that the sink's ranges cover the source's."""
+    issues: list[Issue] = []
+    if not sink.voltage.contains(source.voltage):
+        issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{sink_desc} accepts {sink.voltage} V but {source_desc} "
+                f"drives {source.voltage} V (sink range must cover source)",
+                check=RANGE_CONTAINMENT,
+                path=path,
+            )
+        )
+    if (
+        sink.current is not None
+        and source.current is not None
+        and not sink.current.contains(source.current)
+    ):
+        issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{sink_desc} accepts {sink.current} A but {source_desc} "
+                f"drives {source.current} A (sink range must cover source)",
+                check=RANGE_CONTAINMENT,
+                path=path,
+            )
+        )
     return issues
 
 
@@ -187,6 +283,46 @@ def _matches_filters(part: Part) -> bool:
         for fp_filter in part.symbol.footprint_filters
         for candidate in (fp_name, part.footprint)
     )
+
+
+def _apply_waivers(issues: list[Issue], waivers: tuple[Waiver, ...]) -> list[Issue]:
+    """Apply the capture's waivers: matched errors become WAIVED findings.
+
+    A waived finding stays in the list with its reason appended — the
+    waiver is auditable, the finding is not erased. A waiver matching
+    no finding is stale data and warns.
+    """
+    if not waivers:
+        return issues
+    result: list[Issue] = []
+    used: set[Waiver] = set()
+    for issue in issues:
+        waiver = next(
+            (w for w in waivers if w.check == issue.check and w.path == issue.path),
+            None,
+        )
+        if waiver is not None:
+            used.add(waiver)
+        if waiver is None or issue.severity is not Severity.ERROR:
+            result.append(issue)
+            continue
+        result.append(
+            Issue(
+                Severity.WAIVED,
+                f"{issue.message} (waived: {waiver.reason})",
+                check=issue.check,
+                path=issue.path,
+            )
+        )
+    result.extend(
+        Issue(
+            Severity.WARNING,
+            f"waiver {waiver.check!r} at {waiver.path!r} matched no issue",
+        )
+        for waiver in waivers
+        if waiver not in used
+    )
+    return result
 
 
 def raise_on_errors(issues: list[Issue]) -> None:

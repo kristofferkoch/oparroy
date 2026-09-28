@@ -100,6 +100,73 @@ def _pin_numbers(numbers: str | tuple[str, ...]) -> tuple[str, ...]:
 
 
 @dataclass(frozen=True)
+class Interval:
+    """A closed interval [low, high] — one limit range (T8).
+
+    Containment is inclusive on both ends, so equal boundaries cover:
+
+    >>> Interval(0, 3.6).contains(Interval(0, 3.3))
+    True
+    >>> Interval(0, 3.6).contains(Interval(0, 3.6))
+    True
+    >>> Interval(0, 3.3).contains(Interval(-0.3, 3.3))
+    False
+    """
+
+    low: float
+    high: float
+
+    def __post_init__(self) -> None:
+        if not self.low <= self.high:
+            msg = f"interval low {self.low} exceeds high {self.high}"
+            raise DefinitionError(msg)
+
+    def contains(self, other: Interval) -> bool:
+        """Return True when this interval fully covers ``other``."""
+        return self.low <= other.low and other.high <= self.high
+
+    def __str__(self) -> str:
+        return f"{self.low}..{self.high}"
+
+
+@dataclass(frozen=True)
+class Limits:
+    """A port's electrical limit ranges (T8): voltage, optionally current.
+
+    On a ``source`` port the ranges are what the driver puts out; on a
+    ``sink`` port what the input accepts. The validation pass checks
+    interval containment at instance bindings — the sink's range must
+    cover the connected source's — so tolerance stackup is checkable
+    data. ``current`` is optional: a port declaring voltage only checks
+    voltage only.
+    """
+
+    voltage: Interval
+    current: Interval | None = None
+
+    def __str__(self) -> str:
+        text = f"{self.voltage} V"
+        if self.current is not None:
+            text += f", {self.current} A"
+        return text
+
+
+@dataclass(frozen=True)
+class Waiver:
+    """An explicit, path-addressed check waiver: auditable data (T8).
+
+    Waivers live in the capture next to the wiring they excuse
+    (``board.waive("range-containment", "WD1/ka", reason=...)``) — never
+    comment-style suppression. ``path`` is the hierarchical path the
+    finding reports. A waiver that matches no finding warns as stale.
+    """
+
+    check: str
+    path: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class SymbolPin:
     """One pin of a library symbol: number, display name, electrical type."""
 
@@ -245,9 +312,18 @@ class Part:
 class Net:
     """A named equipotential: the set of pins joined together."""
 
-    def __init__(self, name: str, *, is_port: bool = False) -> None:
+    def __init__(
+        self,
+        name: str,
+        *,
+        is_port: bool = False,
+        source: Limits | None = None,
+        sink: Limits | None = None,
+    ) -> None:
         self._name = name
         self._is_port = is_port
+        self._source = source
+        self._sink = sink
         self._pins: list[Pin] = []
 
     @property
@@ -263,6 +339,16 @@ class Net:
         every port to a parent net, and flattening merges the two.
         """
         return self._is_port
+
+    @property
+    def source(self) -> Limits | None:
+        """The limit ranges this port drives, or None when undeclared (T8)."""
+        return self._source
+
+    @property
+    def sink(self) -> Limits | None:
+        """The limit ranges this port accepts, or None when undeclared (T8)."""
+        return self._sink
 
     @property
     def pins(self) -> tuple[Pin, ...]:
@@ -526,6 +612,7 @@ class Circuit:
         self._arrays: dict[str, PortArray] = {}
         self._bundles: dict[str, Bundle] = {}
         self._instances: dict[str, Instance] = {}
+        self._waivers: list[Waiver] = []
 
     @property
     def name(self) -> str:
@@ -561,6 +648,38 @@ class Circuit:
     def instances(self) -> dict[str, Instance]:
         """All subcircuit instances by name (insertion order)."""
         return dict(self._instances)
+
+    @property
+    def waivers(self) -> tuple[Waiver, ...]:
+        """The capture's check waivers, in declaration order (T8)."""
+        return tuple(self._waivers)
+
+    def waive(self, check: str, path: str, *, reason: str) -> Waiver:
+        """Waive one check finding by hierarchical path, with a reason.
+
+        Waivers are explicit, path-addressed data in the capture —
+        auditable in review, never comment-style suppression (T8).
+        ``check`` is the check id the finding carries (e.g.
+        ``"range-containment"``); ``path`` is the '/'-separated
+        hierarchical path it reports (``WD1/ka``). A waived error
+        degrades to a WAIVED finding — visible, not erased — and a
+        waiver that matches no finding warns as stale.
+        """
+        if not check:
+            msg = "a waiver needs a check id"
+            raise DefinitionError(msg)
+        if not path:
+            msg = f"a waiver for {check!r} needs a path"
+            raise DefinitionError(msg)
+        if not reason:
+            msg = f"a waiver for {check!r} at {path!r} needs a reason"
+            raise DefinitionError(msg)
+        if any(w.check == check and w.path == path for w in self._waivers):
+            msg = f"duplicate waiver for {check!r} at {path!r}"
+            raise DefinitionError(msg)
+        waiver = Waiver(check, path, reason)
+        self._waivers.append(waiver)
+        return waiver
 
     def part(
         self,
@@ -662,16 +781,29 @@ class Circuit:
         _reject_separator("net name", name)
         return self._add_net(name, is_port=False)
 
-    def port(self, name: str) -> Net:
+    def port(
+        self,
+        name: str,
+        *,
+        source: Limits | None = None,
+        sink: Limits | None = None,
+    ) -> Net:
         """Declare a port: an external-facing net, the subcircuit interface.
 
         A port wires like any net inside the subcircuit; a parent
         instantiating it binds every port (``Circuit.instance``), and
         flattening merges port and bound net. Port nets are exempt from
         the dangling-net checks — reaching outside is their job.
+
+        ``source``/``sink`` carry the port's electrical limit ranges
+        (T8): what this port drives out, what it accepts in. The
+        validation pass checks interval containment wherever an
+        instance binds a declared port to a declared parent net. A
+        pass-through port may declare both faces — what it accepts from
+        its parent and what it passes on to its children.
         """
         _reject_separator("net name", name)
-        return self._add_net(name, is_port=True)
+        return self._add_net(name, is_port=True, source=source, sink=sink)
 
     def port_array(self, name: str, width: int) -> PortArray:
         """Declare a port array: ``width`` port nets ``name[0]`` … ``name[width-1]``.
@@ -747,14 +879,21 @@ class Circuit:
             msg = f"{kind} name {name!r} collides with a net of the same name"
             raise DefinitionError(msg)
 
-    def _add_net(self, name: str, *, is_port: bool) -> Net:
+    def _add_net(
+        self,
+        name: str,
+        *,
+        is_port: bool,
+        source: Limits | None = None,
+        sink: Limits | None = None,
+    ) -> Net:
         if name in self._nets:
             msg = f"duplicate net name {name!r}"
             raise DefinitionError(msg)
         if name in self._arrays or name in self._bundles:
             msg = f"net name {name!r} collides with a port array or bundle"
             raise DefinitionError(msg)
-        created = Net(name, is_port=is_port)
+        created = Net(name, is_port=is_port, source=source, sink=sink)
         self._nets[name] = created
         return created
 
@@ -889,7 +1028,12 @@ class Circuit:
             else:
                 # Prefixed names carry '/' — bypass the capture-time
                 # separator check (it guards captured names only).
-                nets[net] = flat._add_net(f"{prefix}{name}", is_port=net.is_port)
+                nets[net] = flat._add_net(
+                    f"{prefix}{name}",
+                    is_port=net.is_port,
+                    source=net.source,
+                    sink=net.sink,
+                )
         for part in self._parts.values():
             placed = flat._place(
                 f"{prefix}{part.ref}",
@@ -924,11 +1068,17 @@ class Circuit:
                 lines.append(f"    {pin.number}{name} ({pin.type}) -> {target}")
         lines.append("nets:")
         for name in sorted(self._nets, key=natural_key):
-            members = " ".join(
-                f"{p.part.ref}.{p.number}" for p in self._nets[name].pins
-            )
-            port = " [port]" if self._nets[name].is_port else ""
-            lines.append(f"  {name}{port}: {members}")
+            net = self._nets[name]
+            members = " ".join(f"{p.part.ref}.{p.number}" for p in net.pins)
+            flags = []
+            if net.is_port:
+                flags.append("port")
+            if net.source is not None:
+                flags.append(f"source {net.source}")
+            if net.sink is not None:
+                flags.append(f"sink {net.sink}")
+            marker = f" [{', '.join(flags)}]" if flags else ""
+            lines.append(f"  {name}{marker}: {members}")
         for name, array in self._arrays.items():
             lines.append(f"port array {name}[{len(array)}]")
         for name, bundle in self._bundles.items():
