@@ -16,6 +16,9 @@ Sources (canonical PDFs live in `datasheets/CH32V003/`):
   2026-09-26 from wch-ic.com.
 - Core-level CSRs (PFIC, SysTick, debug) live in the separate
   QingKeV2_Processor_Manual, not in the RM (RM overview).
+- `QingKeV2DM-debug-manual-v1.0.pdf` — cited as (QDM §x.y); fetched
+  2026-09-29 from openwch/ch32v003. Covers the SWIO wire protocol
+  (ch.2) and the RISC-V v0.13.2 debug module (ch.3).
 
 All registers are accessed as 32-bit words unless noted; WCH header names
 (`R32_...`, `R16_...`) are quoted from the RM tables.
