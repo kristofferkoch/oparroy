@@ -41,8 +41,9 @@ infrastructure, by contrast, may cost freely.
   addressing, and the frame gap as a ring-wide vsync latch
   ([DESIGN.md §2](DESIGN.md#2-physical-layer); analysis:
   [docs/phy-analysis-2026-09-26.md](docs/phy-analysis-2026-09-26.md)).
-- **Segment interconnect** ([DESIGN.md §2.1](DESIGN.md#21-ring-power-rail), [§3](DESIGN.md#3-ring-topology-and-bypass)): 2x6-pin connectors
-  carry both counter-rotating data rings plus power — a single 3.3 V
+- **Segment interconnect** ([DESIGN.md §2.1](DESIGN.md#21-ring-power-rail), [§3](DESIGN.md#3-ring-topology-and-bypass)): 2x5-pin IDC
+  connectors (2.54 mm box headers on 3M 3365/10 ribbon) carry both
+  counter-rotating data rings plus power — a single 3.3 V
   rail that is both the signaling rail and node power, and a raw
   5–18 V rail for payloads with their own buck. On 3M 3365 ribbon,
   segments reach **10 m unamplified**; the 470 Ω TX series resistor,

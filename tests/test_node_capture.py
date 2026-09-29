@@ -44,15 +44,15 @@ def test_bypass_switch_topology(kicad_libs: KiCadLibraries) -> None:
     assert nets["opa_p"] == {"U1.6", "PHY1/Rar.2", "PHY1/SW1.3", "PHY1/Rfb.2"}
     assert nets["txa_drv"] == {"U1.19", "PHY1/SW1.1"}
     assert nets["PHY1/txa_sw"] == {"PHY1/SW1.4", "PHY1/Rat.1"}
-    assert nets["TX_A"] == {"J2.4", "PHY1/Rat.2", "PHY1/Dat.1"}
+    assert nets["TX_A"] == {"J2.5", "PHY1/Rat.2", "PHY1/Dat.1"}
 
 
 def test_terminal_protection_sits_connector_side(kicad_libs: KiCadLibraries) -> None:
     # §7 checklist: connector -> TVS -> R -> µC, on every ring terminal.
     nets = nets_of(capture(kicad_libs))
-    assert nets["RX_A"] == {"J1.4", "PHY1/Rar.1", "PHY1/Dar.1"}
-    assert nets["RX_B"] == {"J2.6", "PHY1/Rbr.1", "PHY1/Dbr.1"}
-    assert nets["TX_B"] == {"J1.6", "PHY1/Rbt.2", "PHY1/Dbt.1"}
+    assert nets["RX_A"] == {"J1.5", "PHY1/Rar.1", "PHY1/Dar.1"}
+    assert nets["RX_B"] == {"J2.7", "PHY1/Rbr.1", "PHY1/Dbr.1"}
+    assert nets["TX_B"] == {"J1.7", "PHY1/Rbt.2", "PHY1/Dbt.1"}
     assert nets["opa_p_b"] == {"U1.4", "PHY1/Rbr.2"}
     assert nets["txb_drv"] == {"U1.13", "PHY1/Rbt.1"}
 
@@ -77,11 +77,14 @@ def test_threshold_divider_on_opa_negative(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_power_loop_enters_from_both_faces(kicad_libs: KiCadLibraries) -> None:
-    # §3: UNREG/3V3/GND alias into both connectors' paired pins.
+    # §3: UNREG/3V3/GND alias into both connectors; 3V3 is doubled and
+    # row 2 (pins 2/4/6/8/10) is a solid ground row (2026-09-29 pinout).
     nets = nets_of(capture(kicad_libs))
     assert {"J1.1", "J2.1"} <= nets["UNREG"]
-    assert {"J1.2", "J2.2"} <= nets["3V3"]
-    assert {"J1.3", "J1.5", "J2.3", "J2.5"} <= nets["GND"]
+    assert {"J1.3", "J1.9", "J2.3", "J2.9"} <= nets["3V3"]
+    assert {
+        f"{j}.{pin}" for j in ("J1", "J2") for pin in ("2", "4", "6", "8", "10")
+    } <= nets["GND"]
 
 
 def test_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:

@@ -231,7 +231,7 @@ ______________________________________________________________________
   ribbon with the §7 470 Ω protection, the 470 Ω TX series R (not the
   cable) sets the limit, analog re-slice repeaters *reduce* reach,
   power (not signal) binds under a connector break. Remaining:
-  long-cable bench measurement on the test board — 3365/06 reels at
+  long-cable bench measurement on the test board — 3365/10 reels at
   5/10/15/25 m, per-segment error counting under the §6
   fault-injection harness, far-end overshoot vs real TVS clamps on
   the instrumented boundary node's PIO taps — plus comparator offset

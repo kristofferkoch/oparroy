@@ -1,14 +1,13 @@
 # 3M 3365 — facts
 
 28 AWG stranded round-conductor flat ribbon cable, 0.050" (1.27 mm)
-pitch, PVC insulation — the candidate segment cable for the ring
-interconnect (DESIGN.md §3: 6-conductor segments; the 6-way variant is
-3365/06). Document on disk:
+pitch, PVC insulation — **the segment cable** for the ring
+interconnect (DESIGN.md §3, decided 2026-09-29): the 10-way variant
+3365/10, or a generic UL2651 equivalent, on 2.54 mm 2x5 IDC
+connectors. Document on disk:
 
 - `3M3365-TS-0080-datasheet-v15.pdf` — 3M TS-0080-15 (2006-12-12),
-  the series tech sheet covering all conductor counts. (The §3
-  connector style is still open — DESIGN.md §6 — so this is the
-  reach-modeling candidate, not a settled BOM part.)
+  the series tech sheet covering all conductor counts.
 
 ## Construction (TS-0080 §Physical)
 

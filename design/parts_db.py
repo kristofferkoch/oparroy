@@ -122,14 +122,29 @@ PARTS = PartsDb(
             note="behavioral models only (opa_cmp, tx_pin); the node MCU (§5)",
         ),
         PartRecord(
-            name="conn-01x06",
+            name="conn-idc-02x05",
             kind="connector",
-            symbol="Connector_Generic:Conn_01x06",
-            footprint="Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
+            lcsc="C22385222",
+            symbol="Connector_Generic:Conn_02x05_Odd_Even",
+            footprint="Connector_IDC:IDC-Header_2x05_P2.54mm_Vertical_SMD",
             tier=Tier.NONE,
-            value="Conn_01x06",
-            area_mm2=38.7,
-            note="provisional §3 connector block; through-hole, hand-soldered",
+            stock=Stock(
+                285,
+                date(2026, 9, 29),
+                "LCSC product-page JSON, fetched live 2026-09-29; "
+                "modest stock — buy ahead",
+            ),
+            value="Conn_02x05_Odd_Even",
+            area_mm2=113.0,
+            note=(
+                "XYECONN IDC2.54-US2S-5A 2x5 2.54 mm SMD box header, "
+                "$0.069 @100 — the §3 segment connector (2026-09-29); "
+                "backside, hand-soldered post-PCBA (the front is the "
+                "single-sided assembly face); no stocked SMD box header "
+                "has anchor pegs — the THT C2977596 is the "
+                "high-pull-force fallback; the cable-side IDC socket "
+                "(C8373) is not a PCBA part"
+            ),
         ),
     ]
 )
