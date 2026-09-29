@@ -11,6 +11,12 @@ checker pass that proves the instrumented board **in reset state** is
 equivalent to the plain board up to an enumerated, budgeted set of
 residuals. "Almost equivalent" is exactly that set.
 
+**Status (2026-09-29):** PR #23 closed unmerged — the card is blocked
+until both designs it relates are settled: the uninstrumented node
+(T22, in layout/fab) and the instrumented CI design (new card T28;
+today only §6 prose). This branch is retained as the pickup point;
+§4 records the four decisions already taken.
+
 ## 1. Transform representation
 
 Instrumentation is a list of **transforms applied to the flattened IR**
@@ -39,12 +45,10 @@ declared transform list. Two consequences:
   stays buildable and fab-able (the T22 node board) while the CI
   board is a strict superset produced mechanically.
 
-Open shape question: transforms over the **flattened** IR (simple,
-one net namespace) vs over the **hierarchical** IR (transforms
-expressed against subcircuit ports, replicated per instance — the CI
-board is eight node tiles, and per-tile transforms want the
-sheetpath-keyed metadata T7ba landed). Memo leans hierarchical for the
-tile case, flattened for the proof. See §4 Q1.
+Decided (2026-09-29, §4 Q1): transforms are expressed against the
+**hierarchical** IR — per-tile, sheetpath-keyed, one declaration
+instruments all eight node tiles — and the proof runs on the
+flattened result.
 
 ## 2. The equivalence proof
 
@@ -95,19 +99,31 @@ already exist for the exceptional case.
   placement) remain §7 layout-checker contracts; this proof runs on
   the netlist IR.
 
-## 4. Open questions
+## 4. Decisions and open questions
 
-- **Q1 — Transform level.** Hierarchical (per-tile, sheetpath-keyed,
-  one declaration instruments all eight nodes) vs flattened (one
-  long explicit list, no metadata dependency). Hierarchical wins if
-  the CI board really is eight identical tiles; flattened wins if the
-  tiles diverge (the instrumented boundary node already does, §6).
-- **Q2 — Reset-state source of truth.** Where do control-line reset
-  levels live? Options: on the transform record (`insert_series(..., reset=LOW)`), on the part class (a `default_channel:` attribute in
-  the parts DB), or derived from the shift-register stage's power-on
-  state. The third is the most truthful (proof input = the actual
-  silicon behavior) but couples the DSL checker to the 74HC595
-  datasheet fact.
+Decided 2026-09-29 (four calls taken before the card was re-blocked):
+
+- **Q1 — Transform level: hierarchical, per-tile.** One transform
+  declaration keyed on T7ba sheetpath metadata instruments all eight
+  node tiles; the proof runs on the flattened result. Tiles that
+  diverge (the instrumented boundary node, §6) carry their own
+  per-instance declarations on top.
+- **Q2 — Reset-state source of truth: shift-register power-on
+  state.** Control-line reset levels derive from the 74HC595-class
+  stage's actual silicon power-on behavior, not from declarations on
+  the transform or the switch part. The datasheet fact lives in the
+  parts DB / datasheet notes; the checker consumes it as proof input.
+- **Q4 — Overrides: a third transform kind, `substitute`.** The §6
+  human-I/O overrides (pot-wiper mux, button parallel) replace who
+  drives a net; the plain capture stays exactly the node board — no
+  CI-only scaffolding sockets in the base design.
+- **Q6 — Base capture: subcircuit instance ×8.** The CI capture
+  instantiates `design/node.py` as a subcircuit eight times —
+  requires T7ba composition to cover whole boards, connectors
+  included.
+
+Still open on pickup:
+
 - **Q3 — Residual magnitude source.** On-resistance, off-leakage,
   tap capacitance: parts-DB attributes per part (extends the T7c
   schema), or annotations on the transform? Parts DB is the single
@@ -116,23 +132,10 @@ already exist for the exceptional case.
   bound, not know. Likely split: electrical residuals from the parts
   DB, geometry residuals emitted as obligations for the §7 layout
   checker to discharge.
-- **Q4 — Override transforms.** The §6 human-I/O overrides (pot mux,
-  button parallel) are not series-inserts on an existing net — the
-  pot wiper mux *replaces* a driver. Is that a third transform kind
-  (`substitute`), or is the plain capture drawn with the mux socket
-  already present and unpopulated (multipacking/sockets, T7bc) with
-  the transform just flipping the stuffing option?
 - **Q5 — Proof granularity.** One `check_equivalent` pass over the
-  whole CI board vs per-tile proofs composed upward. Per-tile
-  composes better with Q1-hierarchical and keeps failure messages
-  local ("tile 3: base net `wd_cap` lost").
-- **Q6 — Where the base capture comes from.** The CI board capture
-  imports `design/node.py` (the T22 capture) and transforms it. Is
-  the node board a subcircuit instance ×8 (needs the T7ba subcircuit
-  composition to cover whole boards, connectors included) or is the
-  CI capture a flat re-instantiation? The former is the design
-  intent; the latter is a drift hole the transform approach exists
-  to close.
+  whole CI board vs per-tile proofs composed upward. Per-tile follows
+  naturally from the Q1 decision and keeps failure messages local
+  ("tile 3: base net `wd_cap` lost") — confirm on pickup.
 
 ## 5. Sketch of the slice
 
