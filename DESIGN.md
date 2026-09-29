@@ -592,6 +592,28 @@ inventory-driven** — prefer parts the assembler stocks; anything
 outside their library costs setup fees or hand-soldering. The DSL
 parts DB tracks assembler-stock status (§7).
 
+Node programming (2026-09-29): nodes program **post-SMT over SWIO**
+— the CH32V003's single-wire debug on PD1 is the only way in (no
+factory bootloader; [quirks.md](datasheets/CH32V003/notes/quirks.md)
+§Debug), and PD1 is the pin map's one hard reservation. Flow:
+JLCPCB places the front; each board then lands on a **pogo jig**
+(the bela-lessons first-class deliverable) where a **WCH-LinkE** —
+the official probe; clones hit flash-unlock walls (quirks) —
+flashes the single node image plus the personality type byte where
+a board carries one. **The programmer powers the board**: brick
+recovery is a power cycle through reset (quirks), so the jig's 3V3
+comes from the WCH-LinkE, never the ring, and the board exposes a
+**SWIO + GND + 3V3 pad strip** for it (§7 checklist). Positional
+addressing (§2) means **zero per-node provisioning** — one image,
+no serial numbers burned; the factory UNIID (ESIG) is read at flash
+time and logged against the handwritten unit serial (§7 checklist).
+The back-side connectors go on *after* programming — the bela
+rework-stage ordering. The CI board's scriptable flash of eight
+nodes (SWIO fan-out by mux, per-node probes, or
+supervisor-as-programmer) rides with the debug-transport decision
+below; programmer tooling (minichlink-class) joins the flake with
+the node firmware.
+
 Open: debug transport (UART per node? shared bus?). The segment
 connector is settled (2026-09-29, §3) — and stays deliberately
 fragile: it is the failure mode under test.
@@ -1022,6 +1044,10 @@ either a layout-checker assertion or a subcircuit):
   connector side — the enclosure owes nothing. Layout-checkable: the
   B.Cu footprint set is exactly the segment connectors, and each
   status LED sits over its routed hole.
+- **Programming strip: SWIO + GND + 3V3 pads** (2026-09-29, §6): the
+  pogo-jig target for post-SMT programming — three pads together at
+  a board edge, 3V3 driven by the programmer, never the ring.
+  Layout-checkable: presence, adjacency, edge placement.
 - **Board identification on silkscreen** (2026-09-26): every PCB
   carries project name (`oparroy`), PCB name, author name, date, and
   version number — checkable as required text fields on the fab/
