@@ -189,11 +189,11 @@ ______________________________________________________________________
   ring segments (plus comparator-output and working-LED taps) wired to
   RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
   §6). Nodes tile the T22 node-board design; captured in the DSL,
-  layout in KiCad. The §6 CI flash fan-out (2026-09-29) rides on one
-  assumption to **bench-verify early**: deselected mux ports idle
-  SWIO high on the target's internal pull-up (quirks, per cnlohr) —
-  if that sags, the single-channel mux scheme needs revisiting before
-  the control plane is committed.
+  layout in KiCad. Bench-verify early with the §6 CI flash fan-out
+  (2026-09-29): deselected-port noise margin (per-node 10 kΩ
+  pull-ups fitted) and SDI false-trigger recovery — a
+  false-triggered node drives its own stub and must resync clean
+  on reselect, before the control plane is committed.
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).

@@ -631,9 +631,23 @@ with 8 nodes the wire becomes the bottleneck and total flash time is
 met, with QDM fast mode (§2.2) in reserve. The mux is a low-Ron
 analog switch (74LVC1G3157-class, already a stocked BOM line;
 analog switches are bidirectional, which half-duplex SWIO needs);
-deselected nodes idle with SWIO high via the target-side pull-up
-(003 internal per cnlohr, quirks — bench-verify). PIO bitbang proven
-by PicoRVD (quirks §Debug). Per-node power switching (brick recovery)
+deselected nodes idle SWIO high on a **per-node 10 kΩ pull-up,
+target side of each mux port** (2026-09-29): the 003's internal weak
+pull-up (35–55 kΩ, 45 typ — DS0 §3.3.9) holds DC with ~5× margin
+against mux off-leakage (~6 µA worst case → 0.33 V droop) but is
+soft against capacitive coupling from the seven other switching
+channels, and the external resistor also covers the 002/4/5/6
+variants whose SWIO mandates one (quirks). Bus-keepers rejected:
+they hold *last state* on a line that must idle *high*, power up
+undefined, and this rig power-cycles nodes for brick recovery — a
+keeper latched low wedges SWIO. A second pull-up (4.7–10 kΩ) sits
+on the mux **common port**: rise time after a turnaround release is
+RC on the common net, and at HSI/3 = 8 MHz (T = 125 ns) the
+internal pull-up alone (τ ≈ 1.4 µs on ~30 pF) is an order too slow.
+Bench-verify on the CI board: deselected-port SDI false-trigger —
+a node so triggered drives its own disconnected stub, harmless
+until reselected, recovered by session-start resync. PIO bitbang
+proven by PicoRVD (quirks §Debug). Per-node power switching (brick recovery)
 is required regardless. Live SWIO debugging is single-target by
 nature: the mux simply **parks on the DUT** for the GDB session, no
 switching overhead. Caveat for live-ring debugging: halting a node
