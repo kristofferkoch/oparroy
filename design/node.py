@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from design.bins import C0603, R0603, Led0603
+from design.bins import C0603, R0603, LedRev1206
 from design.ch32v003 import Ch32v003f4p6
 from design.phy_frontend import PhyFrontEnd
 from design.segment import SegmentConnector, segment_ports
@@ -149,13 +149,17 @@ class Node(Subcircuit):
 
         # §4.1 status LEDs: passive power LED, three MCU-driven.
         circuit.part("Rp", R0603("1k", a=v3v3, b=pwr_led))
-        circuit.part("Dp", Led0603(anode=pwr_led, cathode=gnd, value="RED"))
+        circuit.part(
+            "Dp", LedRev1206(anode=pwr_led, cathode=gnd, value="XL-3216SURC-FB")
+        )
         circuit.part("Rw", R0603("1k", a=led_work, b=ledw_a))
-        circuit.part("Dw", Led0603(anode=ledw_a, cathode=gnd, value="GREEN"))
+        circuit.part(
+            "Dw", LedRev1206(anode=ledw_a, cathode=gnd, value="XL-3216SYGC-FB")
+        )
         circuit.part("Ru", R0603("1k", a=led_up, b=ledu_a))
-        circuit.part("Du", Led0603(anode=ledu_a, cathode=gnd, value="YELLOW"))
+        circuit.part("Du", LedRev1206(anode=ledu_a, cathode=gnd, value="XL-3216UYC-FB"))
         circuit.part("Rd", R0603("1k", a=led_down, b=ledd_a))
-        circuit.part("Dd", Led0603(anode=ledd_a, cathode=gnd, value="YELLOW"))
+        circuit.part("Dd", LedRev1206(anode=ledd_a, cathode=gnd, value="XL-3216UYC-FB"))
 
         # Programming/debug: SWIO on a test pad (debug transport is §6-open).
         circuit.part("TP1", TestPoint("SWIO", p=swio))

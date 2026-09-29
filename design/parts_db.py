@@ -146,6 +146,54 @@ PARTS = PartsDb(
                 "(C8373) is not a PCBA part"
             ),
         ),
+        PartRecord(
+            name="led-rev1206-red",
+            kind="led",
+            lcsc="C3646938",
+            symbol="Device:LED",
+            footprint="LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm",
+            tier=Tier.EXTENDED,
+            stock=Stock(601_050, date(2026, 9, 29), "LCSC product-page JSON"),
+            value="XL-3216SURC-FB",
+            area_mm2=5.12,
+            note=(
+                "XINGLIGHT reverse-mount 1206, red 620 nm / 120 mcd — the "
+                "§4.1 power LED; emits through a routed PCB hole to the "
+                "connector side (2026-09-29)"
+            ),
+        ),
+        PartRecord(
+            name="led-rev1206-yellowgreen",
+            kind="led",
+            lcsc="C3646940",
+            symbol="Device:LED",
+            footprint="LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm",
+            tier=Tier.EXTENDED,
+            stock=Stock(6_950, date(2026, 9, 29), "LCSC product-page JSON"),
+            value="XL-3216SYGC-FB",
+            area_mm2=5.12,
+            note=(
+                "XINGLIGHT reverse-mount 1206, yellow-green 570 nm / 120 "
+                "mcd — the §4.1 working LED; the 525 nm true green of the "
+                "same series (C3646937) has Vf 3.4 V, undrivable from a "
+                "3.3 V GPIO"
+            ),
+        ),
+        PartRecord(
+            name="led-rev1206-yellow",
+            kind="led",
+            lcsc="C3646939",
+            symbol="Device:LED",
+            footprint="LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm",
+            tier=Tier.EXTENDED,
+            stock=Stock(19_450, date(2026, 9, 29), "LCSC product-page JSON"),
+            value="XL-3216UYC-FB",
+            area_mm2=5.12,
+            note=(
+                "XINGLIGHT reverse-mount 1206, yellow 588 nm / 180 mcd — "
+                "the two §4.1 per-connector link LEDs"
+            ),
+        ),
     ]
 )
 

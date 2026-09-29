@@ -5,20 +5,26 @@ typed-part subclass carrying the class-default footprint, so captures
 wire parts, not packages. 0603 is the project default for passives —
 hand-reworkable, stocked by every assembler (§6 inventory-driven
 selection). ``R0603``/``C0603`` are bound from the parts DB's records
-(T7c); the LED and TVS bins stay local until the DB grows records for
-them.
+(T7c); the LED bin references its DB records but stays local (one bin,
+three colors); the TVS bin stays local until the DB grows a record.
 """
 
 from design.parts_db import C0603, R0603
 from oparroy.dsl import Led, TvsDiode
 
-__all__ = ["C0603", "R0603", "Led0603", "TvsSod323"]
+__all__ = ["C0603", "R0603", "LedRev1206", "TvsSod323"]
 
 
-class Led0603(Led):
-    """The project's 0603 LED bin: class-default footprint (§7)."""
+class LedRev1206(Led):
+    """The status-LED bin: 1206 reverse-mount, emitting through a PCB hole.
 
-    default_footprint = "LED_SMD:LED_0603_1608Metric"
+    The LED pads stay on the front — the single-sided assembly face —
+    while the lens emits through a routed board hole to the connector
+    side (2026-09-29, DESIGN.md §4.1). The per-color XINGLIGHT
+    XL-3216-FB records live in the parts DB.
+    """
+
+    default_footprint = "LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm"
 
 
 class TvsSod323(TvsDiode):
