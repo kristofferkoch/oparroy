@@ -7,19 +7,16 @@ two §3 segment connectors (``design/segment.py``). ``Node`` is a
 subcircuit: the node board below captures it directly, and the CI board
 (T10) tiles it eight times — one capture, both boards.
 
-MCU pin budget (F4P6 pin map: datasheets/CH32V003/notes/gpio-pinout.md):
-
-- PA1/PA2 (OPA_N0/OPP0): ring-A threshold and RX tap; PD7 (OPP1):
-  ring-B RX — the §3 firmware RX-source select
-- PD2/PC3 (TIM1_CH1/CH3): TX_A/TX_B, identical compare values (§3)
-- PC2 (TIM1_BKIN): hardware TX-kill, wired to the watchdog's ``sel`` —
-  bypass engaging brakes both TX channels (§2, §4)
-- PC4: keep-alive strobe for the charge pump (GPIO, 20 kHz)
-- PC7/PC5/PC6: working / upstream / downstream status LEDs (§4.1)
-- PD4 (OPA_OUT): the DNP hysteresis fallback (§2); PD1: SWIO debug pad
-
-Unassigned pins (PD0, PD3, PD5, PD6, PC0, PC1) stay unconnected —
-the checker reports them by name as warnings, not errors.
+MCU pin budget: pads bind from ``design/node_pins.py`` — the one
+authoritative table (16 function requests + the SWIO reservation =
+17 of 18 GPIO, PC7 spare; datasheets/CH32V003/notes/gpio-pinout.md).
+The plain node wires the ring PHY (the OPA pads, TIM1 TX channels,
+the brake), the watchdog (keepalive; TIM1_BKIN = ``sel`` — bypass
+engaging brakes both TX channels, §2/§4), the three status LEDs,
+OPO (the §2 DNP hysteresis fallback), and the SWIO pad. The payload
+pads (debug TX, pot, buzzer, buttons — the §6 demonstrator
+superset) and the PC7 spare stay unconnected on this board; the
+checker reports them by name as warnings, not errors.
 
 Usage (in the nix dev shell):
 
@@ -39,6 +36,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from design.bins import C0603, R0603, LedRev1206
 from design.ch32v003 import Ch32v003f4p6
+from design.node_pins import capture as capture_pin_map
 from design.phy_frontend import PhyFrontEnd
 from design.segment import SegmentConnector, segment_ports
 from design.watchdog_chargepump import WatchdogChargePump
@@ -123,23 +121,37 @@ class Node(Subcircuit):
         )
         circuit.instance("WD1", WatchdogChargePump(), ka=ka, sel=sel, GND=gnd)
 
+        # MCU pads bind from the one authoritative table
+        # (design/node_pins.py): function name -> bound pad -> typed-part
+        # keyword. Functions the plain node doesn't carry (the §6
+        # payload superset) stay unbound here and unwired on the board.
+        pin_map = capture_pin_map()
+        mcu_nets = {
+            "rx_threshold": opa_n,
+            "rx_a": opa_p,
+            "rx_b": opa_p_b,
+            "comp_out": opo,
+            "tx_a": txa_drv,
+            "tx_b": txb_drv,
+            "tx_kill": sel,
+            "keepalive": ka,
+            "led_working": led_work,
+            "led_upstream": led_up,
+            "led_downstream": led_down,
+        }
+        pads = pin_map.assignments
         circuit.part(
             "U1",
             Ch32v003f4p6(
                 vdd=v3v3,
                 vss=gnd,
-                pa1=opa_n,
-                pa2=opa_p,
-                pd7=opa_p_b,
-                pd2=txa_drv,
-                pc3=txb_drv,
-                pc4=ka,
-                pc2=sel,
-                pc7=led_work,
-                pc5=led_up,
-                pc6=led_down,
-                pd1=swio,
-                pd4=opo,
+                pd1=swio,  # the table's SWIO reservation, PD1
+                # Pad names arrive as data from the pin table — static
+                # checking can't follow the unpack; the pin map's typed
+                # binding and the capture checker cover it instead.
+                **{  # ty: ignore[invalid-argument-type]
+                    pads[f].name.lower(): net for f, net in mcu_nets.items()
+                },
             ),
         )
 

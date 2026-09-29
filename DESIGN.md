@@ -877,7 +877,13 @@ on both toolchains (`firmware/node/pins.cpp`: host clang + rv32ec
 GCC). Regeneration stays a manual step
 (`python -m design.node_pins > firmware/node/pins.hpp`); meson
 `custom_target()` wiring lands with the first consumer (the node
-firmware).
+firmware). The table's third consumer is the node capture itself
+(2026-09-29): `design/node.py` binds its MCU pads from
+`capture().assignments` rather than hardcoding them — the drift that
+motivated it (the capture had keepalive on PC4 and the LEDs on
+PC7/PC5/PC6 against the table's PD3/PD0/PC0/PC1 — a fabbed board
+would have kept the watchdog permanently strobed-out and dark) is
+the proof that two pad tables cannot coexist.
 
 Node board and the capture→layout stages (2026-09-28): the
 ring node is captured in `design/node.py` — CH32V003F4P6
