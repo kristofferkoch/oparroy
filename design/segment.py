@@ -1,14 +1,23 @@
 """The §3 segment connector: the pinout as a bundle, the connector as a block.
 
-DESIGN.md §3 settles two 6-pin connectors per node — upstream-facing
-(UNREG, 3V3, GND, RX_A, GND, TX_B) and downstream-facing (UNREG, 3V3,
-GND, TX_A, GND, RX_B). Both faces share one pinout by *wire identity*:
-pin 4 is the ring-A data wire, pin 6 the ring-B one, whichever face you
-look at — so the bundle members are ``unreg``/``v3v3``/``gnd``/``a``/
-``b`` and two faces join member-to-member, while
-``SegmentConnector.pin_map`` maps members to pin numbers declaratively
-(``gnd`` owns the two paired ground pins 3 and 5). Connector part and
-footprint are provisional — §3 leaves the connector style open (§6).
+DESIGN.md §3 settles two 10-pin 2.54 mm 2x5 IDC box headers per node
+(2026-09-29, superseding the 2026-09-27 6-pin pinout) on 10-way 1.27
+mm-pitch ribbon (3M 3365/10-class). The dual-row IDC straddle puts odd
+conductors in one connector row and even in the other, so the
+conductor order — UNREG, GND, 3V3, GND, A, GND, B, GND, 3V3, GND —
+lands row 2 as a solid ground row and every conductor ground-flanked
+in the cable (the G-S-G condition the §2 reach model assumes). Both
+faces share one pinout by *wire identity*: pin 5 is the ring-A data
+wire, pin 7 the ring-B one, whichever face you look at — so the
+bundle members are ``unreg``/``v3v3``/``gnd``/``a``/``b`` and two
+faces join member-to-member, while ``SegmentConnector.pin_map`` maps
+members to pin numbers declaratively (``gnd`` owns the five ground
+pins of row 2, ``v3v3`` the doubled 3V3). The header is SMD on the
+board's back side, hand-soldered post-PCBA — the front is the
+single-sided JLCPCB assembly face and stays flat for enclosure-wall
+mounting (§7 checklist). KiCad 10 names the generic
+2-row symbols by numbering scheme: ``Odd_Even`` is the IDC zigzag —
+pin 1 sits next to pin 2, not above it.
 """
 
 from typing import ClassVar
@@ -46,15 +55,15 @@ def segment_ports(circuit: Circuit) -> tuple[Bundle, Bundle]:
 
 
 class SegmentConnector(BundleConnector):
-    """One §3 6-pin segment connector; the same pinout on both faces."""
+    """One §3 10-pin 2x5 IDC segment connector; the same pinout on both faces."""
 
-    symbol = "Connector_Generic:Conn_01x06"
+    symbol = "Connector_Generic:Conn_02x05_Odd_Even"
     pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
         "unreg": "1",
-        "v3v3": "2",
-        "gnd": ("3", "5"),
-        "a": "4",
-        "b": "6",
+        "gnd": ("2", "4", "6", "8", "10"),
+        "v3v3": ("3", "9"),
+        "a": "5",
+        "b": "7",
     }
-    default_value = "Conn_01x06"
-    default_footprint = "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical"
+    default_value = "Conn_02x05_Odd_Even"
+    default_footprint = "Connector_IDC:IDC-Header_2x05_P2.54mm_Vertical_SMD"

@@ -287,15 +287,46 @@ The §5 pin budget lands at ~16–17 of 18, verified at pin-map time
 sees exactly one segment, so the §2 measured baseline and the §9
 reach budget are unchanged by the topology.
 
-Segment connector (2026-09-27; supersedes the single 10-contact
-connector sketched the same day): **two 6-pin connectors per node** —
-upstream-facing `(UNREG, 3V3, GND, RX_A, GND, TX_B)` and
-downstream-facing `(UNREG, 3V3, GND, TX_A, GND, RX_B)`, node-centric
-naming (RX_A/TX_A = this node's ring-A receive/transmit). Each
-connector carries UNREG + 3V3 with two GND pins, so every supply pin
-has a paired return: balanced copper cross-section for power and
-ground on both faces. Power enters a node from both directions — the
-power loop above — and connector part/style stays open (§6).
+Segment connector (2026-09-29; supersedes the 2026-09-27 6-pin
+pinout): **two 10-pin 2.54 mm 2x5 IDC box headers per node** on
+10-way 1.27 mm-pitch 28 AWG ribbon (3M 3365/10 or generic UL2651) —
+the AVR-ISP shape, the deepest-stocked IDC system there is. Pricing
+fetched 2026-09-29 (LCSC @100): header C22385222 $0.069 + cable-side
+socket C8373 $0.084 → **$0.31 of connectors per node**; the 2.0 mm
+and 1.27 mm-pitch IDC systems run 2–4× that on thin stock, and the
+1.27 mm system has no 28 AWG cable at all (0.635 mm ribbon is
+30 AWG, a third off the power budget) — §1's cost driver outranks
+the larger footprint. The dual-row IDC straddle lands odd conductors
+in one row and even in the other, so the conductor order
+
+```
+UNREG, GND, 3V3, GND, A, GND, B, GND, 3V3, GND
+```
+
+makes row 2 a solid ground row with every conductor ground-flanked —
+the datasheet G-S-G configuration behind the reach model's
+102 Ω / 47.5 pF/m numbers
+([docs/cable-reach-2026-09-28.md](docs/cable-reach-2026-09-28.md)) —
+and quarantines UNREG at the cable edge, away from both data wires.
+Both faces share one pinout by wire identity: pin 5 is the ring-A
+data wire, pin 7 the ring-B one, whichever face you look at; naming
+stays node-centric (RX_A/TX_A = this node's ring-A
+receive/transmit). Doubled 3V3 plus five grounds drops the power
+loop to ~0.15 Ω/m, stretching the broken-loop power budget
+(cable-reach §5) from 5.8 m to ~12 m at 10 mA nodes — past the 10 m
+signal reach, so power stops binding segment length. Power enters a
+node from both directions — the power loop above. The header is **SMD
+on the board's back side** (2026-09-29), hand-soldered post-PCBA:
+JLCPCB places the front only — single-side SMT keeps the Economic
+tier (§6) — and the front stays flat as the enclosure-wall mount
+face. No stocked SMD box header carries anchor pegs or hold-downs, so
+the gull-wing joints alone take the mating load — unmating is
+in-plane shear, the gentle direction — and the through-hole variant
+(C2977596) stays in the parts DB note as the high-pull-force
+fallback. The cable-side socket vise-presses onto the ribbon, no
+crimp tooling. Friction fit is deliberate: connectors remain the
+fragile element under test (§6) — the shroud only keys against
+reverse insertion.
 
 Interaction with §4: the watchdog SPDT bypass stays, on ring A only —
 dual ring demotes it from sole defense to second layer. A dead MCU
@@ -549,10 +580,9 @@ inventory-driven** — prefer parts the assembler stocks; anything
 outside their library costs setup fees or hand-soldering. The DSL
 parts DB tracks assembler-stock status (§7).
 
-Open: debug transport (UART per node? shared bus?),
-board interconnect connector part/style — the pinout is settled
-(2026-09-27, §3); connectors remain deliberately fragile elements,
-they are the failure mode under test.
+Open: debug transport (UART per node? shared bus?). The segment
+connector is settled (2026-09-29, §3) — and stays deliberately
+fragile: it is the failure mode under test.
 
 Instrumented boundary node (2026-09-26): the ring node adjacent to the
 supervisor — first/last, where the supervisor closes the ring — is
@@ -735,15 +765,15 @@ mismatch raises at capture (button matrices, LED arrays); elements may
 also bind individually by name. `Circuit.bundle` groups *existing*
 nets under member names — the §3 connector pinout as one connectable
 unit. Members name wires, not node functions (`a` is the ring-A data
-wire on pin 4 of both faces), so two faces join member-to-member; the
+wire on pin 5 of both faces), so two faces join member-to-member; the
 power nets alias into both faces' bundles, and a port reached through
 two groups must resolve to one parent net — conflicting bindings
 raise. `BundleConnector` (parts.py) is the connector block: the
 member→pin-number mapping is class data, and `pin_map` values widen to
-tuples for a member owning several pins (the paired §3 grounds).
-`design/segment.py` carries the §3 pinout (`segment_ports`) and the
-connector block itself (part/footprint provisional — §3 leaves the
-connector style open, §6). Both group forms expand to scalar port
+tuples for a member owning several pins (the §3 ground row and the
+doubled 3V3). `design/segment.py` carries the §3 pinout
+(`segment_ports`) and the connector block itself (part and footprint
+settled 2026-09-29, §3). Both group forms expand to scalar port
 bindings at instantiation: flattening, checks, and emitters see plain
 nets only. One checker fix rode along: footprint filters match against
 the full `Lib:Name` as well as the bare name, so KiCad's lib-qualified
@@ -965,6 +995,15 @@ either a layout-checker assertion or a subcircuit):
   optional. Layout-checkable (§7): TVS adjacent to its connector,
   R between TVS and µC pin.
 - Rounded corners, mounting holes for legs (layout checker, above)
+- **Single-sided SMT; connectors on the back** (2026-09-29): every
+  PCBA-placed part sits on the front — single-side SMT keeps the
+  JLCPCB Economic tier (§6) — and only the two §3 segment connectors
+  sit on the back, SMD, hand-soldered post-PCBA. The front is the
+  flat enclosure-wall mount face; consequence: the §4.1 status LEDs
+  face the wall on enclosed nodes, so enclosures need light pipes or
+  cutouts (the CI board rides unenclosed on its legs).
+  Layout-checkable: the B.Cu footprint set is exactly the segment
+  connectors.
 - **Board identification on silkscreen** (2026-09-26): every PCB
   carries project name (`oparroy`), PCB name, author name, date, and
   version number — checkable as required text fields on the fab/

@@ -452,8 +452,8 @@ def test_dump_shows_arrays_and_bundles(symbols: StubSymbols) -> None:
 
 
 def test_segment_connector_against_kicad_libs(kicad_libs: KiCadLibraries) -> None:
-    # The real §3 connector block: KiCad's Conn_01x06 symbol and the
-    # (provisional) pin-header footprint, checked against the libraries.
+    # The real §3 connector block: KiCad's Conn_02x05_Odd_Even symbol and
+    # the IDC box-header footprint, checked against the libraries.
     circuit = Circuit("segment", kicad_libs)
     upstream, downstream = segment_ports(circuit)
     circuit.part("J1", SegmentConnector(upstream))
@@ -463,4 +463,6 @@ def test_segment_connector_against_kicad_libs(kicad_libs: KiCadLibraries) -> Non
         name: {f"{p.part.ref}.{p.number}" for p in net.pins}
         for name, net in circuit.nets.items()
     }
-    assert nets["GND"] == {"J1.3", "J1.5", "J2.3", "J2.5"}
+    assert nets["GND"] == {
+        f"{j}.{pin}" for j in ("J1", "J2") for pin in ("2", "4", "6", "8", "10")
+    }
