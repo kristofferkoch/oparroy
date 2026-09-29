@@ -34,7 +34,9 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T24[T24 instrumentation with equivalence proof] --> T10
+    T22 --> T28[T28 instrumented CI design]
+    T28 --> T24[T24 instrumentation with equivalence proof]
+    T24 --> T10
     T22[T22 node board design] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
@@ -45,23 +47,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T24 — DSL instrumentation transforms with reset-state equivalence.**
-  The CI board is the node design plus injected controllability and
-  observability (§6: fault-injection muxes, supervisor-override muxes,
-  sense taps) — and that makes it *dangerously different* from the
-  plain node it is meant to exercise (raised 2026-09-27). Capture
-  instrumentation as an **explicit transformation** of the
-  uninstrumented design — insert a series switch on this net, hang a
-  sense tap off that one — never a hand-maintained second capture, so
-  the two can never drift. The checker then proves the instrumented
-  board **in reset state** is equivalent to the plain board: every
-  inserted series element in its default/pass-through state reduces to
-  a wire (net merge), every tap is high-impedance, no base part or net
-  is lost, and residual differences (the series element's on-resistance
-  in the §2 decode-margin budget, tap capacitance on the §6 short-stub
-  contract) are enumerated and budgeted, not assumed away. "Almost
-  equivalent" is exactly the set of those enumerated residuals.
-  **Blocked by:** — · **Unblocks:** T10
 - **T22 — Node board design.** The single ring node as its own small
   board, designed **before** the CI board — the CI board is eight of
   these tiles plus a supervisor (DESIGN.md §6). The DSL capture landed
@@ -178,6 +163,41 @@ ______________________________________________________________________
   exists); **pcbnew ingest validation** of the emitted skeleton (real
   KiCad round trip — T22 exercises the first one).
   **Blocked by:** T22 · **Unblocks:** T10
+- **T28 — Instrumented CI design.** *Shape: design.* Settles the
+  instrumented half that today exists only as §6 prose (raised
+  2026-09-29: T24 has no instrumented design to transform, and the
+  T24 ↔ T10 dependency was circular without this card). From §6 to a
+  settled design: the fault-injection complement (per-segment
+  open/short, per-node power cut, clock kill) with fault-switch part
+  selection, the supervisor-override design for human I/O (pot-wiper
+  mux, button parallel), the boundary node's tap set, and the
+  shift-register control plane's wiring and power-on reset levels.
+  Expressed as the **transform list** against the settled T22 node
+  design — the artifact T24's machinery encodes and T10's capture
+  consumes. **Blocked by:** T22 · **Unblocks:** T24, T10
+- **T24 — DSL instrumentation transforms with reset-state equivalence.**
+  The CI board is the node design plus injected controllability and
+  observability (§6: fault-injection muxes, supervisor-override muxes,
+  sense taps) — and that makes it *dangerously different* from the
+  plain node it is meant to exercise (raised 2026-09-27). Capture
+  instrumentation as an **explicit transformation** of the
+  uninstrumented design — insert a series switch on this net, hang a
+  sense tap off that one — never a hand-maintained second capture, so
+  the two can never drift. The checker then proves the instrumented
+  board **in reset state** is equivalent to the plain board: every
+  inserted series element in its default/pass-through state reduces to
+  a wire (net merge), every tap is high-impedance, no base part or net
+  is lost, and residual differences (the series element's on-resistance
+  in the §2 decode-margin budget, tap capacitance on the §6 short-stub
+  contract) are enumerated and budgeted, not assumed away. "Almost
+  equivalent" is exactly the set of those enumerated residuals.
+  Starting point on pickup: design memo + four settled decisions on
+  the retained branch `t24-dsl-instrumentation`
+  (`docs/instrumentation-equivalence-2026-09-29.md`; PR #23 closed
+  unmerged 2026-09-29) — transforms hierarchical per-tile, reset
+  levels derived from shift-register power-on state, overrides as a
+  `substitute` transform kind, CI capture as node subcircuit ×8.
+  **Blocked by:** T22, T28 · **Unblocks:** T10
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
   all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
