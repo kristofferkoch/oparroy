@@ -24,8 +24,9 @@ from oparroy.dsl import (
 
 GOLDEN = Path(__file__).parent / "golden" / "oparroy-node.net"
 
-#: The MCU pins the node leaves unconnected (module docstring's budget).
-EXPECTED_NC_WARNINGS = {f"U1.{pin} is not connected" for pin in (2, 3, 8, 10, 11, 20)}
+#: The MCU pins the node leaves unconnected: the §6 payload-superset
+#: pads (PD5, PD6, PC4, PC5, PC6) plus the PC7 spare.
+EXPECTED_NC_WARNINGS = {f"U1.{pin} is not connected" for pin in (2, 3, 14, 15, 16, 17)}
 
 
 def nets_of(circuit: Circuit) -> dict[str, set[str]]:
