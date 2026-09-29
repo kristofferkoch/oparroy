@@ -608,14 +608,52 @@ addressing (§2) means **zero per-node provisioning** — one image,
 no serial numbers burned; the factory UNIID (ESIG) is read at flash
 time and logged against the handwritten unit serial (§7 checklist).
 The back-side connectors go on *after* programming — the bela
-rework-stage ordering. The CI board's scriptable flash of eight
-nodes (SWIO fan-out by mux, per-node probes, or
-supervisor-as-programmer) rides with the debug-transport decision
-below; programmer tooling (minichlink-class) joins the flake with
-the node firmware.
+rework-stage ordering.
 
-Open: debug transport (UART per node? shared bus?). The segment
-connector is settled (2026-09-29, §3) — and stays deliberately
+CI flash fan-out (2026-09-29): **the flash-busy time of all eight
+nodes must overlap** — programming time dominates test time, and the
+floor per node is silicon flash-busy, not transport: 256 fast pages
+(64 B) at 2.4–3.1 ms each ≈ 0.8 s
+([flash-option-bytes.md](datasheets/CH32V003/notes/flash-option-bytes.md)).
+Serializing that busy time — one shared probe doing node after node —
+puts ~7 s of dead time in front of test runs that themselves measure
+in milliseconds. Mechanism (revised 2026-09-29): **one PIO SWIO
+channel through an analog mux to the selected node**, pipelined
+round-robin — stream a page (16 words ≈ 0.7 ms of wire), kick the
+page program, switch the mux to the next node while the first is
+busy; poll the status registers round-robin. Legal because SWIO has
+no inter-packet timing requirement: the protocol is host-paced
+(minichlink already inserts USB-scale gaps between packets), so the
+mux may dwell anywhere between transactions. One channel keeps
+~4 nodes' flash pipelines full (3 ms busy vs 0.7 ms wire per page);
+with 8 nodes the wire becomes the bottleneck and total flash time is
+≈ max(8 × 0.2 s transport, 0.8 s busy) ≈ 1.6 s — the requirement is
+met, with QDM fast mode (§2.2) in reserve. The mux is a low-Ron
+analog switch (74LVC1G3157-class, already a stocked BOM line;
+analog switches are bidirectional, which half-duplex SWIO needs);
+deselected nodes idle with SWIO high via the target-side pull-up
+(003 internal per cnlohr, quirks — bench-verify). PIO bitbang proven
+by PicoRVD (quirks §Debug). Per-node power switching (brick recovery)
+is required regardless. Live SWIO debugging is single-target by
+nature: the mux simply **parks on the DUT** for the GDB session, no
+switching overhead. Caveat for live-ring debugging: halting a node
+starves its watchdog, so the §4 bypass engages around it — the
+designated debug DUT below carries a defeat bit for exactly this.
+Programmer tooling (minichlink-class) joins the flake with the node
+firmware.
+
+CI control plane (2026-09-29): **all slow control and observe on the
+CI board is one long daisy-chained shift register with a global
+latch/capture clock** — 74HC595-class stages for control (mux
+enables, per-node power switches, fault-injection switches,
+human-I/O overrides), 74HC165-class stages for observe. A handful of
+RP2040 pins (clock, data out, data in, latch) drives the whole
+board; chain length scales with the fault-injection complement
+instead of consuming GPIO, and every actuator is one bit — no I2C
+addressing, no bus contention, fully deterministic.
+
+Open: runtime debug transport (UART per node? shared bus?). The
+segment connector is settled (2026-09-29, §3) — and stays deliberately
 fragile: it is the failure mode under test.
 
 Instrumented boundary node (2026-09-26): the ring node adjacent to the
@@ -634,6 +672,18 @@ working-LED line (§4.1), so observation stays truthful even when the
 node's MCU misbehaves. Taps must be short stubs — probing must not
 deform the segment under observation (a §7 layout-checker contract).
 The §1 cost driver doesn't apply: this is test infrastructure.
+
+The instrumented boundary node is also the **designated debug DUT**
+(2026-09-29): a live SWIO session parks the flash mux on it, and the
+two segment taps are already on RP2040 PIO, so one node gets the
+full loop — GDB halt/single-step *and* logic-analyzer capture of
+what it received vs re-emitted, with the same pins able to inject
+crafted stimulus at its RX while stepping. To make halting useful it
+carries a **watchdog-defeat bit** in the shift-register chain: while
+set, an override holds the §4 bypass switch in the node-active
+position, so a halted or single-stepped node stays electrically in
+the ring instead of being bypassed on watchdog timeout. Default is
+watchdog-in-charge; the defeat bit is a debug-session tool.
 
 Silkscreen documentation (2026-09-26): the CI board is self-documenting
 at the bench — **connector pinout voltages and test-point labels printed
