@@ -73,7 +73,8 @@ ______________________________________________________________________
   ingest (the T7a caveat, §7) — validate the back-annotation join
   against the real `.kicad_pcb` (so far tested against synthetic input
   only), fab via JLCPCB (§6), and settle the node-board stackup
-  question (§9) at quote time.
+  question (§9) at quote time. Buy ahead: the SMD segment header
+  (C22385222) is thin-stocked (285 on 2026-09-29, §3).
   **Blocked by:** — · **Unblocks:** T10
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
@@ -169,7 +170,10 @@ ______________________________________________________________________
   footprint rotation is not yet modeled); **TVS/series-R placement
   contracts** (§7 checklist: TVS adjacent to its connector, R between
   TVS and µC pin — needs the T22 capture to name the parts);
-  **channelization hook** (per-instance layout replication keyed on
+  **footprint-set equality** (the B.Cu footprint set is exactly the
+  segment connectors) and **part-over-hole** (each reverse-mount
+  status LED over its routed hole) — the §7 contracts added
+  2026-09-29; **channelization hook** (per-instance layout replication keyed on
   T7ba sheetpath metadata, meaningless until a hierarchical board
   exists); **pcbnew ingest validation** of the emitted skeleton (real
   KiCad round trip — T22 exercises the first one).
@@ -185,11 +189,26 @@ ______________________________________________________________________
   ring segments (plus comparator-output and working-LED taps) wired to
   RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
   §6). Nodes tile the T22 node-board design; captured in the DSL,
-  layout in KiCad.
+  layout in KiCad. The §6 CI flash fan-out (2026-09-29) rides on one
+  assumption to **bench-verify early**: deselected mux ports idle
+  SWIO high on the target's internal pull-up (quirks, per cnlohr) —
+  if that sags, the single-channel mux scheme needs revisiting before
+  the control plane is committed.
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   **Blocked by:** T19, T22, T24 · **Unblocks:** T12, T15
+- **T27 — Node programming jig.** The bench deliverable of the §6
+  programming flow (2026-09-29): a pogo jig targeting the node board's
+  TP1/TP2/TP3 (SWIO/3V3/GND) strip, a WCH-LinkE driving — **the probe
+  powers the board**, jig 3V3 never from the ring (brick recovery is a
+  power cycle through reset, quirks). Flashes the single node image
+  plus the personality type byte where a board carries one; reads the
+  factory UNIID at flash time and logs it against the handwritten
+  unit serial (§7 checklist). Bela lesson
+  (docs/bela-lessons-2026-09-26.md §5): the test rig is a first-class
+  deliverable with its own schedule risk — budget for it.
+  **Blocked by:** T22 · **Unblocks:** —
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Per-bit cut-through forwarding with on-the-fly slot rewrite
@@ -208,7 +227,9 @@ ______________________________________________________________________
   target. Defines `lib::verify_failed`, the §4 VERIFY failure hook
   whose wiring point T18 landed (2026-09-28): report over the debug
   transport, then stop the keep-alive strobe so the charge-pump
-  watchdog engages RX→TX bypass. **Blocked by:** — ·
+  watchdog engages RX→TX bypass. Programmer tooling (minichlink-class)
+  joins the flake alongside the firmware (§6, 2026-09-29).
+  **Blocked by:** — ·
   **Unblocks:** T12, T13
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.

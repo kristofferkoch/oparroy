@@ -47,6 +47,12 @@ real work — **move**, don't copy. Reference, don't duplicate.
 ## Hardware
 
 - Comparators for RX: threshold selection, hysteresis, glitch filtering.
+- **QDM fast mode for CI flash** (parked 2026-09-29, against the §6
+  2026-09-29 flash fan-out): the muxed single-PIO-channel scheme lands
+  ≈1.6 s total flash, wire-bound at 8 nodes. If that ever hurts, the
+  QingKeV2 QDM fast mode (debug manual §2.2, extracted in
+  `datasheets/CH32V003/notes/sdi-debug.md`) is the reserve — more wire
+  bandwidth per PIO channel, no topology change.
 - **Blind-pin connector keying** (raised 2026-09-29, against the §3
   2026-09-29 connector decision): the 2x5 pinout's five grounds leave
   one expendable — blind pin 10 (the cable-edge conductor, so the
