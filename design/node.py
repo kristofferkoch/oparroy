@@ -173,8 +173,13 @@ class Node(Subcircuit):
         circuit.part("Rd", R0603("1k", a=led_down, b=ledd_a))
         circuit.part("Dd", LedRev1206(anode=ledd_a, cathode=gnd, value="XL-3216UYC-FB"))
 
-        # Programming/debug: SWIO on a test pad (debug transport is §6-open).
+        # Programming: the SWIO + 3V3 + GND pogo strip (§6 production
+        # flow). The programmer powers the board — brick recovery is a
+        # power cycle through reset (datasheets/CH32V003/notes/quirks.md
+        # §Debug) — so 3V3 here comes from the WCH-LinkE, never the ring.
         circuit.part("TP1", TestPoint("SWIO", p=swio))
+        circuit.part("TP2", TestPoint("3V3", p=v3v3))
+        circuit.part("TP3", TestPoint("GND", p=gnd))
 
 
 def capture(symbols: SymbolTable) -> Circuit:
