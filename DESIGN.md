@@ -6,7 +6,7 @@ that aren't yet work cards. Sections marked TBD are open.
 Settled (2026-09-26):
 
 - Project and protocol name: **oparroy**
-- License: **MIT** (LICENSE added 2026-09-26, card T14 shipped)
+- License: **MIT** (LICENSE added 2026-09-26)
 - Design capture: **home-rolled DSL** (not SKiDL) — owns its IR, emits
   KiCad netlists, constraint checks, firmware headers, simulation netlists
 - Test board: **8 ring nodes + 1 supervisor**, **full fault injection**
@@ -15,23 +15,23 @@ Settled (2026-09-26):
   integration deferred until the board exists
 - Firmware language: **freestanding C++ — no standard library**,
   zero-cost abstractions only (RAII, placement new on memory-mapped
-  I/O), under an aviation-grade rule set (ruleset choice in T16)
+  I/O), under an aviation-grade rule set (§8)
 - Tool provisioning: **nix flake** for everything non-Python (SDCC/GCC
   toolchains, KLEE/clang, ngspice, KiCad, provers); **uv** for Python
   deps — see §8
 - Python tooling: **3.13, uv, ruff (strict), ty, pytest** — package
-  scaffold landed 2026-09-26 (T6): `src/oparroy/` layout, ruff `ALL`
+  scaffold landed 2026-09-26: `src/oparroy/` layout, ruff `ALL`
   (formatter-conflicts off), ty, pytest wired via pre-commit
-- MCU (2026-09-26, card T1): node = **CH32V003F4P6** (TSSOP-20),
-  supervisor = **RP2040**; toolchains GCC riscv + GCC arm, clang host
-  build retained for KLEE (§8)
+- MCU (2026-09-26): node = **[CH32V003F4P6](datasheets/CH32V003/)**
+  (TSSOP-20), supervisor = **RP2040**; toolchains GCC riscv + GCC arm,
+  clang host build retained for KLEE (§8)
 - Node time base (2026-09-26): **internal HSI RC, no crystal** — §5
-- PHY (2026-09-26, card T3): ratio-metric duty-coded PWM, 800 kbit/s
+- PHY (2026-09-26): ratio-metric duty-coded PWM, 800 kbit/s
   anchor, comparator RX + DMA, per-bit cut-through re-timing — §2
-- Bypass topology (2026-09-26, card T2): **counter-rotating dual ring,
+- Bypass topology (2026-09-26): **counter-rotating dual ring,
   symmetric rebroadcast** — RX source select via the OPA's second
   positive input, no per-node parts — §3
-- PCBA (2026-09-26, card T17): prototypes assembled by **JLCPCB**
+- PCBA (2026-09-26): prototypes assembled by **JLCPCB**
   (Economic PCBA); fallback for unstocked parts is PCBWay
   partial-turnkey (§6)
 - Firmware build system (2026-09-26): **Meson + ninja** — §8
@@ -61,10 +61,10 @@ Design drivers, in priority order:
 
 ## 2. Physical layer
 
-Decided (2026-09-26, card T3, against the CH32V003's peripherals; full
+Decided (2026-09-26, against the CH32V003's peripherals; full
 analysis:
 [docs/phy-analysis-2026-09-26.md](docs/phy-analysis-2026-09-26.md)).
-800 kbit/s confirmed by T5 simulation (2026-09-26 — measured block
+800 kbit/s confirmed by simulation (2026-09-26 — measured block
 below); bench confirmation lands with the test board. Break length is a
 firmware/timer decision: the analog side owes only fast, chatter-free
 settling to idle, which tb_fault shows.
@@ -80,17 +80,17 @@ settling to idle, which tb_fault shows.
   reference code work unmodified.
 - **Bit rate: 800 kbit/s anchor** (1.25 µs cell = 60 timer ticks at
   48 MHz; capture resolution 20.8 ns). The rate is a free parameter —
-  the ceiling is comparator response and cable reach (T15), not the
+  the ceiling is comparator response and cable reach (§9), not the
   timers — but at 800 k the OPA (12 MHz GBW, 7.7 V/µs) is nowhere near
   the bottleneck and COTS WS2812 tooling applies. Frame/latch marker:
   line-low break, ≥ 50 µs baseline (WS2812's reset is the upper
-  reference; MCU nodes may go shorter once T5/bench confirm — the
+  reference; MCU nodes may go shorter once bench confirms — the
   vsync semantics below ride on the break either way).
 - **Signaling: 3.3 V single-ended**, push-pull at VDD per segment,
   idle low. RX threshold = VDD/2 divider on an OPA negative input. The
   OPA has no documented hysteresis: glitch rejection comes from the
   TIM2 input digital filter (ICxF) plus ratio-decode margins, not
-  analog feedback. T5 simulation confirmed this (2026-09-26,
+  analog feedback. Simulation confirmed this (2026-09-26,
   `circuits/phy-segment/tb_noise.cir`): zero spurious rxout edges
   under ringing (lseg ≤ 1 µH × cseg ≤ 470 pF) and under ±250 mV-class
   capacitive crosstalk at ±13 mV comparator offset; worst high-time
@@ -104,7 +104,9 @@ settling to idle, which tb_fault shows.
   DMA channels 5/7 stream captures into an SRAM ring buffer. Per-bit
   ISRs are ruled out: 60 cycles/bit at 800 kbit/s leaves nothing after
   PFIC entry; decode runs per burst, amortized ~10 cycles/bit
-  (datasheets/CH32V003/notes: opa.md, timers.md, dma.md).
+  ([opa.md](datasheets/CH32V003/notes/opa.md),
+  [timers.md](datasheets/CH32V003/notes/timers.md),
+  [dma.md](datasheets/CH32V003/notes/dma.md)).
 - **TX path:** TIM1 PWM + DMA streaming compare values against a fixed
   cell period (fallback: SPI + DMA with bit-to-symbol encoding, which
   frees TIM1 for application PWM per §5's I/O complement). TIM1's
@@ -135,32 +137,34 @@ settling to idle, which tb_fault shows.
   lost — a corrupt frame is already downstream before a CRC could
   reject it — so containment moves to illegal-cell detection (period
   outside 0.9–1.6 µs ⇒ stop regenerating, force the line idle), a
-  **frame-length cap** (2026-09-26, T16d: a stream of legal cells past
+  **frame-length cap** (2026-09-26: a stream of legal cells past
   `frame_max_bits` = 2048 without a break — 2× the pre-sized ENUM
   maximum — is a babbling idiot too, contained the same way: Mute until
   the next break), the
   TIM1-brake TX-kill and hardware bypass (§3, §4), and supervisor-side
-  CRC/sequence checks (feeds T13). Fallback rung: if the per-bit loop
-  doesn't close timing on-target, degrade to store-and-forward (T11
-  decides with measurements). Closure discipline: the supervisor is
-  the only frame originator and drainer; echo mismatch ⇒ fault.
+  CRC/sequence checks (feeds the §9 intermittent-fault policy).
+  Fallback rung: if the per-bit loop doesn't close timing on-target,
+  degrade to store-and-forward (decided with measurements on-target).
+  Closure discipline: the supervisor is the only frame originator and
+  drainer; echo mismatch ⇒ fault.
 - **Addressing: positional, discovered — no solder bridges, no
   provisioning step.** Position in the ring *is* the address. The
   supervisor enumerates with one circulation of an ENUM frame that
   each node stamps with its factory 96-bit UNIID (ESIG — see
-  datasheets/CH32V003/notes/flash-option-bytes.md) plus a type byte;
-  the position ↔ UNIID map rebuilds automatically when a node is
+  [flash-option-bytes.md](datasheets/CH32V003/notes/flash-option-bytes.md))
+  plus a type byte; the position ↔ UNIID map rebuilds automatically
+  when a node is
   replaced. Solder-bridge IDs (Trill-style, bela-lessons §2) lose on
   pin budget (≥2 GPIO on an 18-GPIO part) and per-node parts — the §1
   cost driver. One firmware image, personality by type byte in flash
-  (card T11).
+  (node firmware).
 - **Telemetry: slotted in the circulating frame, not polled.** Each
   node writes its own slot as the frame passes, with inputs sampled at
   the vsync latch (below) — synchronous sampling in the ring's
   timebase (bela-lessons §1), deterministic latency (~1.6 kHz
   full-ring update at 8 nodes, cut-through — see re-timing above), no
   poll round-trips. The frame sequence counter is the timestamp.
-  Frame format detail is T11 scope.
+  Frame format detail is node-firmware scope (KANBAN.md).
 - **Ring-wide latch: the frame gap is a vsync — WS2812's "global
   shutter" in both directions** (2026-09-26). The line-low break that
   marks frame start drives two synchronized actions at every node:
@@ -184,7 +188,7 @@ the transition rate, no benefit for comparator RX); USART-async (two
 HSI ends bust the async sampling budget — kept as fallback only if
 bench testing kills the comparator-RX path).
 
-Measured (ngspice, 2026-09-26, card T5 — benches in
+Measured (ngspice, 2026-09-26 — benches in
 `circuits/phy-segment/`, models in `circuits/lib/ch32v003.spi`):
 
 - **Decode margins (tb_decode)** — 24 combos (segment capacitance
@@ -207,16 +211,17 @@ Measured (ngspice, 2026-09-26, card T5 — benches in
   zero BOM cost. Without it the line floats to a leakage-decided state
   — static in sim, but a chatter hazard on real silicon.
 
-Open: drive strength vs cable (T15),
-exact frame format (T11).
+Open: drive strength vs cable (§9),
+exact frame format (node firmware).
 
 ### 2.1 Ring power rail
 
 Decided (2026-09-26): **the ring distributes a single 3.3 V rail** — it
 is both the signaling rail (the §2 push-pull, VDD/2-threshold PHY) and
 node power. No per-node regulator: the CH32V003 runs 2.7–5.5 V straight
-off the rail (datasheets/CH32V003/notes/power-reset.md), and every T4/T5
-bench plus the §7 protection sizing is already characterized at 3.3 V.
+off the rail ([power-reset.md](datasheets/CH32V003/notes/power-reset.md)),
+and every §4 watchdog / §2 PHY bench plus the §7 protection sizing is
+already characterized at 3.3 V.
 
 - **5 V rail rejected** (2026-09-26): the MCU could run at 5 V directly,
   but nothing else follows. The always-on SN74LVC1G3157 at 5 V VCC has
@@ -232,7 +237,7 @@ bench plus the §7 protection sizing is already characterized at 3.3 V.
   a loop (§3), so a 3.3 V rail holds ample margin against the MCU's
   2.7 V floor. A future power-hungry payload carries its own regulator —
   a per-payload cost, not a per-node tax (§1). If the loop drop budget
-  ever busts — check lands with T15's cable numbers, worst case a
+  ever busts — check lands with the §9 cable numbers, worst case a
   connector break turning the loop into a long spur — the fix is
   supervisor-side power injection at a second tap (§1: supervisors may
   cost freely), not a higher rail.
@@ -246,7 +251,7 @@ bench plus the §7 protection sizing is already characterized at 3.3 V.
 
 ## 3. Ring topology and bypass
 
-Decided (2026-09-26, card T2): **counter-rotating dual ring with
+Decided (2026-09-26): **counter-rotating dual ring with
 symmetric rebroadcast.** Every segment carries two data wires in the same
 cable/connector: ring A (primary, clockwise) and ring B
 (counter-rotating). The requirement holds with no per-node parts:
@@ -266,21 +271,21 @@ Mechanism:
   per-direction ENUM.
 - **RX source select is firmware policy, not hardware.** The OPA's two
   positive inputs (OPP0 = PA2 = ring A, OPP1 = PD7 = ring B; `OPA_PSEL`
-  in `R32_EXTEN_CTR` — datasheets/CH32V003/notes/opa.md) mux the
+  in `R32_EXTEN_CTR` — [opa.md](datasheets/CH32V003/notes/opa.md)) mux the
   comparator. No edges for > 2 frame times ⇒ flip source. Firmware is
   safe here because the node at the receiving end of a dead segment is
   alive by definition — a dead MCU is §4's case. Flap/hysteresis policy
-  for intermittent opens is T13 scope. **The internal weak pull-down
-  stays enabled on both OPP inputs** (2026-09-26, T5 tb_fault, §2
-  measured block): it parks a severed segment idle-low and
+  for intermittent opens is open (§9). **The internal weak pull-down
+  stays enabled on both OPP inputs** (2026-09-26, §2
+  measured block, tb_fault): it parks a severed segment idle-low and
   chatter-free, which the flip policy depends on.
 
 Per-node cost: no parts; +1 wire +1 connector contact per segment; +2
 GPIO per node (PD7 as RX_B — already an OPP input — plus one TX_B pin).
 The §5 pin budget lands at ~16–17 of 18, verified at pin-map time
-(T9/T11). Electrically neutral for the PHY: every driver still sees
-exactly one segment, so T5's drive/capacitance baseline and T15's reach
-budget are unchanged by the topology.
+(§7 pin map). Electrically neutral for the PHY: every driver still
+sees exactly one segment, so the §2 measured baseline and the §9
+reach budget are unchanged by the topology.
 
 Segment connector (2026-09-27; supersedes the single 10-contact
 connector sketched the same day): **two 6-pin connectors per node** —
@@ -305,8 +310,8 @@ Failure modes, answered:
 
 - Permanent open at a connector — both rings severed at one point;
   nodes past the break flip to the live direction; all nodes reachable.
-- Intermittent open at a connector — direction-flap policy deferred to
-  T13; the hardware substrate is now settled.
+- Intermittent open at a connector — direction-flap policy deferred
+  (§9); the hardware substrate is now settled.
 - Short to GND / VCC on a segment — treated as an open of that wire;
   the other direction covers. Rail shorts are the CI-board eFuse's
   scope (§7).
@@ -324,31 +329,32 @@ Rejected (2026-09-26):
   driver 2 outright.
 - **Skip-one wires (N→N+2)** — whole-connector-yank coverage needs
   physically separate skip assemblies leaping a node: 2× pitch halves
-  the T15 reach budget on the engaged path, and avoiding permanent
+  the §9 reach budget on the engaged path, and avoiding permanent
   double drive-loading costs +1 SPDT per node. Sharing the connector
   instead cuts coverage to single-contact faults. Equal-or-less
   coverage for worse mechanics.
 
 ## 4. Node watchdog / bypass
 
-Decided (2026-09-26, card T4): an **edge-sensitive charge pump** holds a
+Decided (2026-09-26): an **edge-sensitive charge pump** holds a
 normally-on analog switch open; when the MCU stops strobing, the switch
 relaxes closed and RX→TX bypass engages. The window-watchdog supervisor
 IC candidate is rejected on cost/inventory (below). Both candidates
 live as standalone subcircuits with ngspice testbenches:
 
-- `circuits/watchdog-chargepump/` — **chosen**. BAT54S-class dual
-  Schottky pump (Cp=22n, Rs=220, Cs=10n, Rb=47k, τ=0.47 ms) driven by a
-  20 kHz MCU keep-alive; its `sel` output drives the switch select.
+- `circuits/watchdog-chargepump/` — **chosen**.
+  [BAT54S](datasheets/BAT54S/)-class dual Schottky pump (Cp=22n,
+  Rs=220, Cs=10n, Rb=47k, τ=0.47 ms) driven by a 20 kHz MCU keep-alive;
+  its `sel` output drives the switch select.
 - `circuits/watchdog-supervisor/` — the rejected TPS3430-class window
   watchdog, kept as the quantified record of what the money would have
   bought.
 
-Switch: SN74LVC1G3157 SPDT (facts in
-`datasheets/SN74LVC1G3157/notes/`). COM = downstream, B1 = upstream —
-bypass is the default, sel low —, B2 = node TX. The node's RX tap stays
-connected in bypass: a dead node keeps listening (listen-only); bypass
-cuts TX only.
+Switch: [SN74LVC1G3157](datasheets/SN74LVC1G3157/) SPDT (facts in
+[its notes](datasheets/SN74LVC1G3157/notes/facts.md)). COM = downstream,
+B1 = upstream — bypass is the default, sel low —, B2 = node TX. The
+node's RX tap stays connected in bypass: a dead node keeps listening
+(listen-only); bypass cuts TX only.
 
 Requirement (unchanged): RX→TX bypass is the **default state**; the MCU
 must actively deassert it. Semi-passive — no firmware in the bypass
@@ -387,14 +393,15 @@ re-sets the latch); and the select output snaps rail-to-rail, with no
 10 ns/V input-rate violation.
 
 Known spec violation, accepted: A's slow sel ramp breaks the switch's
-10 ns/V input-rate spec (SCES424O §5.4) — ≤500 µA ΔICC while dwelling
-~0.4 ms in the 0.99–2.31 V band, once per fault event. A 74LVC1G17
-Schmitt buffer on sel fixes it for one Extended BOM line if the bench
-disagrees.
+10 ns/V input-rate spec ([SCES424O](datasheets/SN74LVC1G3157/) §5.4) —
+≤500 µA ΔICC while dwelling ~0.4 ms in the 0.99–2.31 V band, once per
+fault event. A 74LVC1G17 Schmitt buffer on sel fixes it for one
+Extended BOM line if the bench disagrees.
 
 Power: bypass switch + watchdog run from the **always-on ring rail**,
 not the per-node switchable rail — the 1G3157 has no Ioff /
-partial-power-down spec. Shaped §3 (2026-09-26); still constrains T10.
+partial-power-down spec. Shaped §3 (2026-09-26); still constrains the
+§6 test board.
 
 ### 4.1 Fault detection and serviceability
 
@@ -420,12 +427,13 @@ product feature, not board-only debug.
 
 ## 5. MCU platform
 
-Decided (2026-09-26, card T1; PCBA verification under card T17):
+Decided (2026-09-26):
 
-- **Node MCU: CH32V003F4P6** (WCH RV32EC @ 48 MHz, **TSSOP-20**) —
-  ~$0.29 at prototype qty, $0.137 @4k (LCSC **C5187096**, JLCPCB
-  Extended, ~9k in stock 2026-09-26). Its OPA comparator routes to TIM2
-  CH1 capture; two capture-capable timers + DMA. TSSOP-20 over the
+- **Node MCU: [CH32V003F4P6](datasheets/CH32V003/)** (WCH RV32EC @
+  48 MHz, **TSSOP-20**) — ~$0.29 at prototype qty, $0.137 @4k (LCSC
+  **C5187096**, JLCPCB Extended, ~9k in stock 2026-09-26). Its OPA
+  comparator routes to TIM2 CH1 capture; two capture-capable timers +
+  DMA. TSSOP-20 over the
   QFN-20 variant (F4U6): avoids JLCPCB's per-board X-ray fee for
   leadless packages and stays hand-reworkable.
 - **Supervisor MCU: RP2040** ($0.70–1.00, LCSC **C2040**, JLCPCB
@@ -437,7 +445,7 @@ Decided (2026-09-26, card T1; PCBA verification under card T17):
 - **Toolchains**: GCC riscv (ch32v003fun-class SDK) for the node, GCC
   arm for the supervisor; clang/LLVM-bitcode host build retained for
   KLEE (§8). All provisioned by the nix flake.
-- **Node time base** (2026-09-26, T3 analysis): **internal HSI 24 MHz
+- **Node time base** (2026-09-26, §2 analysis): **internal HSI 24 MHz
   RC + PLL ×2 = 48 MHz — no crystal on the node.** HSI is
   factory-trimmed to −1.2/+1.6 % over 0–70 °C ([CH32V003
   datasheet](https://akizukidenshi.com/goodsaffix/CH32V003.pdf)). The
@@ -517,7 +525,7 @@ fault-injection muxes and per-node debug plumbing want the routing room,
 and the §1 cost driver doesn't apply to test infrastructure. Node-board
 stackup is a separate question (§9).
 
-Prototype assembly (decided 2026-09-26, card T17): **JLCPCB Economic
+Prototype assembly (decided 2026-09-26): **JLCPCB Economic
 PCBA** for the first prototype boards. Research + inventory snapshot:
 [docs/pcba-research-2026-09-26.md](docs/pcba-research-2026-09-26.md).
 Facts that shape board design:
@@ -560,14 +568,14 @@ injection — which is the measurement half of its golden-reference role
 stimulus. Two further taps: the node's comparator-output GPIO and its
 working-LED line (§4.1), so observation stays truthful even when the
 node's MCU misbehaves. Taps must be short stubs — probing must not
-deform the segment under observation (layout contract for T19). The §1
-cost driver doesn't apply: this is test infrastructure.
+deform the segment under observation (a §7 layout-checker contract).
+The §1 cost driver doesn't apply: this is test infrastructure.
 
 Silkscreen documentation (2026-09-26): the CI board is self-documenting
 at the bench — **connector pinout voltages and test-point labels printed
 on the board** (e.g. `3V3`, `5V`, `GND`, `TP12 ring-seg-3`), so probing
 never requires the schematic open on a second screen. Layout-checkable
-(T19): every connector and test point carries a silkscreen label.
+(§7): every connector and test point carries a silkscreen label.
 
 ## 7. Design-capture DSL
 
@@ -581,9 +589,9 @@ of truth for:
 
 Rationale: owning the IR makes multi-target codegen and property
 verification straightforward; a KiCad/SKiDL-format emitter is just one
-backend. Package scaffold landed 2026-09-26 (T6, see §8 tooling).
+backend. Package scaffold landed 2026-09-26 (see §8 tooling).
 
-DSL shape (2026-09-26, from the T7a design interrogation):
+DSL shape (2026-09-26, from the initial design interrogation):
 
 - **Separable, pretty-printable IR.** The IR is a real data structure,
   dumpable and diffable; its printed form is for humans — it does not
@@ -629,8 +637,8 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   One-off parts stay string-declared, but **declared in one place and
   instantiated elsewhere**: declaration is data, instantiation is
   wiring. Instantiation is **keyword-only** (2026-09-27): positional
-  arguments are a pin-swap factory (the BAT54S x/sel swap, found in the
-  T7a review, is the proof). Pin names are the keyword names —
+  arguments are a pin-swap factory (the BAT54S x/sel swap, found in
+  review, is the proof). Pin names are the keyword names —
   `Diode(*, cathode=sel_net, anode=x_net)` — so construction *is* the
   wiring: no separate `connect` call for typed parts, and the type
   checker and autocomplete cover declaration and connection alike. Sole
@@ -648,7 +656,7 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   places units independently (U1A, U1B, …; unplaced units don't
   exist), and the netlist export flattens to refdes + physical pin
   numbers — pcbnew never sees units. The DSL mirrors this: `Symbol`
-  preserves unit structure (landed 2026-09-28, T7bc — see below), a
+  preserves unit structure (landed 2026-09-28 — see below), a
   placed part instantiates a **unit subset** (default: all — today's
   behavior), unplaced units materialize no pins so the unconnected-pin
   check stays clean, and a physical pin shared by several placed units
@@ -662,20 +670,21 @@ DSL shape (2026-09-26, from the T7a design interrogation):
   (divider ratio, filter corner) is a spec — target plus tolerance —
   not a number: the emitter resolves it to a real part from a stocked
   bin (the VDD/2 divider draws from the 10k bin), never an unsourcable
-  irrational value. Resolution runs against the T7c parts DB's value
+  irrational value. Resolution runs against the parts DB's value
   bins (§6 inventory-driven selection). `Part.value` widens from a
   string to a value-spec type when this lands — a designed change to a
-  public constructor parameter, not a patch (card: T23).
+  public constructor parameter, not a patch (KANBAN.md).
 - **Captures live in a new `design/` tree.** `circuits/` keeps benches
-  and device models until T7e's port retires the DUT `.cir` files.
+  and device models until the bench DUTs are ported and the DUT `.cir`
+  files retire.
 - **Human-review rendering:** a Graphviz dot dump is the minimal first
   view (ugly, but a start); the goal is abstraction-level block views
-  in the Verilog-debugger sense — prior-art survey shipped 2026-09-28
-  (card T21): [docs/prior-art-schematic-gen-2026-09-28.md](docs/prior-art-schematic-gen-2026-09-28.md)
+  in the Verilog-debugger sense — prior-art survey shipped 2026-09-28:
+  [docs/prior-art-schematic-gen-2026-09-28.md](docs/prior-art-schematic-gen-2026-09-28.md)
   — borrow the layout engine (grandalf first, ELK fallback), build
-  only the view extraction; the views are card T26.
+  only the view extraction; the views are open work (KANBAN.md).
 
-Landed (2026-09-26, card T7a; typed parts and review hardening
+Landed (2026-09-26; typed parts and review hardening
 2026-09-27): the DSL core in `src/oparroy/dsl/` —
 `ir.py` (parts/pins/nets/circuit + pretty-print), `check.py`
 (validation pass: connectivity, footprint existence and symbol
@@ -698,7 +707,7 @@ Not yet proven: a real pcbnew netlist *import* (no KiCad application in
 the flake yet — the golden format is pinned, the ingest is exercised
 when the first board enters layout).
 
-Subcircuit composition (2026-09-28, card T7ba): hierarchy is
+Subcircuit composition (2026-09-28): hierarchy is
 capture-time structure, **flattening is a pass** — `subcircuit.py`
 (`Subcircuit` base), `Circuit.port` (a net marked as interface, exempt
 from the dangling-net checks), `Circuit.instance` (captures the child
@@ -716,10 +725,10 @@ with content-derived tstamps — the channelization hook. Check and the
 emitters flatten implicitly and report hierarchical paths. The §4
 watchdog is the first subcircuit (`design/watchdog_chargepump.py`); the
 8-instance proving case runs in `tests/test_dsl_subcircuit.py`.
-Remainder of the T7b split: multipacking and component sockets (T7bc),
-connection sugar (T7bd).
+Remainder of that split: multipacking and component sockets (below),
+connection sugar (KANBAN.md).
 
-Port arrays and bundles (2026-09-28, card T7bb): the interface scales
+Port arrays and bundles (2026-09-28): the interface scales
 past scalar ports. `Circuit.port_array` declares a width-fixed vector
 (`led[0]`…`led[7]`) bound element-wise at instantiation — a width
 mismatch raises at capture (button matrices, LED arrays); elements may
@@ -740,25 +749,26 @@ nets only. One checker fix rode along: footprint filters match against
 the full `Lib:Name` as well as the bare name, so KiCad's lib-qualified
 filters (`Connector*:*_1x??_*`) work.
 
-ngspice emitter (2026-09-28, card T7d): `spice_emit.py` (`emit_spice`)
+ngspice emitter (2026-09-28): `spice_emit.py` (`emit_spice`)
 is the simulation-netlist backend over the flat IR. It emits the DUT
 as a `.subckt` with ports in declaration order; stimulus and `.meas`
 assertions stay in the external bench decks (`circuits/**/tb_*.cir`) —
 the DSL emits the circuit, benches drive it — so a capture whose ports
 match a hand-written `circuits/` interface drops into the same benches
-unmodified, and either capture can drive the run while T7e ports the
-DUTs over. Spice bindings are ad hoc until T7c's parts DB owns them: a
-symbol-keyed table (R/C two-pin primitives, the BAT54S series-pair
-expansion) plus caller-passed `.model` definitions, a part's value
-naming its model as in a hand-written deck. Emission is byte-identical
-like the KiCad emitter's, hierarchy flattens implicitly (ngspice
+unmodified, and either capture can drive the run while the remaining
+DUTs are ported over. Spice bindings are ad hoc until the parts DB
+owns them: a symbol-keyed table (R/C two-pin primitives, the BAT54S
+series-pair expansion) plus caller-passed `.model` definitions, a
+part's value naming its model as in a hand-written deck. Emission is
+byte-identical like the KiCad emitter's, hierarchy flattens implicitly
+(ngspice
 accepts `/` in element and node names verbatim), and element names
 keep the ref, gaining a kind-letter prefix only when flattening hid it
 (`WD1/Rs` → `RWD1/Rs`). Proven by `design/watchdog_chargepump.py --spice`: the emitted `wd_chargepump` passes all three §4 benches
 (`tb_engage`, `tb_missed_pulse`, `tb_glitch`) through
-`scripts/sim-run` — the T7e equivalence pattern, rehearsed.
+`scripts/sim-run` — the DUT-port equivalence pattern, rehearsed.
 
-Port limit ranges and waivers (2026-09-28, card T8): typed ports carry
+Port limit ranges and waivers (2026-09-28): typed ports carry
 electrical limit **ranges** — `Circuit.port(..., source=…, sink=…)`
 taking `Limits(voltage=Interval, current=…)` — and the validation pass
 checks **interval containment** over every net's declared endpoints: a
@@ -781,10 +791,11 @@ single-fault and watchdog default-state checks, which need the
 board-level captures they inspect, and pin/part-level ranges (today
 only ports carry them — port arrays and bundles not included).
 
-Parts DB (2026-09-28, card T7c): `parts_db.py` holds one record per
+Parts DB (2026-09-28): `parts_db.py` holds one record per
 part — LCSC number, JLCPCB Basic/Extended tier, a stock snapshot with
 its as-of date and source, the KiCad symbol/footprint pair, the spice
-model binding, and the datasheet pointer into `datasheets/` — the §6
+model binding, and the datasheet pointer into
+[`datasheets/`](datasheets/README.md) — the §6
 inventory-driven-selection view as data. Selection is **constraint
 filtering over the table**, not lookup: a `PartFilter` is refinement
 data (kind, tier, area bounds, an allowed-footprint set, exclusions, a
@@ -794,16 +805,16 @@ assembler-stock status is a column *and* a checkable constraint.
 owns symbol/value/footprint — so captures draw their bins from the
 table (`design/parts_db.py` binds `R0603`/`C0603`; capture-specific
 parts bind at the capture site) instead of re-declaring footprint
-pairs per capture, retiring the T7a ad-hoc bin classes.
+pairs per capture, retiring the earlier ad-hoc bin classes.
 `PartsDb.check_stock` is the freshness audit: stale snapshots,
 never-queried parts, unverified tiers, and stock-outs surface as
 warnings (`python -m design.parts_db`); the per-capture
-unsourcable-part gate is T8's. Stock numbers are as-of-dated
+unsourcable-part gate is open work. Stock numbers are as-of-dated
 snapshots with provenance, never live data — re-query JLCPCB before
-ordering. Full emitter-side resolution against value bins is T23's
-solve pass.
+ordering. Full emitter-side resolution against value bins —
+the solve pass — is open work (KANBAN.md).
 
-Firmware pin maps (2026-09-28, card T9): `pinmap.py` — pins are
+Firmware pin maps (2026-09-28): `pinmap.py` — pins are
 requested by function (`gpio.request("keepalive")`), pads bind late as
 refinement data (`gpio.bind(keepalive="PD3")`), and the one
 authoritative table feeds both consumers: `emit_pin_header` (the
@@ -813,18 +824,20 @@ GPIO-budget check: the bound pad carries every used signal, one
 function per pad, reservations honored, requests + reservations inside
 the chip's GPIO count). Chip data (`Chip`/`Pad`) is datasheet-derived —
 the CH32V003F4P6 table covers the default alternates only (DS0 §2.1,
-datasheets/CH32V003/notes/gpio-pinout.md); AFIO remaps are refinement
-room, added when a binding needs one. `design/node_pins.py` is the
-node table — 16 function requests plus the SWIO reservation = **17 of
+[gpio-pinout.md](datasheets/CH32V003/notes/gpio-pinout.md)); AFIO
+remaps are refinement room, added when a binding needs one.
+`design/node_pins.py` is the node table — 16 function requests plus the
+SWIO reservation = **17 of
 18 GPIO, PC7 spare**, verifying §3's "~16–17 of 18" at pin-map time as
-§3 predicted (T9/T11) — and `firmware/node/pins.hpp` is the generated
+§3 predicted — and `firmware/node/pins.hpp` is the generated
 header, byte-pinned by `tests/golden/node-pins.hpp` and compile-proven
 on both toolchains (`firmware/node/pins.cpp`: host clang + rv32ec
 GCC). Regeneration stays a manual step
 (`python -m design.node_pins > firmware/node/pins.hpp`); meson
-`custom_target()` wiring lands with the first consumer (T11).
+`custom_target()` wiring lands with the first consumer (the node
+firmware).
 
-Node board and the capture→layout stages (2026-09-28, card T22): the
+Node board and the capture→layout stages (2026-09-28): the
 ring node is captured in `design/node.py` — CH32V003F4P6
 (`design/ch32v003.py`: pins keyword-only by port name, power pins
 required, the rest reported unconnected by name via the typed-part
@@ -836,8 +849,9 @@ from the 10k bin, ring-B protected RX/TX, 470 Ω + TVS footprint per
 an SWIO test pad, and the two §3 segment connectors. TIM1_BKIN (PC2)
 is wired to the watchdog's `sel` — bypass engaging brakes both TX
 channels (§2). `Node` is a subcircuit: the node board captures it
-directly, and T10 tiles it eight times. Between capture and pcbnew sit
-the two stages this section promised: `assign.py` (footprint overrides
+directly, and the §6 test board tiles it eight times. Between capture
+and pcbnew sit the two stages this section promised: `assign.py`
+(footprint overrides
 as JSON data on top of the class-default bins, now shared in
 `design/bins.py`) and `annotate.py` (capture names → board refdes;
 prior annotations survive source edits; comp tstamps are keyed on the
@@ -846,10 +860,10 @@ timestamp across re-annotation; `annotation_from_pcb` folds KiCad's
 geographic renumbering back out of `.kicad_pcb`). Typed parts grew
 `Led` and `TvsDiode`. Golden: `tests/golden/oparroy-node.net`. Not yet
 proven: real pcbnew ingest and the back-annotation join against a real
-layout (the T7a caveat above) — first layout is human work, and the §9
+layout (the caveat above) — first layout is human work, and the §9
 node-board stackup question settles at quote time.
 
-Multipacking and component sockets (2026-09-28, card T7bc): the
+Multipacking and component sockets (2026-09-28): the
 multi-unit model above lands. kicadlib preserves KiCad's unit
 structure — `Symbol.common_pins` (unit 0, present in every placed
 unit) and `Symbol.units`; `pins` stays the all-units view and
@@ -909,7 +923,7 @@ assert layout-level properties the schematic can't express, e.g.:
   handling — checkable as min corner radius on the edge-cuts layer),
   mounting holes for standoffs/"legs" with correct keepouts
 - **Electrical geometry**: net-class width/clearance compliance, max
-  segment trace length against the cable-reach budget (T15), keepout
+  segment trace length against the cable-reach budget (§9), keepout
   respect
 - KiCad's own DRC stays authoritative for manufacturability; the DSL
   checker covers *project semantics* DRC can't know about. The DSL can
@@ -934,7 +948,8 @@ either a layout-checker assertion or a subcircuit):
   TX/RX (470 Ω × 50 pF ≈ 24 ns edge softening, far inside the §2
   decode margins) and on user-facing outputs (7 mA into a shorted
   pin, inside the ±8 mA spec'd drive), 1 kΩ on buttons, ADC sources
-  ≤ 10 kΩ total including the series R (adc.md, T3-24). The R also
+  ≤ 10 kΩ total including the series R
+  ([adc.md](datasheets/CH32V003/notes/adc.md), T3-24). The R also
   caps phantom-power injection into a powered-down node (the §4/§6
   power-cut fault). Prefer FT pins (PC1/PC2/PC5/PC6) for any
   terminal that can see 5 V. Plus a **TVS footprint per external
@@ -947,7 +962,7 @@ either a layout-checker assertion or a subcircuit):
   variant; leave one CI node DNP to cover populated↔unpopulated
   segments in the same run. Production nodes may ship DNP. The
   power-rail TVS pairs with the eFuse/crowbar above and is *not*
-  optional. Layout-checkable (T19): TVS adjacent to its connector,
+  optional. Layout-checkable (§7): TVS adjacent to its connector,
   R between TVS and µC pin.
 - Rounded corners, mounting holes for legs (layout checker, above)
 - **Board identification on silkscreen** (2026-09-26): every PCB
@@ -963,7 +978,7 @@ either a layout-checker assertion or a subcircuit):
   revision are on the bench. Layout-checkable: a silkscreen box of
   minimum area, kept clear of pads and other silkscreen text.
 
-Landed (2026-09-28, card T19, first slice): the layout checker in
+Landed (2026-09-28, first slice): the layout checker in
 `src/oparroy/dsl/` — `kicad_pcb.py` (a tolerant `.kicad_pcb` parser on
 top of `sexpr`: stackup, net classes, footprints/pads, copper, board
 outline, silkscreen texts/rects, zones), `layout_check.py`
@@ -979,8 +994,8 @@ classes, and keepouts into pcbnew pre-audit; round-trips through the
 parser). Proven against `tests/fixtures/board_pass.kicad_pcb`. Not yet
 landed: copper-geometry independence beyond pad whitelisting, serial
 box pad/silkscreen clearance, TVS/series-R placement contracts, and
-the channelization hook (per-instance layout replication over T7ba
-sheetpaths) — these wait for the first real board (T22).
+the channelization hook (per-instance layout replication over the
+subcircuit sheetpaths) — these wait for the first real board.
 
 ## 8. Verification strategy
 
@@ -1041,15 +1056,15 @@ with explicit `try_` growth. Landed in `firmware/lib/`: `Span`,
 `ErrorOr<void>`), `StaticArena` + `ArenaPtr` ownership over static
 slot pools, `UNREACHABLE`, VERIFY's target personality
 (`-DOPARROY_TARGET` → `lib::verify_failed`, the §4 wiring point — the
-node firmware's hook definition lands with T11), `lib::move`
+node firmware's hook definition lands with the node firmware), `lib::move`
 (`utility.hpp` — AK's spelling; `<utility>` stays outside the
 freestanding header set, code-std.md §2), and the StaticVector → `Span`
 implicit conversion (the `std::vector` → `std::span` analog, AK's
-`Vector`/`operator Span` shape) (2026-09-28, T18).
+`Vector`/`operator Span` shape) (2026-09-28).
 `Error` is a bare `enum class` code, not AK's string-carrying class —
 widen to a payload-carrying class the day an error needs more than a
 code. Rule set: **project-owned** (decided
-2026-09-26, T16b) — `code-std.md` at the repo root, borrowing the
+2026-09-26) — `code-std.md` at the repo root, borrowing the
 defect-preventing rules from JSF AV C++ / MISRA C++:2023 / AUTOSAR
 C++14 / CERT and dropping checker-driven superstition (single-exit,
 mandatory `default`, essential-type cast noise) that KLEE/fuzz/UBSan
@@ -1061,7 +1076,7 @@ Practical consequences:
   behind thin shims so protocol and state-machine logic builds for the
   host analyzer. (The freestanding subset also keeps the bitcode clean:
   no libstdc++ exception machinery for KLEE to choke on.)
-- **Toolchain consequence (feeds T1):** freestanding C++ needs a real
+- **Toolchain consequence (feeds §5):** freestanding C++ needs a real
   C++ compiler — GCC/clang. SDCC is C-only, so this decision all but
   rules out 8051-class parts (EFM8/STC) and favors RISC-V/ARM
   (CH32V003, RP2040-class).
@@ -1104,10 +1119,10 @@ Firmware build system (2026-09-26): **Meson + ninja**. The build matrix
 is wide even though the file count is small: three toolchains (riscv
 GCC node, arm GCC supervisor, clang host) × build flavours (host
 objects, LLVM bitcode for KLEE, fuzzers, coverage-instrumented release)
-plus custom outputs (KLEE runs, DSL-generated headers per T9). Meson
+plus custom outputs (KLEE runs, DSL-generated headers per §7). Meson
 covers that natively — one cross/native file per toolchain, per-target
 flag overrides, `custom_target()` for bitcode/KLEE, and the built-in
-test runner driving T16e's coverage-on-release (2026-09-28, T16e:
+test runner driving coverage-on-release (2026-09-28:
 clang source-based instrumentation + llvm-cov branch reporting, chosen
 over `b_coverage`/gcov — gcov-format data degrades on C++ at -O2, and
 llvm-cov reports exact branch coverage with tools already in the
@@ -1115,8 +1130,8 @@ flake's LLVM set). CMake was the
 runner-up (toolchain-file ceremony, verbose custom commands); GNU make
 loses on the multi-toolchain matrix; tup ruled out (FUSE dependency,
 thin ecosystem). Provisioned through the flake like everything else.
-The project's default `buildtype` is pinned to `plain` (2026-09-26,
-T20): the nix cc-wrapper appends `-D_FORTIFY_SOURCE` *after* all user
+The project's default `buildtype` is pinned to `plain` (2026-09-26):
+the nix cc-wrapper appends `-D_FORTIFY_SOURCE` *after* all user
 flags whenever it sees an explicit `-O` (meson debug's `-O0` included),
 and glibc `#error`s on that under `-Werror` at `-O0` — freestanding has
 no libc for fortify to call into anyway. Optimized flavours are chosen
@@ -1152,9 +1167,9 @@ resolves each is in KANBAN.md):
 
 - **Intermittent connector faults** (§3) — protocol re-route vs hardware
   auto-bypass vs both; the dual-ring substrate is settled (§3), the
-  direction-flap policy is not. Card: T13.
+  direction-flap policy is not.
 - **Debug transport** (§6) — per-node UART vs shared bus, connector
-  style. Card: T10.
+  style.
 - **Node-board stackup and thickness** (§6) — leaning 4-layer to keep
   the node board small and good, but every extra layer is a per-node
   fab cost and must argue against the central cost driver (§1); the CI
@@ -1162,17 +1177,17 @@ resolves each is in KANBAN.md):
   boards should be **thinner than the standard 1.6 mm** (≤1.0 mm class)
   so a small board doesn't feel chunky — JLCPCB offers thinner stackups
   as a fab option; verify exact thicknesses/4-layer combos at quote
-  time. Card: T22 (the first node-board design).
+  time. Resolved by the first node-board design (KANBAN.md).
 - **Cable reach** (§2) — maximum segment length unamplified, and with
   an amplifier/re-driver node in the segment; line coding is settled
   (§2), so this is drive strength, comparator sensitivity, and cable
   characteristics.
   Answered by simulation first, then measured on the test board.
-  Card: T15.
-- **Coverage threshold gate** (§8) — T16e (2026-09-28) measures branch
-  coverage of the release build (llvm-cov, informational only: 82% of
+- **Coverage threshold gate** (§8) — the coverage instrumentation
+  (2026-09-28) measures branch coverage of the release build (llvm-cov,
+  informational only: 82% of
   122 branches at landing). Whether to gate the build on a threshold,
   and at what red line, is undecided; the infrastructure supports it
   (`llvm-cov export` JSON) once the suite matures. Also open: whether
   the shipped node image builds at the measured `-O2` or at `-Os`
-  (16 KB flash). Card: none yet.
+  (16 KB flash). No card yet.
