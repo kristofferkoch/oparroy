@@ -47,6 +47,22 @@ real work — **move**, don't copy. Reference, don't duplicate.
 ## Hardware
 
 - Comparators for RX: threshold selection, hysteresis, glitch filtering.
+- **Blind-pin connector keying** (raised 2026-09-29, against the §3
+  2026-09-29 connector decision): the 2x5 pinout's five grounds leave
+  one expendable — blind pin 10 (the cable-edge conductor, so the
+  floating stub couples least) on the header and press a polarizing
+  plug (3M 3433-class) into the matching socket hole, PC-floppy
+  style. GND×4 keeps the power budget (~0.16 Ω/m loop). Redundant on
+  the CI board — the shrouded DC3/FC system already keys reverse and
+  offset mating — but two future uses: (a) dropping to a plain
+  unshrouded 2x5 header (~$0.02 vs $0.068, lower profile) on
+  production nodes, where the blind pin is the *only* keying; (b)
+  **connector-type discrimination** once the §6 debug transport
+  lands — different blind-pin patterns keep a segment cable out of a
+  debug header that will likely also be a pin header. Costs to
+  remember: a manual pin-pull the netlist/layout checker can't see,
+  one plug per cable end, and the loss of the shroud's retention and
+  pin protection on the connector we deliberately yank (§6).
 
 ## Node peripherals
 
