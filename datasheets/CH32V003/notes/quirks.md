@@ -134,6 +134,23 @@ against silicon are marked **unverified**.
   chip but fails unlock with `CTLR = 00008080` / `WRPTRERR` on some parts;
   recovery needs the official tool's clear-all sequence
   ([cnlohr/ch32fun#915](https://github.com/cnlohr/ch32fun/issues/915), open).
+- **No hardware breakpoints** — the debug module implements no trigger
+  module; WCH-LinkE and PicoRVD both emulate breakpoints by patching
+  `ebreak` into flash and unpatched on resume, so breakpoint count is
+  unlimited but every set/clear costs flash writes
+  ([PicoRVD SoftBreak](https://github.com/Community-PIO-CH32V/PicoRVD#softbreak),
+  2026-09-29).
+- **Undocumented debug-interface register PART at 0x7F** — PicoRVD reads a
+  part-info word from 7-bit address 0x7F, absent from QDM §2.3's register
+  table ([PicoRVD PicoSWIO.cpp](https://github.com/Community-PIO-CH32V/PicoRVD/blob/master/src/PicoSWIO.cpp),
+  2026-09-29).
+- **Programmer options beyond WCH-LinkE** — minichlink drives WCH-LinkE,
+  ESP32-S2 (funprog), and "RVSWDIO003-01" (a CH32V003 as SWIO programmer);
+  PicoRVD turns an RP2040 into a GDB-server SWIO probe (PIO bitbang,
+  ~800 kbps normal mode) — directly usable for a supervisor-as-programmer
+  CI board ([PicoRVD](https://github.com/Community-PIO-CH32V/PicoRVD),
+  [minichlink](https://github.com/cnlohr/ch32fun/tree/master/minichlink),
+  2026-09-29).
 
 ## Flash & option bytes
 
