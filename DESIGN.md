@@ -456,6 +456,18 @@ count feeds the MCU requirements in §5 and the test board in §6 — on
 the board these LEDs double as test observability, but they are a
 product feature, not board-only debug.
 
+Status-LED delivery (2026-09-29): the four status LEDs are
+**reverse-mount 1206 parts on the front** (XINGLIGHT XL-3216-FB
+series — parts DB), emitting through routed holes in the PCB to the
+**back — the connector side, where a viewer stands**. The LED pads
+stay on the front, so single-sided assembly and the flat
+enclosure-wall face are untouched, and the back's copper set stays
+exactly the two segment connectors (§7 checklist). One series covers
+all four positions; the working LED is the 570 nm yellow-green —
+the series' 525 nm true green has Vf 3.4 V, undrivable from a 3.3 V
+GPIO. Layout-checkable (§7): each status LED sits over its routed
+hole.
+
 ## 5. MCU platform
 
 Decided (2026-09-26):
@@ -999,11 +1011,11 @@ either a layout-checker assertion or a subcircuit):
   PCBA-placed part sits on the front — single-side SMT keeps the
   JLCPCB Economic tier (§6) — and only the two §3 segment connectors
   sit on the back, SMD, hand-soldered post-PCBA. The front is the
-  flat enclosure-wall mount face; consequence: the §4.1 status LEDs
-  face the wall on enclosed nodes, so enclosures need light pipes or
-  cutouts (the CI board rides unenclosed on its legs).
-  Layout-checkable: the B.Cu footprint set is exactly the segment
-  connectors.
+  flat enclosure-wall mount face; the §4.1 status LEDs shine through
+  routed PCB holes to the back (2026-09-29, §4.1), visible from the
+  connector side — the enclosure owes nothing. Layout-checkable: the
+  B.Cu footprint set is exactly the segment connectors, and each
+  status LED sits over its routed hole.
 - **Board identification on silkscreen** (2026-09-26): every PCB
   carries project name (`oparroy`), PCB name, author name, date, and
   version number — checkable as required text fields on the fab/
