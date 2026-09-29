@@ -1,96 +1,96 @@
-# Node board — open decisions and layout log
+# Node board — decisions and layout log
 
-Working doc for the node board (KANBAN.md): everything not yet decided
-in the design, inventoried 2026-09-29 before layout starts. Decisions
-graduate into DESIGN.md as they settle (section references below);
-this doc keeps the reasoning and the discarded options. Struck items
-are settled.
+Working doc for the node board (KANBAN.md). Everything undecided in the
+design was inventoried 2026-09-29 before layout start and settled the
+same day (PR #24); the settled items graduate into DESIGN.md (section
+references below). This doc keeps the reasoning, the discarded options,
+and the layout brief the decisions add up to.
 
-Settled already (no decision owed): segment connector and pinout (§3),
-reverse-mount status LEDs through PCB holes with colors picked (§4.1 —
-power red, working yellow-green 570 nm, per-connector yellow),
+Previously settled (no decision owed): segment connector and pinout
+(§3), reverse-mount status LEDs through PCB holes with colors picked
+(§4.1 — power red, working yellow-green 570 nm, per-connector yellow),
 single-sided front assembly with back-side SMD headers (§7), SWIO pogo
 strip with programmer-supplied 3V3 (§6), MCU decoupling (100n + 10u),
 VDD/2 threshold from the 10k bin (§2), DNP hysteresis feedback R (§2),
 charge-pump watchdog values (§4).
 
-## Electrical / BOM
+## Settled 2026-09-29
 
-1. **TVS part pick** — the capture carries a provisional value
-   (`PESD3V3L1BA`, `design/bins.py`) with no parts-DB record: no LCSC
-   number, no tier, no stock snapshot. Needs a real record (§6
-   inventory-driven selection) — low-capacitance bidirectional, VRWM ≥
-   3.3 V (§7 checklist). Also: populate or DNP on these boards? §7
-   settles the CI board fully populated and production nodes DNP-allowed;
-   the standalone node boards sit between — they are the first bench
-   articles for the §2/§4 claims.
-1. **BAT54S tier/stock unverified** — the parts DB marks C727126's tier
-   unverified and stock never queried (IDEAS.md, 2026-09-28); a
-   conservative filter never admits it. Needs a human on jlcpcb.com.
-1. **`sel` Schmitt buffer** — §4's accepted spec violation (the slow
-   sel ramp vs the switch's 10 ns/V input-rate spec): ship bare, or add
-   a 74LVC1G17 footprint (populated or DNP) as insurance? One Extended
-   BOM line if populated (§4); a DNP footprint costs only area.
-1. **Per-connector LED drive** — the capture drives `led_upstream`/
-   `led_downstream` from MCU GPIO (PC0/PC1). §4.1 notes the ideal is
-   PHY-hardware drive so the LEDs tell the truth with a dead MCU. That
-   costs parts against §1; confirm firmware-driven for this revision.
-   (The activity/no-signal/error encoding itself is firmware scope —
-   §4.1 TBD rides with the node firmware.)
+1. **Stackup and thickness** (§9 open question, resolved): **2-layer,
+   0.8 mm.** The §1 cost driver won — the board is tiny, single-sided,
+   and its back is two connectors plus pass-through, so 4-layer's
+   routing room buys nothing. 0.8 mm over 1.0 mm for feel, accepting
+   more flex under the IDC mating shear the hand-soldered SMD headers
+   take (§3). JLCPCB's exact 2-layer thickness offerings verify at
+   quote time.
+1. **KiCad application joins the flake** (§8): pinned, matching the
+   KiCad 10 libraries the DSL validates against — pcbnew ingest must
+   not drift from the validated libraries. A workstation install was
+   the lighter but drift-prone alternative.
+1. **TVS diodes populated** on the node boards (§7 checklist): they are
+   the first bench articles for the §2/§4 claims, and DNP strictly
+   removes load. The provisional `PESD3V3L1BA` value in
+   `design/bins.py` still needs a real parts-DB record (LCSC number,
+   tier, stock snapshot) picked against assembler inventory —
+   low-capacitance bidirectional, VRWM ≥ 3.3 V.
+1. **`sel` Schmitt insurance** (§4's accepted 10 ns/V violation): a
+   **DNP 74LVC1G17 footprint in the sel path, bridged by a fitted
+   0 Ω**. Costs only area while DNP (no Extended-line fee); if the
+   bench disagrees the fix is a resistor swap, not a respin.
+1. **Per-connector LEDs: firmware-driven, merged onto one antiparallel
+   GPIO** (§4.1). Firmware drive confirmed against the
+   hardware-activity ideal — the watchdog plus working LED already
+   flag a dead node, and the CI board observes truth through the §6
+   supervisor taps, so activity hardware doesn't survive §1. The two
+   connector LEDs become an antiparallel pair on one pin with a shared
+   series R: high = upstream, low = downstream, Hi-Z = dark, a kHz
+   toggle = both (half brightness). Frees PC1 (an FT pin) and one
+   resistor; the cost is firmware encoding complexity and the loss of
+   independent steady states. The activity/no-signal/error encoding
+   itself stays firmware scope.
+1. **Board outline: layout proposes** a minimal rectangle — long axis
+   along the cable run, connectors on the short edges — with **2×
+   M2.5 mounting holes**; the §7 checker numbers (corner radius, hole
+   keepouts) get fixed once drawn. Enclosure design stays future work.
+1. **Programming strip geometry** (§7 checklist): keep the captured
+   1.5×1.5 mm pads, **2.54 mm pitch on a short edge**, order
+   SWIO/3V3/GND — standard pogo pitch; the pogo jig (KANBAN.md)
+   consumes exactly this.
+1. **Spare PC7 gets a test pad** — bare copper, no placement cost;
+   bring-up observability and a future expansion point without a
+   respin. The unbound payload pads (debug_tx, pot, buzzer, buttons)
+   stay NC, reported as warnings.
+1. **Segment connectors on opposite short edges** — cables exit in
+   line; the node reads as a bead on the ribbon, natural for a ring
+   segment and the enclosure-wall mount. The same-edge U-turn
+   alternative clutters one edge and doubles cable bends.
+1. **Serial box and board-ID silkscreen all on the back** — the
+   connector side, where a viewer stands (§4.1). The front stays clean
+   against the enclosure wall; front silkscreen would be invisible
+   once mounted.
+1. **Assemble all five boards** — a 4-node ring plus spare straight
+   out of the box: real bypass and direction-flip tests before the CI
+   board exists. (The cheaper alternative was the 2-board assembly
+   minimum with hand-soldered blanks.)
+1. **Header buy-ahead deferred** (user call): the C22385222 stock
+   (285 on 2026-09-29, §3) gets re-checked before the fab order;
+   revisit if the number drops.
 
-## Mechanical / layout
+## Still open
 
-5. **Stackup and thickness** (§9 open question) — 2-layer vs 4-layer,
-   and target ≤1.0 mm thickness. §9 leans 4-layer for size/quality but
-   every layer argues against the §1 cost driver; the board is tiny,
-   single-sided, and its whole back is two connectors plus pass-through.
-   Gates layout start; the exact JLCPCB thickness/stackup combos
-   verify at quote time.
-1. **Board outline** — dimensions, corner radius (the §7 min-radius
-   check wants a number), mounting holes: count, diameter, position.
-   The front is the flat enclosure-wall mount face (§3, §7) — but the
-   mount itself (standoffs? adhesive? screw bosses in the enclosure?)
-   is undefined, and it sets the hole pattern.
-1. **Connector placement** — edge orientation and cable-exit direction
-   for J1/J2, spacing between them, and hand-solder access: the
-   headers are back-side SMD, hand-soldered post-PCBA (§3), so the
-   front must not crowd the iron's approach through... nothing — but
-   tall front parts near the board edge still fight the iron angle.
-1. **Programming strip geometry** — today three 1.5×1.5 mm pads
-   (`design/node.py` TP1/TP2/TP3). The T27 pogo jig consumes this:
-   pad size, pitch, edge placement, and whether 1.5 mm pads are
-   pogo-friendly at all (1.0 mm-pitch pogo arrays want specific land).
-1. **Back-face information layout** — LED hole positions relative to
-   their connectors (§4.1: each LED points at its segment), the
-   handwritten serial box (§7 — on the back, the viewer side?), and
-   the board-ID silkscreen fields (§7 — which face?).
-1. **Spare pads** — PC7 (spare) and the unbound payload pads
-   (debug_tx, pot, buzzer, buttons) are NC by capture, reported as
-   warnings. Test pad on PC7, or truly nothing?
-
-## Pipeline
-
-11. **KiCad application provisioning** — the flake carries the KiCad
-    10 symbol/footprint *libraries* only; pcbnew ingest, layout, and
-    the back-annotation round trip need the application. Add KiCad to
-    the flake (pinned, matching the library version) or use a
-    workstation install? Reproducibility (§8) argues flake; GUI-in-nix
-    argues workstation.
-01. **Back-annotation join validation** — `annotation_from_pcb` is
-    tested against synthetic input only; the first real `.kicad_pcb`
-    exercises it (the T7a caveat, §7). Ride-along: T19's pcbnew
-    skeleton-ingest validation.
-01. **Layout-rules instance** — the node board needs its `LayoutRules`
-    data: net classes (widths/clearances/vias), trace-length budgets,
-    keepouts, the mounting-hole and serial-box numbers from items
-    6–9. Feeds the `pcb_emit` skeleton that guides the human layout.
-
-## Fab / purchasing
-
-14. **Quantity** — PCB fab minimum 5, assembly minimum 2 (§6). Ring
-    bring-up wants ≥2 working nodes plus a supervisor stand-in; how
-    many of the 5 get assembled? Spare blanks come free.
-01. **Buy-ahead: segment header** — C22385222 thin-stocked (285 on
-    2026-09-29, §3). Order when, against what fab date?
-01. **Quote-time stackup combos** — which thicknesses JLCPCB actually
-    offers in 2- and 4-layer at this board size (with item 5).
+- **BAT54S tier/stock verification** — the parts DB marks C727126's
+  tier unverified and stock never queried (IDEAS.md, 2026-09-28); a
+  conservative filter never admits it. Needs a human on jlcpcb.com.
+- **Back-annotation join validation** — `annotation_from_pcb` is
+  tested against synthetic input only; the first real `.kicad_pcb`
+  exercises it (the T7a caveat, §7). Ride-along: the layout checker's
+  pcbnew skeleton-ingest validation.
+- **Layout-rules instance** — the node board needs its `LayoutRules`
+  data: net classes (widths/clearances/vias), trace-length budgets,
+  keepouts, the mounting-hole and serial-box numbers once the outline
+  is drawn. Feeds the `pcb_emit` skeleton that guides the human
+  layout.
+- **Capture deltas to land before netlist emission**: the LED merge
+  (pin map + `design/node.py` + `firmware/node/pins.hpp` golden), the
+  Schmitt buffer + 0Ω bridge, the PC7 test pad, the TVS parts-DB
+  record.

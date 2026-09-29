@@ -54,12 +54,21 @@ ______________________________________________________________________
   status LEDs (§4.1), terminal protection (§7 checklist), two segment
   connectors (§3 pinout — the T7bb `design/segment.py` block), plus the
   footprint-assignment and annotation/back-annotation stages (§7).
-  Remaining: lay out the board in KiCad — the first real pcbnew netlist
-  ingest (the T7a caveat, §7) — validate the back-annotation join
-  against the real `.kicad_pcb` (so far tested against synthetic input
-  only), fab via JLCPCB (§6), and settle the node-board stackup
-  question (§9) at quote time. Buy ahead: the SMD segment header
-  (C22385222) is thin-stocked (285 on 2026-09-29, §3).
+  Design decisions settled 2026-09-29
+  (docs/node-board-2026-09-29.md, PR #24): 2-layer 0.8 mm stackup
+  (§9 resolved), TVS populated on the node boards, DNP 74LVC1G17 +
+  fitted 0 Ω insurance on `sel` (§4), per-connector LEDs merged onto
+  one antiparallel GPIO (frees PC1, §4.1), PC7 test pad, pogo strip at
+  2.54 mm pitch on a short edge, connectors on opposite short edges,
+  silkscreen ID + serial box on the back, all five boards assembled,
+  header buy-ahead deferred (re-check C22385222 stock before ordering).
+  Remaining: capture deltas (LED merge, Schmitt bridge, PC7 pad, TVS
+  parts-DB record; BAT54S tier/stock still needs a human on
+  jlcpcb.com), KiCad application into the flake, then lay out the
+  board in KiCad — the first real pcbnew netlist ingest (the T7a
+  caveat, §7) — validate the back-annotation join against the real
+  `.kicad_pcb` (so far tested against synthetic input only), and fab
+  via JLCPCB (§6).
   **Blocked by:** — · **Unblocks:** T10
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and

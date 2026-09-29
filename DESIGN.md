@@ -427,7 +427,10 @@ Known spec violation, accepted: A's slow sel ramp breaks the switch's
 10 ns/V input-rate spec ([SCES424O](datasheets/SN74LVC1G3157/) §5.4) —
 ≤500 µA ΔICC while dwelling ~0.4 ms in the 0.99–2.31 V band, once per
 fault event. A 74LVC1G17 Schmitt buffer on sel fixes it for one
-Extended BOM line if the bench disagrees.
+Extended BOM line if the bench disagrees. Insurance landed for the
+node board (2026-09-29): a **DNP 74LVC1G17 footprint in the sel path,
+bridged by a fitted 0 Ω** — the fix becomes a resistor swap, not a
+respin.
 
 Power: bypass switch + watchdog run from the **always-on ring rail**,
 not the per-node switchable rail — the 1G3157 has no Ioff /
@@ -467,6 +470,18 @@ all four positions; the working LED is the 570 nm yellow-green —
 the series' 525 nm true green has Vf 3.4 V, undrivable from a 3.3 V
 GPIO. Layout-checkable (§7): each status LED sits over its routed
 hole.
+
+Per-connector LED drive (2026-09-29): **firmware-driven**, confirmed
+against the hardware-activity ideal above — the watchdog plus working
+LED already flag a dead node, and the CI board observes truth through
+the §6 supervisor taps, so per-node activity hardware doesn't survive
+the §1 cost driver. The two connector LEDs merge onto **one GPIO as
+an antiparallel pair** with a shared series R: pin high lights
+upstream, low lights downstream, Hi-Z dark, a kHz toggle lights both
+at half brightness. That frees PC1 (an FT pin) and one resistor; the
+cost is firmware encoding complexity and the loss of independent
+steady states. The activity/no-signal/error encoding itself stays
+firmware scope (the §4.1 TBD above).
 
 ## 5. MCU platform
 
@@ -566,7 +581,7 @@ optocoupler/transistor.
 Board fabrication (2026-09-26): the CI/test board is **4-layer** — the
 fault-injection muxes and per-node debug plumbing want the routing room,
 and the §1 cost driver doesn't apply to test infrastructure. Node-board
-stackup is a separate question (§9).
+stackup settled separately (2026-09-29, §9): **2-layer, 0.8 mm**.
 
 Prototype assembly (decided 2026-09-26): **JLCPCB Economic
 PCBA** for the first prototype boards. Research + inventory snapshot:
@@ -831,9 +846,11 @@ the §4 charge pump captured on typed parts against the
 nix-provisioned KiCad
 libraries, golden netlist in `tests/golden/` (byte-identical across
 the typed-parts migration), 92 pytest cases green.
-Not yet proven: a real pcbnew netlist *import* (no KiCad application in
-the flake yet — the golden format is pinned, the ingest is exercised
-when the first board enters layout).
+Not yet proven: a real pcbnew netlist *import* — the golden format is
+pinned, the ingest is exercised when the first board enters layout.
+The KiCad application joins the flake (2026-09-29), pinned to the
+library version the DSL validates against, so pcbnew ingest and layout
+cannot drift from the validated libraries.
 
 Subcircuit composition (2026-09-28): hierarchy is
 capture-time structure, **flattening is a pass** — `subcircuit.py`
@@ -1095,6 +1112,8 @@ either a layout-checker assertion or a subcircuit):
   strictly removes load and a passing CI with TVS covers the bare
   variant; leave one CI node DNP to cover populated↔unpopulated
   segments in the same run. Production nodes may ship DNP. The
+  standalone node boards ship populated as well (2026-09-29) — they
+  are the first bench articles for the §2/§4 claims. The
   power-rail TVS pairs with the eFuse/crowbar above and is *not*
   optional. Layout-checkable (§7): TVS adjacent to its connector,
   R between TVS and µC pin.
@@ -1111,7 +1130,9 @@ either a layout-checker assertion or a subcircuit):
 - **Programming strip: SWIO + GND + 3V3 pads** (2026-09-29, §6): the
   pogo-jig target for post-SMT programming — three pads together at
   a board edge, 3V3 driven by the programmer, never the ring.
-  Layout-checkable: presence, adjacency, edge placement.
+  Layout-checkable: presence, adjacency, edge placement. Geometry
+  (2026-09-29): **2.54 mm pitch, three 1.5×1.5 mm pads, on a short
+  board edge** — the pogo jig consumes exactly this.
 - **Board identification on silkscreen** (2026-09-26): every PCB
   carries project name (`oparroy`), PCB name, author name, date, and
   version number — checkable as required text fields on the fab/
@@ -1317,14 +1338,13 @@ resolves each is in KANBAN.md):
   direction-flap policy is not.
 - **Debug transport** (§6) — per-node UART vs shared bus, connector
   style.
-- **Node-board stackup and thickness** (§6) — leaning 4-layer to keep
-  the node board small and good, but every extra layer is a per-node
-  fab cost and must argue against the central cost driver (§1); the CI
-  board's 4-layer decision doesn't automatically transfer. Also: node
-  boards should be **thinner than the standard 1.6 mm** (≤1.0 mm class)
-  so a small board doesn't feel chunky — JLCPCB offers thinner stackups
-  as a fab option; verify exact thicknesses/4-layer combos at quote
-  time. Resolved by the first node-board design (KANBAN.md).
+- **Node-board stackup and thickness** (§6) — **resolved 2026-09-29:
+  2-layer, 0.8 mm.** The §1 cost driver won: the board is tiny,
+  single-sided, and its back is two connectors plus pass-through, so
+  4-layer's routing room buys nothing. 0.8 mm over 1.0 mm for feel,
+  accepting more flex under the IDC mating shear the hand-soldered SMD
+  headers take (§3). JLCPCB's exact 2-layer thickness offerings verify
+  at quote time.
 - **Cable reach** (§2) — maximum segment length unamplified, and with
   an amplifier/re-driver node in the segment; line coding is settled
   (§2), so this is drive strength, comparator sensitivity, and cable
