@@ -606,6 +606,9 @@ Facts that shape board design:
 - VOEC-registered: Norwegian VAT settled at checkout.
 - Fallback for anything JLCPCB can't stock: **PCBWay partial-turnkey**
   (1-pc MOQ, true consignment), at 2–4× the price.
+- Third-party population is acceptable (2026-09-30): consignment and
+  Extended-line fees are just money — what the design avoids is
+  hand-soldering jellybean passives ourselves at volume.
 
 Consequence: **part selection is
 inventory-driven** — prefer parts the assembler stocks; anything
