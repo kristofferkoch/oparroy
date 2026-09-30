@@ -60,8 +60,12 @@ ______________________________________________________________________
   fitted 0 Ω insurance on `sel` (§4), per-connector LEDs merged onto
   one antiparallel GPIO (frees PC1, §4.1), PC7 test pad, pogo strip at
   2.54 mm pitch on a short edge, connectors on opposite short edges,
-  silkscreen ID + serial box on the back, all five boards assembled,
-  header buy-ahead deferred (re-check C22385222 stock before ordering).
+  silkscreen ID + serial box on the back. Fab order (2026-09-30):
+  **the CI board fabs first** — its eight tiles are the first bench
+  articles — so this card's deliverable is the fully thought-through
+  node design the CI board tiles; the standalone board fabs second
+  (assemble 2, the minimum; blanks hand-solderable). Header buy-ahead
+  deferred (re-check C22385222 stock before ordering).
   Remaining: capture deltas (LED merge, Schmitt bridge, PC7 pad, TVS
   parts-DB record; BAT54S tier/stock still needs a human on
   jlcpcb.com), KiCad application into the flake, then lay out the
@@ -226,6 +230,8 @@ ______________________________________________________________________
   Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
+  Fabs **first**, ahead of the standalone node board (2026-09-30):
+  its eight tiles are the first bench articles for the §2/§4 claims.
   **Blocked by:** T19, T22, T24 · **Unblocks:** T12, T15
 - **T27 — Node programming jig.** The bench deliverable of the §6
   programming flow (2026-09-29): a pogo jig targeting the node board's

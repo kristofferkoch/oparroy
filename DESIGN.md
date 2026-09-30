@@ -584,7 +584,12 @@ and the §1 cost driver doesn't apply to test infrastructure. Node-board
 stackup settled separately (2026-09-29, §9): **2-layer, 0.8 mm**.
 
 Prototype assembly (decided 2026-09-26): **JLCPCB Economic
-PCBA** for the first prototype boards. Research + inventory snapshot:
+PCBA** for the first prototype boards. Fab order (2026-09-30): the
+**CI/test board fabs first** — its eight node tiles are the first
+bench articles for the §2/§4 claims — and the standalone node board
+follows, assembled at the 2-board minimum as the production-form
+proof (single-sided assembly, back-side hand-soldered headers, pogo
+programming flow). Research + inventory snapshot:
 [docs/pcba-research-2026-09-26.md](docs/pcba-research-2026-09-26.md).
 Facts that shape board design:
 

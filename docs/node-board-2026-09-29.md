@@ -14,6 +14,11 @@ strip with programmer-supplied 3V3 (§6), MCU decoupling (100n + 10u),
 VDD/2 threshold from the 10k bin (§2), DNP hysteresis feedback R (§2),
 charge-pump watchdog values (§4).
 
+Fab order (2026-09-30): **the CI board fabs first** — its eight node
+tiles are the first bench articles for the §2/§4 claims — so this
+board's job is to be fully thought through before the CI board tiles
+it; the standalone board fabs second, as the production-form proof.
+
 ## Settled 2026-09-29
 
 1. **Stackup and thickness** (§9 open question, resolved): **2-layer,
@@ -68,10 +73,14 @@ charge-pump watchdog values (§4).
    connector side, where a viewer stands (§4.1). The front stays clean
    against the enclosure wall; front silkscreen would be invisible
    once mounted.
-1. **Assemble all five boards** — a 4-node ring plus spare straight
-   out of the box: real bypass and direction-flip tests before the CI
-   board exists. (The cheaper alternative was the 2-board assembly
-   minimum with hand-soldered blanks.)
+1. **Assemble two boards** (the JLCPCB assembly minimum), revised
+   2026-09-30 with the CI-board-first fab order: the tiles on the CI
+   board are the first ring, so the standalone pair proves the
+   production form — single-sided assembly, back-side hand-soldered
+   headers, the pogo programming flow — and the three spare blanks
+   stay hand-solderable (0603/SOT-23/TSSOP-20, §5's rework argument).
+   Supersedes the same-day "assemble all five" call, whose premise
+   was a ring on the bench before the CI board exists.
 1. **Header buy-ahead deferred** (user call): the C22385222 stock
    (285 on 2026-09-29, §3) gets re-checked before the fab order;
    revisit if the number drops.
