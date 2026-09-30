@@ -466,10 +466,12 @@ series — parts DB), emitting through routed holes in the PCB to the
 stay on the front, so single-sided assembly and the flat
 enclosure-wall face are untouched, and the back's copper set stays
 exactly the two segment connectors (§7 checklist). One series covers
-all four positions; the working LED is the 570 nm yellow-green —
-the series' 525 nm true green has Vf 3.4 V, undrivable from a 3.3 V
-GPIO. Layout-checkable (§7): each status LED sits over its routed
-hole.
+all four positions; the per-connector link pair is the 570 nm
+yellow-green (the series' 525 nm true green has Vf 3.4 V, undrivable
+from a 3.3 V GPIO), and the working LED is the 588 nm yellow so the
+roles stay visually distinct — red = power, yellow = working,
+green = link (2026-09-30). Layout-checkable (§7): each status LED
+sits over its routed hole.
 
 Per-connector LED drive (2026-09-29): **firmware-driven**, confirmed
 against the hardware-activity ideal above — the watchdog plus working

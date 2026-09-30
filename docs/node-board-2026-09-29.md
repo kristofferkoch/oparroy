@@ -8,11 +8,12 @@ and the layout brief the decisions add up to.
 
 Previously settled (no decision owed): segment connector and pinout
 (§3), reverse-mount status LEDs through PCB holes with colors picked
-(§4.1 — power red, working yellow-green 570 nm, per-connector yellow),
-single-sided front assembly with back-side SMD headers (§7), SWIO pogo
-strip with programmer-supplied 3V3 (§6), MCU decoupling (100n + 10u),
-VDD/2 threshold from the 10k bin (§2), DNP hysteresis feedback R (§2),
-charge-pump watchdog values (§4).
+(§4.1 — power red, working yellow 588 nm, per-connector yellow-green
+570 nm; the shuffle landed 2026-09-30 with the antiparallel merge, item
+5 below), single-sided front assembly with back-side SMD headers (§7),
+SWIO pogo strip with programmer-supplied 3V3 (§6), MCU decoupling
+(100n + 10u), VDD/2 threshold from the 10k bin (§2), DNP hysteresis
+feedback R (§2), charge-pump watchdog values (§4).
 
 Fab order (2026-09-30): **the CI board fabs first** — its eight node
 tiles are the first bench articles for the §2/§4 claims — so this
@@ -34,10 +35,11 @@ it; the standalone board fabs second, as the production-form proof.
    the lighter but drift-prone alternative.
 1. **TVS diodes populated** on the node boards (§7 checklist): they are
    the first bench articles for the §2/§4 claims, and DNP strictly
-   removes load. The provisional `PESD3V3L1BA` value in
-   `design/bins.py` still needs a real parts-DB record (LCSC number,
-   tier, stock snapshot) picked against assembler inventory —
-   low-capacitance bidirectional, VRWM ≥ 3.3 V.
+   removes load. The pick landed 2026-09-30: **Brightking UDD32C03L01**
+   (LCSC C78439, Extended — no Basic SOD-323 TVS exists at all), VRWM
+   3.3 V, Cj 0.8 pF typ — RC ≈ 0.4 ns against the 470 Ω series R.
+   The parts-DB record `tvs-sod323` carries the stock snapshot and the
+   rejected alternatives (SD03C, PESD3V3L1BA, BV03C).
 1. **`sel` Schmitt insurance** (§4's accepted 10 ns/V violation): a
    **DNP 74LVC1G17 footprint in the sel path, bridged by a fitted
    0 Ω**. Costs only area while DNP (no Extended-line fee); if the
@@ -99,7 +101,10 @@ it; the standalone board fabs second, as the production-form proof.
   keepouts, the mounting-hole and serial-box numbers once the outline
   is drawn. Feeds the `pcb_emit` skeleton that guides the human
   layout.
-- **Capture deltas to land before netlist emission**: the LED merge
-  (pin map + `design/node.py` + `firmware/node/pins.hpp` golden), the
-  Schmitt buffer + 0Ω bridge, the PC7 test pad, the TVS parts-DB
-  record.
+- **Capture deltas before netlist emission** — landed 2026-09-30: the
+  LED merge (pin map + `design/node.py` + `firmware/node/pins.hpp`
+  golden — one `led_segments` request on PC0, 16 of 18 GPIO, PC1 freed
+  to spare), the `sel` Schmitt buffer (DNP 74LVC1G17 straddling a
+  fitted 0 Ω in `design/phy_frontend.py`), the PC7 test pad (TP4 in
+  `design/node.py` — its unconnected-pad warning is gone), and the TVS
+  parts-DB record (`tvs-sod323`; the `design/bins.py` value follows).
