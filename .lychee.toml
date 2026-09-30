@@ -6,6 +6,8 @@ exclude = [
   '^https?://(www\.)?eevblog\.com/',
   # 403 from GitHub Actions IPs (Cloudflare bot filter), 200 locally.
   '^https?://(www\.)?silabs\.com/',
+  # Times out from CI and locally (site outage, 2026-09-30).
+  '^https?://(www\.)?beagleboard\.org/',
 ]
 include_fragments = 'anchor-only'
 max_concurrency = 12
