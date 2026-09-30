@@ -79,12 +79,15 @@ def test_sel_drives_switch_and_brake(kicad_libs: KiCadLibraries) -> None:
 def test_connector_leds_share_one_antiparallel_gpio(kicad_libs: KiCadLibraries) -> None:
     # §4.1 (2026-09-30): both connector LEDs sit on PC0 as an
     # antiparallel pair behind one shared 470 Ω — pin high lights
-    # upstream (Du), pin low lights downstream (Dd), Hi-Z dark.
+    # upstream (Du), pin low lights downstream (Dd), Hi-Z dark. Dd's
+    # anode returns to 3V3: the pin-low state sinks rail current
+    # through Dd and Rs into the pad. The block is the SL1 instance;
+    # the drive-state contract is sim-asserted in tb_status_leds.
     nets = nets_of(capture(kicad_libs))
-    assert nets["led_seg"] == {"U1.10", "Rs.1"}
-    assert nets["led_x"] == {"Rs.2", "Du.2", "Dd.1"}
-    assert {"Du.1", "Dp.1", "Dw.1"} <= nets["GND"]
-    assert "Dd.2" in nets["GND"]
+    assert nets["led_seg"] == {"U1.10", "SL1/Rs.1"}
+    assert nets["SL1/led_x"] == {"SL1/Rs.2", "SL1/Du.2", "SL1/Dd.1"}
+    assert {"SL1/Du.1", "SL1/Dp.1", "SL1/Dw.1"} <= nets["GND"]
+    assert "SL1/Dd.2" in nets["3V3"]
 
 
 def test_pc7_spare_lands_on_a_test_pad(kicad_libs: KiCadLibraries) -> None:

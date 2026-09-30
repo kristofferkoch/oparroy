@@ -37,11 +37,12 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from design.bins import C0603, R0603, LedRev1206
+from design.bins import C0603
 from design.ch32v003 import Ch32v003f4p6
 from design.node_pins import capture as capture_pin_map
 from design.phy_frontend import PhyFrontEnd
 from design.segment import SegmentConnector, segment_ports
+from design.status_leds import StatusLeds
 from design.watchdog_chargepump import WatchdogChargePump
 from oparroy.dsl import (
     Annotation,
@@ -97,9 +98,6 @@ class Node(Subcircuit):
         led_seg = circuit.net("led_seg")
         swio = circuit.net("swio")
         pc7 = circuit.net("pc7")
-        pwr_led = circuit.net("pwr_led")
-        ledw_a = circuit.net("ledw_a")
-        led_x = circuit.net("led_x")
 
         circuit.part("J1", SegmentConnector(upstream))
         circuit.part("J2", SegmentConnector(downstream))
@@ -161,21 +159,17 @@ class Node(Subcircuit):
         circuit.part("C1", C0603("100n", a=v3v3, b=gnd))
         circuit.part("C2", C0603("10u", a=v3v3, b=gnd))
 
-        # §4.1 status LEDs: passive power LED, working heartbeat, and
-        # the per-connector link pair merged onto one antiparallel GPIO
-        # (2026-09-30) — pin high lights Du (upstream), pin low lights
-        # Dd (downstream), Hi-Z dark. The shared 470 Ω sets ~2.5 mA at
-        # Vf ≈ 2.1 V, inside the CH32V003's ±8 mA pad drive. Colors:
-        # red = power, yellow = working, yellow-green = link.
-        circuit.part("Rp", R0603("1k", a=v3v3, b=pwr_led))
-        circuit.part(
-            "Dp", LedRev1206(anode=pwr_led, cathode=gnd, value="XL-3216SURC-FB")
+        # §4.1 status LEDs: the StatusLeds subcircuit (power, working,
+        # antiparallel link pair on led_seg) — its drive-state contract
+        # is sim-asserted in circuits/status-leds/tb_status_leds.cir.
+        circuit.instance(
+            "SL1",
+            StatusLeds(),
+            v3v3=v3v3,
+            gnd=gnd,
+            led_work=led_work,
+            led_seg=led_seg,
         )
-        circuit.part("Rw", R0603("1k", a=led_work, b=ledw_a))
-        circuit.part("Dw", LedRev1206(anode=ledw_a, cathode=gnd, value="XL-3216UYC-FB"))
-        circuit.part("Rs", R0603("470", a=led_seg, b=led_x))
-        circuit.part("Du", LedRev1206(anode=led_x, cathode=gnd, value="XL-3216SYGC-FB"))
-        circuit.part("Dd", LedRev1206(anode=gnd, cathode=led_x, value="XL-3216SYGC-FB"))
 
         # Programming: the SWIO + 3V3 + GND pogo strip (§6 production
         # flow). The programmer powers the board — brick recovery is a

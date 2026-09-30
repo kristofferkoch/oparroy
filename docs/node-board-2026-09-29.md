@@ -54,7 +54,16 @@ it; the standalone board fabs second, as the production-form proof.
    toggle = both (half brightness). Frees PC1 (an FT pin) and one
    resistor; the cost is firmware encoding complexity and the loss of
    independent steady states. The activity/no-signal/error encoding
-   itself stays firmware scope.
+   itself stays firmware scope. Corrected 2026-09-30 (caught in pcbnew
+   netlist review of the first layout): **Dd's anode returns to 3V3,
+   not GND** — the pin-low state sinks rail current through Dd and Rs
+   into the pad; anode on GND leaves Dd dark in every drive state. The
+   block then graduated to the §7 subcircuit-with-bench pattern it
+   owed: `design/status_leds.py` (SL1 in the node capture), with the
+   full drive-state truth table — pin high / pin low / Hi-Z, power,
+   working — asserted in `circuits/status-leds/tb_status_leds.cir`
+   against the DSL-emitted DUT (`tests/test_status_leds.py`); the
+   bench re-fails when Dd's anode is tied back to GND.
 1. **Board outline: layout proposes** a minimal rectangle — long axis
    along the cable run, connectors on the short edges — with **2×
    M2.5 mounting holes**; the §7 checker numbers (corner radius, hole
