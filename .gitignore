@@ -2,6 +2,10 @@
 /result-*
 .direnv/
 /build/
+.history/
+
+# KiCad project-local settings (machine-local, written by pcbnew/kicad-cli)
+*.kicad_prl
 
 # Python side (uv owns it — DESIGN.md §8)
 .venv/

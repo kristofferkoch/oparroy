@@ -35,18 +35,27 @@ def test_net_table(board_pass: Board) -> None:
     assert board_pass.nets == {"": 0, "BYPASS": 1, "GND": 2, "SIG": 3}
 
 
-def test_net_classes(board_pass: Board) -> None:
-    by_name = {nc.name: nc for nc in board_pass.net_classes}
+def test_net_classes() -> None:
+    """Board-file net classes: the pre-KiCad-10 fallback the parser keeps."""
+    board = parse_board(
+        "(kicad_pcb (layers)"
+        " (setup"
+        '  (net_class "Default" "" (clearance 0.2) (trace_width 0.25)'
+        '   (add_net "GND") (add_net "SIG"))'
+        '  (net_class "Power" "" (trace_width 0.5) (add_net "BYPASS")))'
+        ' (net 1 "BYPASS") (net 2 "GND") (net 3 "SIG"))'
+    )
+    by_name = {nc.name: nc for nc in board.net_classes}
     assert set(by_name) == {"Default", "Power"}
     default = by_name["Default"]
     assert default.trace_width_mm == _DEFAULT_WIDTH_MM
     assert default.clearance_mm == _DEFAULT_CLEARANCE_MM
     assert default.nets == frozenset({"GND", "SIG"})
     assert by_name["Power"].nets == frozenset({"BYPASS"})
-    power = board_pass.net_class_of("BYPASS")
+    power = board.net_class_of("BYPASS")
     assert power is not None
     assert power.name == "Power"
-    assert board_pass.net_class_of("UNROUTE") is None
+    assert board.net_class_of("UNROUTE") is None
 
 
 def test_footprints_and_pads(board_pass: Board) -> None:

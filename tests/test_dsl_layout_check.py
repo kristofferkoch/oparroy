@@ -9,6 +9,7 @@ from oparroy.dsl import (
     Board,
     BypassRule,
     LayoutRules,
+    Project,
     check_layout,
     parse_board,
 )
@@ -46,8 +47,10 @@ def full_rules() -> LayoutRules:
     )
 
 
-def test_pass_board_meets_full_contract(board_pass: Board) -> None:
-    assert check_layout(board_pass, full_rules()) == []
+def test_pass_board_meets_full_contract(
+    board_pass: Board, project_pass: Project
+) -> None:
+    assert check_layout(board_pass, full_rules(), project_pass) == []
 
 
 def test_empty_rules_find_nothing(board_pass: Board) -> None:
@@ -119,6 +122,17 @@ def test_unclassed_net_is_not_checked() -> None:
         ' (segment (start 0 0) (end 10 0) (width 0.1) (layer "F.Cu") (net 1)))'
     )
     assert check_layout(board, LayoutRules()) == []
+
+
+def test_project_class_width_violation(project_pass: Project) -> None:
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "SIG")'
+        ' (segment (start 0 0) (end 10 0) (width 0.15) (layer "F.Cu") (net 1)))'
+    )
+    issues = check_layout(board, LayoutRules(), project_pass)
+    assert [i.message for i in issues] == [
+        "segment on net 'SIG' is 0.15 mm wide, net class 'Default' requires 0.25 mm"
+    ]
 
 
 def test_corner_radius_too_small(board_pass: Board) -> None:

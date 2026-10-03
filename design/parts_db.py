@@ -67,6 +67,37 @@ PARTS = PartsDb(
             ),
         ),
         PartRecord(
+            name="tvs-sod323",
+            kind="diode",
+            lcsc="C78439",
+            symbol="Device:D_TVS",
+            footprint="Diode_SMD:D_SOD-323",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                183_717,
+                date(2026, 9, 30),
+                "jlcsearch mirror 183,717 / LCSC product page 931,760",
+            ),
+            value="UDD32C03L01",
+            area_mm2=2.52,
+            note=(
+                "Brightking UDD32C03L01, bidirectional SOD-323 — the §7 "
+                "terminal-protection TVS (picked 2026-09-30): VRWM 3.3 V, "
+                "VBR 4 V min @ 1 mA, VCL 7 V @ 1 A (15 V @ 5 A), Cj "
+                "0.8 pF typ — RC ≈ 0.4 ns against the 470 Ω series R, "
+                "far inside the §2 decode margin; IR ≤ 5 µA @ 3.3 V; "
+                "~$0.037 @1; one BOM line, four positions per node. "
+                "Extended tier — no Basic SOD-323 TVS exists (only "
+                "1N4148WS-class switching diodes). Rejected: MDD SD03C "
+                "(C502532 — the datasheet says 450 pF max vs the "
+                "listing's 40 pF claim; 450 pF against 470 Ω is τ ≈ "
+                "210 ns, blowing the §2 decode margin), UMW PESD3V3L1BA "
+                "(C2687129 — ~100 pF, clamps at 24 V, weakest "
+                "electrically), TECH PUBLIC BV03C (C2858699 — ~1 pF but "
+                "the datasheet is image-only, unverifiable)"
+            ),
+        ),
+        PartRecord(
             name="sn74lvc1g3157-ti",
             kind="analog-switch",
             lcsc="C10426",
@@ -174,9 +205,10 @@ PARTS = PartsDb(
             area_mm2=5.12,
             note=(
                 "XINGLIGHT reverse-mount 1206, yellow-green 570 nm / 120 "
-                "mcd — the §4.1 working LED; the 525 nm true green of the "
-                "same series (C3646937) has Vf 3.4 V, undrivable from a "
-                "3.3 V GPIO"
+                "mcd — the §4.1 per-connector link LEDs, one antiparallel "
+                "pair on a single GPIO (2026-09-30); the series' only "
+                "3.3 V-drivable green — the 525 nm true green of the "
+                "same series (C3646937) has Vf 3.4 V"
             ),
         ),
         PartRecord(
@@ -191,7 +223,9 @@ PARTS = PartsDb(
             area_mm2=5.12,
             note=(
                 "XINGLIGHT reverse-mount 1206, yellow 588 nm / 180 mcd — "
-                "the two §4.1 per-connector link LEDs"
+                "the §4.1 working LED (2026-09-30 color shuffle: red = "
+                "power, yellow = working, green = link stay "
+                "distinguishable)"
             ),
         ),
     ]

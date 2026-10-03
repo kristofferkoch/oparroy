@@ -427,7 +427,10 @@ Known spec violation, accepted: A's slow sel ramp breaks the switch's
 10 ns/V input-rate spec ([SCES424O](datasheets/SN74LVC1G3157/) §5.4) —
 ≤500 µA ΔICC while dwelling ~0.4 ms in the 0.99–2.31 V band, once per
 fault event. A 74LVC1G17 Schmitt buffer on sel fixes it for one
-Extended BOM line if the bench disagrees.
+Extended BOM line if the bench disagrees. Insurance landed for the
+node board (2026-09-29): a **DNP 74LVC1G17 footprint in the sel path,
+bridged by a fitted 0 Ω** — the fix becomes a resistor swap, not a
+respin.
 
 Power: bypass switch + watchdog run from the **always-on ring rail**,
 not the per-node switchable rail — the 1G3157 has no Ioff /
@@ -463,10 +466,24 @@ series — parts DB), emitting through routed holes in the PCB to the
 stay on the front, so single-sided assembly and the flat
 enclosure-wall face are untouched, and the back's copper set stays
 exactly the two segment connectors (§7 checklist). One series covers
-all four positions; the working LED is the 570 nm yellow-green —
-the series' 525 nm true green has Vf 3.4 V, undrivable from a 3.3 V
-GPIO. Layout-checkable (§7): each status LED sits over its routed
-hole.
+all four positions; the per-connector link pair is the 570 nm
+yellow-green (the series' 525 nm true green has Vf 3.4 V, undrivable
+from a 3.3 V GPIO), and the working LED is the 588 nm yellow so the
+roles stay visually distinct — red = power, yellow = working,
+green = link (2026-09-30). Layout-checkable (§7): each status LED
+sits over its routed hole.
+
+Per-connector LED drive (2026-09-29): **firmware-driven**, confirmed
+against the hardware-activity ideal above — the watchdog plus working
+LED already flag a dead node, and the CI board observes truth through
+the §6 supervisor taps, so per-node activity hardware doesn't survive
+the §1 cost driver. The two connector LEDs merge onto **one GPIO as
+an antiparallel pair** with a shared series R: pin high lights
+upstream, low lights downstream, Hi-Z dark, a kHz toggle lights both
+at half brightness. That frees PC1 (an FT pin) and one resistor; the
+cost is firmware encoding complexity and the loss of independent
+steady states. The activity/no-signal/error encoding itself stays
+firmware scope (the §4.1 TBD above).
 
 ## 5. MCU platform
 
@@ -566,10 +583,15 @@ optocoupler/transistor.
 Board fabrication (2026-09-26): the CI/test board is **4-layer** — the
 fault-injection muxes and per-node debug plumbing want the routing room,
 and the §1 cost driver doesn't apply to test infrastructure. Node-board
-stackup is a separate question (§9).
+stackup settled separately (2026-09-29, §9): **2-layer, 0.8 mm**.
 
 Prototype assembly (decided 2026-09-26): **JLCPCB Economic
-PCBA** for the first prototype boards. Research + inventory snapshot:
+PCBA** for the first prototype boards. Fab order (2026-09-30): the
+**CI/test board fabs first** — its eight node tiles are the first
+bench articles for the §2/§4 claims — and the standalone node board
+follows, assembled at the 2-board minimum as the production-form
+proof (single-sided assembly, back-side hand-soldered headers, pogo
+programming flow). Research + inventory snapshot:
 [docs/pcba-research-2026-09-26.md](docs/pcba-research-2026-09-26.md).
 Facts that shape board design:
 
@@ -586,6 +608,9 @@ Facts that shape board design:
 - VOEC-registered: Norwegian VAT settled at checkout.
 - Fallback for anything JLCPCB can't stock: **PCBWay partial-turnkey**
   (1-pc MOQ, true consignment), at 2–4× the price.
+- Third-party population is acceptable (2026-09-30): consignment and
+  Extended-line fees are just money — what the design avoids is
+  hand-soldering jellybean passives ourselves at volume.
 
 Consequence: **part selection is
 inventory-driven** — prefer parts the assembler stocks; anything
@@ -831,9 +856,11 @@ the §4 charge pump captured on typed parts against the
 nix-provisioned KiCad
 libraries, golden netlist in `tests/golden/` (byte-identical across
 the typed-parts migration), 92 pytest cases green.
-Not yet proven: a real pcbnew netlist *import* (no KiCad application in
-the flake yet — the golden format is pinned, the ingest is exercised
-when the first board enters layout).
+Not yet proven: a real pcbnew netlist *import* — the golden format is
+pinned, the ingest is exercised when the first board enters layout.
+The KiCad application joins the flake (2026-09-29), pinned to the
+library version the DSL validates against, so pcbnew ingest and layout
+cannot drift from the validated libraries.
 
 Subcircuit composition (2026-09-28): hierarchy is
 capture-time structure, **flattening is a pass** — `subcircuit.py`
@@ -1061,8 +1088,9 @@ assert layout-level properties the schematic can't express, e.g.:
   respect
 - KiCad's own DRC stays authoritative for manufacturability; the DSL
   checker covers *project semantics* DRC can't know about. The DSL can
-  also *push* constraints the other way — emitting net classes and
-  keepouts into the `.kicad_pcb` so the layout tool guides the human
+  also *push* constraints the other way — emitting the stackup and
+  keepouts into the `.kicad_pcb` and the net classes and board
+  minimums into the `.kicad_pro`, so the layout tool guides the human
   toward compliance before the audit runs.
 
 Board-level checklist (grows as boards are designed; each item is
@@ -1095,6 +1123,8 @@ either a layout-checker assertion or a subcircuit):
   strictly removes load and a passing CI with TVS covers the bare
   variant; leave one CI node DNP to cover populated↔unpopulated
   segments in the same run. Production nodes may ship DNP. The
+  standalone node boards ship populated as well (2026-09-29) — they
+  are the first bench articles for the §2/§4 claims. The
   power-rail TVS pairs with the eFuse/crowbar above and is *not*
   optional. Layout-checkable (§7): TVS adjacent to its connector,
   R between TVS and µC pin.
@@ -1111,7 +1141,9 @@ either a layout-checker assertion or a subcircuit):
 - **Programming strip: SWIO + GND + 3V3 pads** (2026-09-29, §6): the
   pogo-jig target for post-SMT programming — three pads together at
   a board edge, 3V3 driven by the programmer, never the ring.
-  Layout-checkable: presence, adjacency, edge placement.
+  Layout-checkable: presence, adjacency, edge placement. Geometry
+  (2026-09-29): **2.54 mm pitch, three 1.5×1.5 mm pads, on a short
+  board edge** — the pogo jig consumes exactly this.
 - **Board identification on silkscreen** (2026-09-26): every PCB
   carries project name (`oparroy`), PCB name, author name, date, and
   version number — checkable as required text fields on the fab/
@@ -1136,13 +1168,37 @@ corner radius with collinear-junction exemption, required silkscreen
 board-ID fields, serial-box area, mounting-hole count and keepout
 coverage, footprint adjacency and presence, and bypass-net pad
 whitelisting — the §4 independence check), and `pcb_emit.py` (a
-byte-identical `.kicad_pcb` skeleton emitter pushing stackup, net
-classes, and keepouts into pcbnew pre-audit; round-trips through the
-parser). Proven against `tests/fixtures/board_pass.kicad_pcb`. Not yet
+byte-identical skeleton emitter pushing constraints into pcbnew
+pre-audit; round-trips through the parser). Proven against
+`tests/fixtures/board_pass.kicad_pcb`. Not yet
 landed: copper-geometry independence beyond pad whitelisting, serial
 box pad/silkscreen clearance, TVS/series-R placement contracts, and
 the channelization hook (per-instance layout replication over the
 subcircuit sheetpaths) — these wait for the first real board.
+
+Skeleton emitter, KiCad 10 shape (2026-10-03, verified headless
+against KiCad 10.0.6 — `kicad-cli pcb upgrade`/`pcb drc`, exercised
+in `tests/test_dsl_kicad10.py`): KiCad 10 rejects `net_class` in
+`.kicad_pcb` `(setup)`, so the skeleton is a **pair** —
+`pcb_emit.emit_pcb` writes the `.kicad_pcb` (stackup, keepouts, net
+list; still format 20240108, pcbnew upgrades on open) and
+`pcb_emit.emit_project` writes the `.kicad_pro` (net classes in
+`net_settings.classes`, net→class membership in
+`net_settings.netclass_assignments` — the key is
+`netclass_assignments`, the `class_patterns` spelling is silently
+ignored; board minimums in `board.design_settings.rules`).
+DRC-enforcement facts the design relies on: per-class clearance and
+the board minimums are DRC-enforced headless; net-class track width
+is a routing default only, so per-net width/via contracts stay with
+the layout checker, which now reads classes from the project
+(`kicad_pro.parse_project`, `check_layout(..., project=...)`) with
+board-file classes as fallback. Quirks, both documented where the
+code hits them: stackup paste layers must not carry
+thickness/material (the upgrader mangles them into dielectrics), and
+a class clearance ≤ 0.25 mm is enforced but the violation text
+reports an empty constraint name (above 0.25 mm it cites the class).
+The node board's spec is `design/node_board.py`; the emitted pair
+lives in `boards/node/`.
 
 ## 8. Verification strategy
 
@@ -1317,14 +1373,13 @@ resolves each is in KANBAN.md):
   direction-flap policy is not.
 - **Debug transport** (§6) — per-node UART vs shared bus, connector
   style.
-- **Node-board stackup and thickness** (§6) — leaning 4-layer to keep
-  the node board small and good, but every extra layer is a per-node
-  fab cost and must argue against the central cost driver (§1); the CI
-  board's 4-layer decision doesn't automatically transfer. Also: node
-  boards should be **thinner than the standard 1.6 mm** (≤1.0 mm class)
-  so a small board doesn't feel chunky — JLCPCB offers thinner stackups
-  as a fab option; verify exact thicknesses/4-layer combos at quote
-  time. Resolved by the first node-board design (KANBAN.md).
+- **Node-board stackup and thickness** (§6) — **resolved 2026-09-29:
+  2-layer, 0.8 mm.** The §1 cost driver won: the board is tiny,
+  single-sided, and its back is two connectors plus pass-through, so
+  4-layer's routing room buys nothing. 0.8 mm over 1.0 mm for feel,
+  accepting more flex under the IDC mating shear the hand-soldered SMD
+  headers take (§3). JLCPCB's exact 2-layer thickness offerings verify
+  at quote time.
 - **Cable reach** (§2) — maximum segment length unamplified, and with
   an amplifier/re-driver node in the segment; line coding is settled
   (§2), so this is drive strength, comparator sensitivity, and cable

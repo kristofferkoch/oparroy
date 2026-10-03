@@ -12,11 +12,13 @@ from oparroy.dsl import (
     KiCadLibraries,
     LibraryError,
     PinType,
+    Project,
     Symbol,
     SymbolPin,
     SymbolUnit,
     UnknownSymbolError,
     parse_board,
+    parse_project,
 )
 
 _FIXTURES = Path(__file__).parent / "fixtures"
@@ -191,3 +193,9 @@ def kicad_libs() -> KiCadLibraries:
 def board_pass() -> Board:
     """Parse the compliant reference board (tests/fixtures/)."""
     return parse_board((_FIXTURES / "board_pass.kicad_pcb").read_text())
+
+
+@pytest.fixture
+def project_pass() -> Project:
+    """Parse the reference board's project: the KiCad 10 net-class home."""
+    return parse_project((_FIXTURES / "board_pass.kicad_pro").read_text())
