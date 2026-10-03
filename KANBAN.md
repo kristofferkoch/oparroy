@@ -38,9 +38,15 @@ graph TD
     T28 --> T24[T24 instrumentation with equivalence proof]
     T24 --> T10
     T22[T22 node board design] --> T10
+    T31[T31 scan control/observe plane] --> T24
+    T29[T29 CI power: USB-C + 3V3] --> T10
+    T30[T30 RP2040 supervisor subcircuit] --> T10
+    T31 --> T10
+    T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
     T11 --> T12
+    T32[T32 supervisor firmware] --> T12
 ```
 
 ______________________________________________________________________
@@ -74,6 +80,68 @@ ______________________________________________________________________
   `.kicad_pcb` (so far tested against synthetic input only), and fab
   via JLCPCB (§6).
   **Blocked by:** — · **Unblocks:** T10
+- **T31 — CI scan control/observe plane.** *Shape: design.* Split out
+  of T28 (2026-09-30). Settles the §6 (2026-09-29) shift-register
+  plane as its own design: 74HC595-class control stages and
+  74HC165-class observe stages in one daisy chain under a global
+  latch/capture clock; chain partitioning (per-tile slices vs
+  functional grouping, control/observe interleave); the bit inventory
+  by function — mux selects, per-node power switches, fault-injection
+  switches, human-I/O overrides, the boundary node's watchdog-defeat
+  bit (§6); and **power-on reset levels** — every control bit's POR
+  state must reduce the instrumented board to the plain board, and
+  these levels are what T24's reset-state equivalence proof derives
+  from. Also the analog-mux hierarchy the chain drives: the
+  fault-injection muxes (per T28's complement), the SWIO flash mux
+  (§6, 2026-09-29), and the pot-wiper override muxes (§6 dual role).
+  The architecture stands alone — 595/165 classes, chain topology,
+  POR-level philosophy need nothing from the node design; the bit
+  inventory finalizes with T28's fault complement. **Blocked by:** — ·
+  **Unblocks:** T24, T10
+- **T29 — CI board power: USB-C inlet and 3.3 V rail.** DSL capture of
+  the board's power tree (§6, 2026-09-30): one USB-C receptacle is
+  both power inlet and host link — CC sink pull-downs (5.1 kΩ Rd ×2,
+  no PD, 5 V only), 5 V distribution, and a **3.3 V regulator**
+  feeding the ring rail (§2.1) and all board logic: 8 tiles through
+  the per-node power-cut switches (T28's fault complement slots in
+  downstream of the rail), RP2040, and the scan plane. Power budget
+  against baseline USB-C 5 V delivery: tiles at tens of mA each
+  (§2.1), RP2040, fault/scan logic. Regulator and connector are
+  inventory-driven picks into the parts DB (§6, §7). Decides whether
+  the §2.1 unregulated payload rail is populated (plain 5 V copper) or
+  omitted on this board. **Blocked by:** — · **Unblocks:** T10
+- **T30 — RP2040 supervisor subcircuit.** DSL capture of the §5
+  supervisor: RP2040 minimal system — QSPI flash, 12 MHz crystal (§5:
+  the supervisor keeps its crystal for USB), decoupling, boot/reset —
+  with D+/D− from the board's single USB-C receptacle (shared with
+  power, §6 2026-09-30). Carries the GPIO/PIO budget: the SWIO flash
+  channel and its mux select (§6, 2026-09-29), the boundary node's
+  four taps (RX, TX, comparator-out, working-LED — §6), scan-chain
+  clock/data/latch (T31), and whatever the debug-transport decision
+  (§9) adds — capture proceeds with those pins reserved, the budget
+  finalizes with the decision. Pin-scarcity-checked like the T9 node
+  pin map; at 30 GPIO the IDEAS scarcity lint starts to apply.
+  **Blocked by:** — · **Unblocks:** T10
+- **T33 — Debug transport decision.** *Shape: decision.* Settles the
+  §6/§9 open question — per-node UART vs shared bus vs
+  scan-observe-only — for runtime debug output from the eight nodes:
+  bandwidth need (assert reports; the §4 `lib::verify_failed` wiring
+  point reports over this transport), RP2040 pin/PIO cost (feeds the
+  T30 budget), connector or pogo style, and interaction with the SWIO
+  flash mux (does debug ride the same mux?). Recorded into DESIGN.md
+  §6 on resolution. **Blocked by:** — · **Unblocks:** T10
+- **T34 — CI board block diagram.** *Shape: docs.* One page showing
+  the whole CI board as blocks and the wires between them: the USB-C
+  inlet → 5 V → 3.3 V regulator power tree (T29), the RP2040
+  supervisor and its PIO roles (T30), the scan control/observe chain
+  and the mux hierarchy it drives (T31), the eight node tiles with
+  their fault-injection complement (T28), the instrumented boundary
+  node's tap set (§6), and the human-I/O override paths (§6 dual
+  role). Mermaid in `docs/` so it diffs and reviews like the rest of
+  the planning docs. Drawn from §6 prose as a first pass — it is the
+  review artifact for the T28/T31/T10 conversations — revised as those
+  settle, and retired in favor of T26's generated block view once the
+  T10 capture exists. **Blocked by:** — · **Unblocks:** —
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
   `circuits/watchdog-supervisor/` in the DSL — the charge pump's
@@ -120,6 +188,16 @@ ______________________________________________________________________
   wiring-point shape as `lib::verify_failed`: target-side reporting
   over the debug transport lands with T11/T12. **Blocked by:** — ·
   **Unblocks:** —
+- **T32 — Supervisor firmware (RP2040).** The RP2040 image that makes
+  the CI board scriptable: USB CDC command channel to the host (the
+  T12 harness is its client); the PIO SWIO flash engine — pipelined
+  round-robin through the flash mux, ≈1.6 s for all 8 nodes (§6,
+  2026-09-29); the scan-chain driver — shift/latch primitives plus the
+  reset-state load at boot (T31's POR levels); and PIO logic-analyzer
+  capture + glitch stimulus on the boundary node's taps (§6).
+  Developed against a stock Pico-class board from the first commit —
+  the PIO programs and scan driver are board-agnostic — so it does not
+  wait for T10 hardware. **Blocked by:** — · **Unblocks:** T12
 
 ## Backlog
 
@@ -183,8 +261,10 @@ ______________________________________________________________________
   settled design: the fault-injection complement (per-segment
   open/short, per-node power cut, clock kill) with fault-switch part
   selection, the supervisor-override design for human I/O (pot-wiper
-  mux, button parallel), the boundary node's tap set, and the
-  shift-register control plane's wiring and power-on reset levels.
+  mux, button parallel), and the boundary node's tap set — the
+  shift-register control plane's wiring and power-on reset levels
+  split out 2026-09-30 into T31 (unblocked; the bit inventory
+  finalizes against this card's fault complement).
   Expressed as the **transform list** against the settled T22 node
   design — the artifact T24's machinery encodes and T10's capture
   consumes. **Blocked by:** T22 · **Unblocks:** T24, T10
@@ -232,7 +312,12 @@ ______________________________________________________________________
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   Fabs **first**, ahead of the standalone node board (2026-09-30):
   its eight tiles are the first bench articles for the §2/§4 claims.
-  **Blocked by:** T19, T22, T24 · **Unblocks:** T12, T15
+  Supervisor-side work splits out (2026-09-30): power inlet and 3.3 V
+  rail (T29), RP2040 subcircuit (T30), scan control/observe plane
+  (T31), debug-transport decision (T33); the supervisor image itself
+  is T32.
+  **Blocked by:** T19, T22, T24, T29, T30, T31, T33 ·
+  **Unblocks:** T12, T15
 - **T27 — Node programming jig.** The bench deliverable of the §6
   programming flow (2026-09-29): a pogo jig targeting the node board's
   TP1/TP2/TP3 (SWIO/3V3/GND) strip, a WCH-LinkE driving — **the probe
@@ -268,7 +353,8 @@ ______________________________________________________________________
   **Unblocks:** T12, T13
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
-  CI-platform integration is a later card. **Blocked by:** T10, T11 ·
+  CI-platform integration is a later card. **Blocked by:** T10, T11,
+  T32 ·
   **Unblocks:** —
 - **T8 — DSL constraint checking: board-level property checks.**
   Partially shipped 2026-09-28: range-carrying typed ports, the per-net
