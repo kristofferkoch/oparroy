@@ -23,6 +23,9 @@ from oparroy.dsl.kicad_pcb import Board, Edge, EdgeKind, Footprint, Point
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from oparroy.dsl.kicad_pcb import NetClass
+    from oparroy.dsl.kicad_pro import Project
+
 _EPSILON_MM = 1e-6
 _COLLINEAR_COSINE = -0.999
 _JUNCTION_LINE_COUNT = 2
@@ -75,11 +78,19 @@ class LayoutRules:
     bypass: tuple[BypassRule, ...] = ()
 
 
-def check_layout(board: Board, rules: LayoutRules) -> list[Issue]:
-    """Assert the layout contract; returns the issue list (errors only)."""
+def check_layout(
+    board: Board, rules: LayoutRules, project: Project | None = None
+) -> list[Issue]:
+    """Assert the layout contract; returns the issue list (errors only).
+
+    When ``project`` (the parsed ``.kicad_pro``) is given, net-class
+    width/via compliance reads its classes — the same numbers KiCad's
+    DRC enforces; the board file's own ``net_class`` entries remain
+    the fallback for pre-KiCad-10 files.
+    """
     issues: list[Issue] = []
     issues.extend(_check_stackup(board, rules))
-    issues.extend(_check_net_class_compliance(board))
+    issues.extend(_check_net_class_compliance(board, project))
     issues.extend(_check_trace_budgets(board, rules))
     issues.extend(_check_corner_radius(board, rules))
     issues.extend(_check_silkscreen(board, rules))
@@ -122,10 +133,16 @@ def _check_stackup(board: Board, rules: LayoutRules) -> list[Issue]:
     return issues
 
 
-def _check_net_class_compliance(board: Board) -> list[Issue]:
+def _check_net_class_compliance(board: Board, project: Project | None) -> list[Issue]:
+
+    def net_class_of(net: str) -> NetClass | None:
+        if project is not None:
+            return project.net_class_of(net)
+        return board.net_class_of(net)
+
     issues: list[Issue] = []
     for segment in board.segments:
-        net_class = board.net_class_of(segment.net)
+        net_class = net_class_of(segment.net)
         if (
             net_class is not None
             and net_class.trace_width_mm is not None
@@ -139,7 +156,7 @@ def _check_net_class_compliance(board: Board) -> list[Issue]:
                 )
             )
     for via in board.vias:
-        net_class = board.net_class_of(via.net)
+        net_class = net_class_of(via.net)
         if (
             net_class is not None
             and net_class.via_dia_mm is not None

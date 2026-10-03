@@ -15,9 +15,11 @@ Typed jellybean parts live in :mod:`oparroy.dsl.parts`; KiCad library
 access lives in :mod:`oparroy.dsl.kicadlib`; the parts DB with
 assembler-stock status lives in :mod:`oparroy.dsl.parts_db`. The
 physical-layout side parses ``.kicad_pcb``
-(:mod:`oparroy.dsl.kicad_pcb`), asserts layout properties
-(:mod:`oparroy.dsl.layout_check`), and pushes net classes/keepouts
-into pcbnew (:mod:`oparroy.dsl.pcb_emit`).
+(:mod:`oparroy.dsl.kicad_pcb`) and ``.kicad_pro``
+(:mod:`oparroy.dsl.kicad_pro`), asserts layout properties
+(:mod:`oparroy.dsl.layout_check`), and pushes stackup/keepouts into
+pcbnew plus net classes and board minimums into the project
+(:mod:`oparroy.dsl.pcb_emit`).
 """
 
 from oparroy.dsl.annotate import (
@@ -83,6 +85,7 @@ from oparroy.dsl.kicad_pcb import (
 from oparroy.dsl.kicad_pcb import (
     Pad as PcbPad,
 )
+from oparroy.dsl.kicad_pro import Project, ProjectError, parse_project
 from oparroy.dsl.kicadlib import KiCadLibraries, LibraryError
 from oparroy.dsl.layout_check import (
     AdjacencyRule,
@@ -113,11 +116,14 @@ from oparroy.dsl.parts_db import (
     Tier,
 )
 from oparroy.dsl.pcb_emit import (
+    BoardMinimums,
     Keepout,
     NetClassSpec,
     PcbSpec,
     PcbSpecError,
+    StackupLayer,
     emit_pcb,
+    emit_project,
 )
 from oparroy.dsl.pinmap import (
     CH32V003F4P6,
@@ -140,6 +146,7 @@ __all__ = [
     "Bat54adw",
     "Bat54s",
     "Board",
+    "BoardMinimums",
     "Bundle",
     "BundleConnector",
     "BypassRule",
@@ -183,12 +190,15 @@ __all__ = [
     "PinType",
     "Point",
     "PortArray",
+    "Project",
+    "ProjectError",
     "Rect",
     "Resistor",
     "Segment",
     "Severity",
     "SocketSpec",
     "SpiceModel",
+    "StackupLayer",
     "Stock",
     "Subcircuit",
     "Symbol",
@@ -214,11 +224,13 @@ __all__ = [
     "emit_netlist",
     "emit_pcb",
     "emit_pin_header",
+    "emit_project",
     "emit_spice",
     "footprint_map",
     "overrides_from_json",
     "overrides_to_json",
     "parse_board",
+    "parse_project",
     "raise_on_errors",
     "to_dot",
 ]
