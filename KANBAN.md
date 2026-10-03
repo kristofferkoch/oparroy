@@ -66,13 +66,15 @@ ______________________________________________________________________
   node design the CI board tiles; the standalone board fabs second
   (assemble 2, the minimum; blanks hand-solderable). Header buy-ahead
   deferred (re-check C22385222 stock before ordering).
-  Remaining: capture deltas (LED merge, Schmitt bridge, PC7 pad, TVS
-  parts-DB record; BAT54S tier/stock still needs a human on
-  jlcpcb.com), KiCad application into the flake, then lay out the
-  board in KiCad — the first real pcbnew netlist ingest (the T7a
-  caveat, §7) — validate the back-annotation join against the real
-  `.kicad_pcb` (so far tested against synthetic input only), and fab
-  via JLCPCB (§6).
+  Capture deltas landed 2026-09-30 (PR #24): LED merge (StatusLeds
+  subcircuit + bench; caught Dd dark-forever anode net), Schmitt
+  bridge, PC7 pad, TVS parts-DB record; KiCad application in the
+  flake. The first layout attempt was deleted as a dead end.
+  Remaining: BAT54S tier/stock still needs a human on jlcpcb.com;
+  lay out the board in KiCad (fresh start) — the first real pcbnew
+  netlist ingest (the T7a caveat, §7) — validate the back-annotation
+  join against the real `.kicad_pcb` (so far tested against
+  synthetic input only), and fab via JLCPCB (§6).
   **Blocked by:** — · **Unblocks:** T10
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
