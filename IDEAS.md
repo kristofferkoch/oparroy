@@ -146,15 +146,6 @@ real work — **move**, don't copy. Reference, don't duplicate.
   instead of a matcher inferring it. Revisit if BOM-line pressure or
   the CI board's switch count makes hand-packing tedious; the settled
   unit model (DESIGN.md §7) is the substrate this would map onto.
-- **KiCad 10 rejects `net_class` in `.kicad_pcb` setup** (found
-  2026-09-30, KiCad 10.0.6): `kicad-cli pcb upgrade` fails with
-  "Unexpected net_class" (then segfaults) on any board whose `(setup)`
-  block carries net classes — including our own
-  `tests/fixtures/board_pass.kicad_pcb`. A bare `(setup)` upgrades fine
-  to format 20260206. Consequence: boards emitted/seeded for the §7
-  back-annotation flow need net classes dropped (or moved to the
-  project file) before KiCad 10 will open them; the fixture will need
-  regeneration the day we open real boards in pcbnew 10.
 - Hardware-in-the-loop CI: self-hosted runner permanently attached to the
   test board?
 - Analog simulation of the PHY (line drivers, comparators, bypass

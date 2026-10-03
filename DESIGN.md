@@ -1088,8 +1088,9 @@ assert layout-level properties the schematic can't express, e.g.:
   respect
 - KiCad's own DRC stays authoritative for manufacturability; the DSL
   checker covers *project semantics* DRC can't know about. The DSL can
-  also *push* constraints the other way — emitting net classes and
-  keepouts into the `.kicad_pcb` so the layout tool guides the human
+  also *push* constraints the other way — emitting the stackup and
+  keepouts into the `.kicad_pcb` and the net classes and board
+  minimums into the `.kicad_pro`, so the layout tool guides the human
   toward compliance before the audit runs.
 
 Board-level checklist (grows as boards are designed; each item is
@@ -1167,13 +1168,37 @@ corner radius with collinear-junction exemption, required silkscreen
 board-ID fields, serial-box area, mounting-hole count and keepout
 coverage, footprint adjacency and presence, and bypass-net pad
 whitelisting — the §4 independence check), and `pcb_emit.py` (a
-byte-identical `.kicad_pcb` skeleton emitter pushing stackup, net
-classes, and keepouts into pcbnew pre-audit; round-trips through the
-parser). Proven against `tests/fixtures/board_pass.kicad_pcb`. Not yet
+byte-identical skeleton emitter pushing constraints into pcbnew
+pre-audit; round-trips through the parser). Proven against
+`tests/fixtures/board_pass.kicad_pcb`. Not yet
 landed: copper-geometry independence beyond pad whitelisting, serial
 box pad/silkscreen clearance, TVS/series-R placement contracts, and
 the channelization hook (per-instance layout replication over the
 subcircuit sheetpaths) — these wait for the first real board.
+
+Skeleton emitter, KiCad 10 shape (2026-10-03, verified headless
+against KiCad 10.0.6 — `kicad-cli pcb upgrade`/`pcb drc`, exercised
+in `tests/test_dsl_kicad10.py`): KiCad 10 rejects `net_class` in
+`.kicad_pcb` `(setup)`, so the skeleton is a **pair** —
+`pcb_emit.emit_pcb` writes the `.kicad_pcb` (stackup, keepouts, net
+list; still format 20240108, pcbnew upgrades on open) and
+`pcb_emit.emit_project` writes the `.kicad_pro` (net classes in
+`net_settings.classes`, net→class membership in
+`net_settings.netclass_assignments` — the key is
+`netclass_assignments`, the `class_patterns` spelling is silently
+ignored; board minimums in `board.design_settings.rules`).
+DRC-enforcement facts the design relies on: per-class clearance and
+the board minimums are DRC-enforced headless; net-class track width
+is a routing default only, so per-net width/via contracts stay with
+the layout checker, which now reads classes from the project
+(`kicad_pro.parse_project`, `check_layout(..., project=...)`) with
+board-file classes as fallback. Quirks, both documented where the
+code hits them: stackup paste layers must not carry
+thickness/material (the upgrader mangles them into dielectrics), and
+a class clearance ≤ 0.25 mm is enforced but the violation text
+reports an empty constraint name (above 0.25 mm it cites the class).
+The node board's spec is `design/node_board.py`; the emitted pair
+lives in `boards/node/`.
 
 ## 8. Verification strategy
 

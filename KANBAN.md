@@ -70,6 +70,11 @@ ______________________________________________________________________
   subcircuit + bench; caught Dd dark-forever anode net), Schmitt
   bridge, PC7 pad, TVS parts-DB record; KiCad application in the
   flake. The first layout attempt was deleted as a dead end.
+  The KiCad-10 constraint skeleton landed 2026-10-03
+  (`design/node_board.py` → `boards/node/`: stackup + keepouts in the
+  `.kicad_pcb`, net classes + board minimums in the `.kicad_pro`,
+  DRC enforcement verified headless, §7) — DRC and stackup are set
+  programmatically, no GUI step.
   Remaining: BAT54S tier/stock still needs a human on jlcpcb.com;
   lay out the board in KiCad (fresh start) — the first real pcbnew
   netlist ingest (the T7a caveat, §7) — validate the back-annotation
