@@ -15,21 +15,6 @@
   )
   (setup
     (pad_to_mask_clearance 0)
-    (net_class "Default" "Default net class"
-      (clearance 0.2)
-      (trace_width 0.25)
-      (via_dia 0.8)
-      (via_drill 0.4)
-      (add_net "GND")
-      (add_net "SIG")
-    )
-    (net_class "Power" "bypass-path copper"
-      (clearance 0.3)
-      (trace_width 0.5)
-      (via_dia 1.0)
-      (via_drill 0.5)
-      (add_net "BYPASS")
-    )
   )
   (net 0 "")
   (net 1 "BYPASS")
