@@ -154,11 +154,6 @@ real work — **move**, don't copy. Reference, don't duplicate.
   thresholds aren't pure folklore. Rung 5 = bench: DIY near-field
   H/E probes + spectrum analyzer/SDR over a running ring, TDR/NanoVNA
   for discontinuities (§6 HIL philosophy).
-- **Verify BAT54S C727126 tier/stock at JLCPCB before T22**
-  (2026-09-28): the parts-DB seed (`design/parts_db.py`) marks the
-  BAT54S's assembly tier unverified and its stock never queried —
-  `check_stock` flags exactly this. Needs a human with browser access
-  to jlcpcb.com; until then a conservative filter never admits it.
 - **Technology mapping onto multi-unit packages** (2026-09-27) — the
   FPGA-flow analogy: synthesis emits primitive gates, the technology
   mapper packs them onto physical cells. Applied here: a capture

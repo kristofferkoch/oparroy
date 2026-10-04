@@ -176,12 +176,12 @@ ______________________________________________________________________
   interleaving is the anti-pattern). **Blocked by:** — ·
   **Unblocks:** —
 - **T22b — Node board fab.** *Shape: chore — needs a human.* Split
-  from T22 (2026-10-04): everything past the settled design. Verify
-  BAT54S C727126 assembly tier/stock on jlcpcb.com — the parts DB's
-  conservative filter never admits it until then
-  (`design/parts_db.py`, `check_stock` flags exactly this) — and
-  re-check C22385222 header stock before ordering (buy-ahead deferred
-  2026-09-29). Then fab via JLCPCB (§6): assemble 2, the minimum;
+  from T22 (2026-10-04): everything past the settled design. BAT54S
+  verified 2026-10-04: KEXIN C369929, Extended tier, 1,181 in stock at
+  $0.0158 @1 — the parts DB now binds it (`design/parts_db.py`); the
+  never-queried TWGMC C727126 listing is dropped. Remaining: re-check
+  C22385222 header stock before ordering (buy-ahead deferred
+  2026-09-29), then fab via JLCPCB (§6): assemble 2, the minimum;
   blanks hand-solderable. Fabs **second**, after the T10 CI board
   (2026-09-30 decision): the CI board's eight tiles are the first
   bench articles. **Blocked by:** T22a · **Unblocks:** —

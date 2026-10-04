@@ -54,16 +54,27 @@ PARTS = PartsDb(
         PartRecord(
             name="bat54s",
             kind="diode",
-            lcsc="C727126",
+            lcsc="C369929",
             symbol="Diode:BAT54S",
             footprint="Package_TO_SOT_SMD:SOT-23",
             value="BAT54S",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                1_181,
+                date(2026, 10, 4),
+                "jlcpcb.com product page, human-verified",
+            ),
             area_mm2=3.77,
             datasheet="datasheets/BAT54S",
             note=(
-                "TWGMC C727126 (datasheets/BAT54S/notes/facts.md); JLCPCB "
-                "tier and stock never queried (2026-09-28); spice model is "
-                "inline in circuits/watchdog-chargepump/ until T7e"
+                "KEXIN C369929, $0.0158 @1 — verified on jlcpcb.com "
+                "2026-10-04, replacing the never-queried TWGMC C727126 "
+                "listing; same industry-standard series pair (30 V, "
+                "200 mA, SOT-23), so datasheets/BAT54S (the TWGMC doc) "
+                "still stands. Extended tier — the ~$3/line fee (§6) "
+                "applies; a Basic-tier BAT54S was not found but also "
+                "not hunted. Spice model is inline in "
+                "circuits/watchdog-chargepump/ until T7e"
             ),
         ),
         PartRecord(

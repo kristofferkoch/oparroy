@@ -33,9 +33,9 @@ STALE = FRESH - timedelta(days=STOCK_MAX_AGE_DAYS + 1)
 BASIC_STOCK = 10_000
 TI_STOCK = 51_000
 
-#: The seed records with no stock snapshot (never queried, and for the
-#: BAT54S an unverified tier) — everything else is fresh at TODAY.
-SEED_UNVERIFIED = {"r-0603", "c-0603", "bat54s"}
+#: The seed records with no stock snapshot (never queried) — everything
+#: else is fresh at TODAY.
+SEED_UNVERIFIED = {"r-0603", "c-0603"}
 
 
 def _record(name: str, **overrides: object) -> PartRecord:
