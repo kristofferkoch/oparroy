@@ -783,7 +783,12 @@ DSL shape (2026-09-26, from the initial design interrogation):
   KiCad releases. KiCad is the merge engine between generated and
   hand-edited artifacts — ref-matched netlist import for connectivity,
   Board Setup's Import Settings from Another Board for constraints;
-  the DSL emits and audits.
+  the DSL emits and audits. The Import Settings step is itself scripted
+  since 2026-10-04: `src/oparroy/dsl/pcb_merge.py` drives the same
+  merge through pcbnew's SWIG API (the flake's `kicad-python` wrapper;
+  `python -m design.node_board --apply DIR`), keeping layout and
+  GUI-authored project state intact while re-imposing the emitted
+  constraints.
 - **The pipeline is not one-way** (2026-09-27). Between capture and
   pcbnew sit **footprint assignment** and **annotation** as explicit,
   repeatable stages — annotation re-runs during layout so numbering
