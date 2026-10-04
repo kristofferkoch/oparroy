@@ -58,20 +58,28 @@ shrinks, not the rule. Tune here when the quote lands — nowhere else.
 
 Usage (in the nix dev shell):
 
-    python -m design.node_board              # write boards/node/ artifacts
-    python -m design.node_board /tmp/skel    # stage elsewhere
+    python -m design.node_board               # write boards/node/ artifacts
+    python -m design.node_board /tmp/skel     # stage elsewhere
+    python -m design.node_board --apply DIR   # merge settings into DIR's board
 
-Once layout lives in ``boards/node/oparroy-node.kicad_pcb``, re-emit to
-a staging directory and merge via pcbnew's Board Setup → Import
-Settings from Another Board — running against ``boards/node/``
-overwrites the live board (the emit is a seed, not a merge).
+The plain modes stay the pure emitter — a seed, not a merge: running
+them against ``boards/node/`` overwrites the live board. ``--apply``
+emits the skeleton to a staging directory and merges it into DIR's
+board through KiCad's own pcbnew API (:mod:`oparroy.dsl.pcb_merge`,
+driven by the flake's ``kicad-python`` wrapper — scripted 2026-10-04,
+replacing the manual Board Setup → Import Settings from Another Board
+step).
 """
 
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from oparroy.dsl import (
     BoardMinimums,
@@ -152,17 +160,31 @@ def spec() -> PcbSpec:
 
 
 def main() -> None:
-    """Write the skeleton pair (byte-identical per spec) to OUT_DIR."""
+    """Emit the skeleton, or emit-and-merge it into a live board (--apply)."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "out_dir",
         nargs="?",
         type=Path,
-        default=_OUT_DIR,
         help="output directory (default: boards/node/)",
     )
+    parser.add_argument(
+        "--apply",
+        metavar="DIR",
+        type=Path,
+        help="merge the skeleton's settings into DIR's live board via pcbnew",
+    )
     args = parser.parse_args()
-    out_dir: Path = args.out_dir
+    if args.apply is not None:
+        if args.out_dir is not None:
+            parser.error("--apply takes no positional out_dir")
+        _apply(args.apply)
+        return
+    _emit(args.out_dir or _OUT_DIR)
+
+
+def _emit(out_dir: Path) -> None:
+    """Write the skeleton pair (byte-identical per spec) to OUT_DIR."""
     board_spec = spec()
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, content in [
@@ -172,6 +194,31 @@ def main() -> None:
         path = out_dir / name
         path.write_text(content, encoding="utf-8")
         sys.stdout.write(f"wrote {path}\n")
+
+
+def _apply(live_dir: Path) -> None:
+    """Emit to a staging directory and merge into LIVE_DIR via kicad-python."""
+    kicad_python = shutil.which("kicad-python")
+    if kicad_python is None:
+        sys.stderr.write("kicad-python not on PATH — run inside the nix dev shell\n")
+        raise SystemExit(2)
+    env = os.environ.copy()
+    src = Path(__file__).parent.parent / "src"
+    pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = f"{src}{os.pathsep}{pythonpath}" if pythonpath else str(src)
+    with TemporaryDirectory() as staging:
+        _emit(Path(staging))
+        subprocess.run(  # noqa: S603 — runs the nix-provisioned kicad-python
+            [
+                kicad_python,
+                "-m",
+                "oparroy.dsl.pcb_merge",
+                staging,
+                str(live_dir),
+            ],
+            check=True,
+            env=env,
+        )
 
 
 if __name__ == "__main__":

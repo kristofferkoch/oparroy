@@ -7,7 +7,10 @@ classes onto the :class:`oparroy.dsl.kicad_pcb.NetClass` shape the
 audit (:mod:`oparroy.dsl.layout_check`) already reasons over, so the
 audit checks against the same numbers KiCad's DRC enforces. The reader
 is tolerant: keys the model does not need (GUI settings, plot
-parameters, …) are ignored.
+parameters, …) are ignored, and net→class assignments read in both the
+emitter's scalar form (net-settings meta version 3) and KiCad 10's
+native list form (version 5 — what a KiCad re-save writes, verified
+against 10.0.6 on 2026-10-04).
 """
 
 from __future__ import annotations
@@ -69,8 +72,8 @@ def parse_project(text: str) -> Project:
     root = _mapping(data, "project")
     net_settings = _mapping(root.get("net_settings", {}), "net_settings")
     assignments = {
-        str(net): str(name)
-        for net, name in _mapping(
+        str(net): _assignment(classes)
+        for net, classes in _mapping(
             net_settings.get("netclass_assignments", {}), "netclass_assignments"
         ).items()
     }
@@ -90,6 +93,19 @@ def _mapping(value: object, what: str) -> Mapping[str, object]:
         msg = f"expected an object for {what}"
         raise ProjectError(msg)
     return value
+
+
+def _assignment(value: object) -> str:
+    # KiCad 10's native net settings (meta version 5) write each net's
+    # classes as a list; the first entry is the effective class
+    # (verified against 10.0.6 on 2026-10-04). The emitter's own seed
+    # (version 3) writes a scalar.
+    if isinstance(value, list):
+        if not value:
+            msg = "empty class list in netclass_assignments"
+            raise ProjectError(msg)
+        value = value[0]
+    return str(value)
 
 
 def _opt_number(data: Mapping[str, object], key: str, what: str) -> float | None:
