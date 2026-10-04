@@ -55,14 +55,17 @@ are deliberately looser than the fab's.
    MCU's PC7 corner.
 1. **Outline + 2× M2.5 mounting holes last** (item 6: layout proposes
    the minimal rectangle; §7 checker numbers get fixed once drawn).
-   Not yet drawn as of this pass — nor are the pours.
+   Drawn 2026-10-04: rounded corners, holes, and the GND pours.
 
 ## Routing
 
-1. **Bypass path first, as short as possible**: `RX_A`, `opa_p`,
-   `PHY1/txa_sw`, `TX_A` — the Bypass class copper (0.4 mm). Top side,
-   zero vias if the spine placement did its job; every via in this
-   path is copper the ring depends on with the node dead.
+1. **Bypass path first, as short as possible**: `RX_A`,
+   `PHY1/txa_sw`, `TX_A` — the Bypass class copper (0.4 mm), with
+   `opa_p` riding the same spine but in Default class (its 0.3 mm class
+   clearance was unmeetable at the MCU's TSSOP-20 pads, demoted
+   2026-10-04). Top side, zero vias if the spine placement did its
+   job; every via in this path is copper the ring depends on with the
+   node dead.
 1. **Ring B next**: `RX_B` (J2.7 → Dbr → Rbr → PD7), `TX_B` (PC3 →
    Rbt → Dbt → J1.7). Default class.
 1. **Power class**: `UNREG` straight through J1.1 → J2.1 (pure
@@ -79,7 +82,12 @@ are deliberately looser than the fab's.
 
 ## Before calling it done
 
-- [ ] DRC clean against the seeded classes and minimums.
+- [ ] DRC clean against the seeded classes and minimums, modulo the
+  known-intrinsic set (2026-10-04): the LED light-pipe NPTHs flag
+  `copper_edge_clearance` (the 0.3 mm router-bit edge floor also
+  judges holes — footprint-fixed 0.175 mm pad-to-hole) and
+  `npth_inside_courtyard` under the connectors; both deliberate, both
+  pending exclusion or a footprint/quote decision.
 - [ ] B.Cu footprint set is exactly J1 + J2.
 - [ ] Each reverse-mount LED over its hole; TVS adjacent to its
   connector with the R between TVS and µC.

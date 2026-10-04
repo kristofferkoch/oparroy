@@ -81,12 +81,23 @@ ______________________________________________________________________
     are set programmatically, no GUI step. The placement/routing checklist
     from the 2026-10-04 passes lives in docs/node-layout-2026-10-04.md;
     the feasibility place-and-route itself landed the same day (placement
-  - routing solved on two layers; outline, pours, and back-annotation
-    still open).
-    Remaining: board outline + mounting holes, GND pours, validate the
-    back-annotation join against the real `.kicad_pcb` (so far tested
-    against synthetic input only — the T7a caveat, §7).
-    **Blocked by:** — · **Unblocks:** T19, T28, T10
+    - routing solved on two layers), and the board finished the same day:
+      rounded outline, 2× M2.5 mounting holes, GND pours both sides. The
+      back-annotation join validated against the real `.kicad_pcb` (the
+      T7a caveat, §7, closed): all 35 flattened capture parts join via
+      path tstamps, refdes match the board exactly, the mounting holes
+      are correctly pcbnew-owned. The first full DRC pass settled two
+      constraints: `opa_p` demoted out of the Bypass class (its 0.3 mm
+      clearance is unmeetable inside the MCU's TSSOP-20 pad gap) and an
+      explicit 0.15 mm `min_hole_clearance` floor — KiCad's 0.25 mm
+      default flagged the §7 part-over-hole LEDs' intent itself
+      (`design/node_board.py`).
+      Remaining: the intrinsic LED NPTH `copper_edge_clearance` pairs
+      (the 0.3 mm router-bit edge floor also judges the light-pipe holes
+      — DRC exclusions vs a scoped rule vs shrinking the footprint hole,
+      decided with the fab quote), silkscreen nudges, and JLCPCB's
+      NPTH-to-copper capability check at quote time.
+      **Blocked by:** — · **Unblocks:** T19, T28, T10
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
   in PR #17 review, 2026-09-28): `TEST_CASE`/`EXPECT` macros over a
   tiny report hook — failure index as exit code freestanding,
