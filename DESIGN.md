@@ -691,6 +691,18 @@ board; chain length scales with the fault-injection complement
 instead of consuming GPIO, and every actuator is one bit — no I2C
 addressing, no bus contention, fully deterministic.
 
+Board power and host link (2026-09-30): one **USB-C receptacle** is
+both the power inlet and the supervisor's host link. 5 V in — CC
+sink pull-downs only, no PD negotiation; the load (8 tiles at tens
+of mA each, §2.1, plus RP2040 and the scan plane) sits trivially
+inside baseline USB-C delivery — and an on-board **3.3 V regulator**
+feeds the ring rail (§2.1) and all board logic. The receptacle's
+D+/D− wire to the RP2040's USB (it keeps its 12 MHz crystal for
+exactly this, §5), so one cable is power, host channel, and debug
+transport uplink. Regulator and connector are inventory-driven picks
+(§6); the per-node power-cut switches of the fault complement sit
+between the rail and each tile.
+
 Open: runtime debug transport (UART per node? shared bus?). The
 segment connector is settled (2026-09-29, §3) — and stays deliberately
 fragile: it is the failure mode under test.
