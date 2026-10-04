@@ -139,9 +139,19 @@ def _bat54s(part: Part, referenced: set[str]) -> list[str]:
     ]
 
 
+def _led(part: Part, referenced: set[str]) -> list[str]:
+    """Emit an LED as a plain diode element (pin 1 = cathode, pin 2 = anode)."""
+    model = _require_value(part)
+    referenced.add(model)
+    anode = _net_of(part["2"])
+    cathode = _net_of(part["1"])
+    return [f"{_element_name('D', part.ref)} {anode} {cathode} {model}"]
+
+
 _BINDINGS: dict[str, Callable[[Part, set[str]], list[str]]] = {
     "Device:R": _two_pin("R"),
     "Device:C": _two_pin("C"),
+    "Device:LED": _led,
     "Diode:BAT54S": _bat54s,
 }
 

@@ -26,3 +26,8 @@ static_assert(pins::pot_adc == 6);
 // Plain GPIO: the §4 watchdog strobe.
 static_assert(pins::keepalive.port_base == pins::gpio_d_base && pins::keepalive.bit == 3);
 static_assert(pins::keepalive.package_pin == 20);
+
+// The §4.1 antiparallel connector-LED pair on PC0 (2026-09-30 merge —
+// one pin, high = upstream / low = downstream / Hi-Z = dark).
+static_assert(pins::led_segments.port_base == pins::gpio_c_base && pins::led_segments.bit == 0);
+static_assert(pins::led_segments.package_pin == 10);

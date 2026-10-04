@@ -1,0 +1,59 @@
+* tb_status_leds — the §4.1 status-LED contract as a sim unit test
+* (DESIGN.md §7). The antiparallel link pair sits on one GPIO behind a
+* shared 470 Ω: pin high lights Du (upstream), pin low lights Dd
+* (downstream), Hi-Z dark; the power LED is always on and the working
+* LED follows led_work. Written against the review that found Dd's
+* anode tied to GND (dark forever) instead of 3V3, 2026-09-30.
+*
+* Phases (1 ms each): led_seg high / low / Hi-Z. Hi-Z is real: S1
+* opens — a PWL-held voltage source would keep driving.
+*
+* Assertions (windowed averages at each phase's end):
+*   a1 high:  I(Du) = 1.8–3.8 mA    a2 high:  I(Dd) < 100 µA
+*   a3 low:   I(Dd) = 1.8–3.8 mA    a4 low:   I(Du) < 100 µA
+*   a5 Hi-Z:  I(Du) < 20 µA         a6 Hi-Z:  I(Dd) < 20 µA
+*   a7 power: I(Dp) = 0.8–2.0 mA (always; sampled in the Hi-Z phase)
+*   a8 work high: I(Dw) = 0.8–2.0 mA
+*   a9 work low:  I(Dw) < 100 µA
+
+.include status-leds.cir
+
+Vdd vdd 0 3.3
+
+* led_seg pin model: push-pull drive behind S1; S1 opens for the Hi-Z
+* phase so the pad truly floats.
+Vdrv sdrv 0 PWL(0 3.3 0.99m 3.3 1m 0 3m 0)
+S1 sdrv seg sctl 0 pinsw
+Vctl sctl 0 PWL(0 1 1.99m 1 2m 0 3m 0)
+.model pinsw sw ron=10 roff=1g vt=0.5 vh=0.1
+
+Vwrk work 0 PWL(0 3.3 0.99m 3.3 1m 0 3m 0)
+
+Xsl vdd 0 work seg status_leds
+
+.control
+.options savecurrents
+tran 5u 3m uic
+* ngspice-45 names subcircuit-internal device currents @d.xsl.<dev>[id].
+let i_du = @d.xsl.du[id]
+let i_dd = @d.xsl.dd[id]
+let i_dp = @d.xsl.dp[id]
+let i_dw = @d.xsl.dw[id]
+meas tran a1 avg i_du from=0.8m to=0.95m
+meas tran a2 avg i_dd from=0.8m to=0.95m
+meas tran a3 avg i_dd from=1.8m to=1.95m
+meas tran a4 avg i_du from=1.8m to=1.95m
+meas tran a5 avg i_du from=2.8m to=2.95m
+meas tran a6 avg i_dd from=2.8m to=2.95m
+meas tran a7 avg i_dp from=2.8m to=2.95m
+meas tran a8 avg i_dw from=0.8m to=0.95m
+meas tran a9 avg i_dw from=1.8m to=1.95m
+if (a1 > 1.8m) & (a1 < 3.8m) & (abs(a2) < 100u) & (a3 > 1.8m) & (a3 < 3.8m) & (abs(a4) < 100u) & (abs(a5) < 20u) & (abs(a6) < 20u) & (a7 > 0.8m) & (a7 < 2m) & (a8 > 0.8m) & (a8 < 2m) & (abs(a9) < 100u)
+  echo "PASS"
+else
+  echo "FAIL"
+  quit 1
+end
+quit 0
+.endc
+.end

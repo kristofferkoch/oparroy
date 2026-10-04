@@ -16,10 +16,11 @@ from oparroy.dsl import Severity, check_pin_map, emit_pin_header
 GOLDEN = Path(__file__).parent / "golden" / "node-pins.hpp"
 FIRMWARE_COPY = Path(__file__).parent.parent / "firmware" / "node" / "pins.hpp"
 
-# 16 function requests + the SWIO reservation = 17 of 18 GPIO (§3's
-# "~16-17 of 18" budget), PC7 the spare.
-REQUEST_COUNT = 16
-USED_COUNT = 17
+# 15 function requests + the SWIO reservation = 16 of 18 GPIO (§3's
+# "~16-17 of 18" budget); PC1 (freed by the §4.1 LED merge) and PC7
+# (a test pad on the node board) are the spares.
+REQUEST_COUNT = 15
+USED_COUNT = 16
 GPIO_COUNT = 18
 
 
@@ -31,7 +32,7 @@ def test_capture_checks_clean() -> None:
     assert check_pin_map(capture()) == []
 
 
-def test_budget_lands_at_17_of_18() -> None:
+def test_budget_lands_at_16_of_18() -> None:
     pin_map = capture()
     assert len(pin_map.requests) == REQUEST_COUNT
     used = len(pin_map.requests) + len(pin_map.reservations)
@@ -43,7 +44,7 @@ def test_budget_lands_at_17_of_18() -> None:
         for pad in pin_map.chip.gpio_pads
         if pad.name not in bound and pad.name not in pin_map.reservations
     }
-    assert spare == {"PC7"}
+    assert spare == {"PC1", "PC7"}
 
 
 def test_peripheral_forced_bindings() -> None:

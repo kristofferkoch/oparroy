@@ -99,6 +99,24 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
+- **Drive pcbnew's settings import through the KiCad API** (2026-10-04,
+  from the generated-vs-manual split in the board workflow): re-running
+  `design/node_board.py` today overwrites
+  `boards/node/oparroy-node.kicad_pcb`, so a constraint change (stackup,
+  net classes, minimums) would clobber live layout. The manual fix is to
+  emit the skeleton to a staging path and merge it in via pcbnew's Board
+  Setup → Import Settings from Another Board. The idea: script that same
+  merge through KiCad's own code — the KiCad 9+ IPC API
+  (`kicad-python`) or the pcbnew Python module: load the staged
+  skeleton, push its design settings into the live board, save.
+  Constraint updates then stay hands-off and CI-friendly without us
+  writing a `.kicad_pcb` merger — the §7 lean-on-KiCad principle over
+  the alternative (a DSL-side merge that splices DSL-owned subtrees into
+  the live board file). Open questions: whether the API exposes
+  settings-import directly or we copy design settings between two open
+  boards; whether import-from-board picks net classes up from the
+  source's sibling `.kicad_pro` (the emitter's split puts them there,
+  `src/oparroy/dsl/pcb_emit.py`); headless operation in the nix shell.
 - **Pin-map scarcity lint / auto-assignment** (2026-09-28, follows T9):
   `check_pin_map` verifies a hand-written binding; it does not yet
   *judge* it. A scarcity pass could warn when a pad with rare
@@ -124,6 +142,36 @@ real work — **move**, don't copy. Reference, don't duplicate.
   questions: rate limits and auth on JLCPCB's side, whether the script
   edits `design/parts_db.py` in place (data-as-code stays the source
   of truth) or emits an overlay.
+- **Layout return-path and stitching checks** (2026-10-04): verify, from
+  the routed `.kicad_pcb`, that the return path for each switching
+  signal (the PHY line drivers' outputs, the watchdog charge pump,
+  status LEDs) takes a reasonably direct GND route back to the
+  driver's own ground pin — the current loop, not just connectivity.
+  Plus a fill-stitching check: GND/other copper fills are adequately
+  via-stitched, no large unstitched islands or long thin necks between
+  pours. Both are EMI/loop-area concerns DRC doesn't cover.
+  **Method ladder settled 2026-10-04:** rung 1 = geometric/rule-based
+  checks in CI, and that's what this card builds — at our frequencies
+  (800 kbit/s, MCU edge rates → spectrum ≤ ~200 MHz on cm-scale
+  copper) the board is deep in the quasi-static regime, loop
+  inductance dominates, and the HF return current in a plane flows
+  almost directly under the trace, so "direct return path" reduces to
+  geometry: plane continuous under switching traces, stitching via
+  within N mm of a signal layer change, no unstitched islands.
+  Example check family: series-R fanout-1 adjacent to the driver pin
+  (slew limiting only works if the R sits between the driver and all
+  downstream capacitance; firmware knob on top — CH32V003 GPIO speed
+  grades 2/10/30 MHz, pick the slowest that meets PHY timing), plus
+  the return-continuity/stitching checks above. Rung 2 = closed-form
+  loop inductance / 2.5D extraction (atlc) as design input. Rung 3 =
+  PEEC (FastHenry/FastCap → ngspice) for isolated hotspots later —
+  first candidate the CI board's USB D+/D- pair (~90 Ω diff,
+  12 Mbit/s full-speed). Rung 4 = full-wave (openEMS via gerber2ems /
+  pcbmodelgen, or Palace) — not for routine use, but sanity-check a
+  few of the rung-1 rules in spots against openEMS/Palace so the
+  thresholds aren't pure folklore. Rung 5 = bench: DIY near-field
+  H/E probes + spectrum analyzer/SDR over a running ring, TDR/NanoVNA
+  for discontinuities (§6 HIL philosophy).
 - **Verify BAT54S C727126 tier/stock at JLCPCB before T22**
   (2026-09-28): the parts-DB seed (`design/parts_db.py`) marks the
   BAT54S's assembly tier unverified and its stock never queried —
