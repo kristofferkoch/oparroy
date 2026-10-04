@@ -38,6 +38,14 @@
             ps.mdformat
             ps.mdformat-gfm
           ]);
+          # Interpreter for the pcbnew SWIG API (src/oparroy/dsl/pcb_merge.py):
+          # nixpkgs' pcbnew is built for Python 3.14, which uv's pinned 3.13
+          # cannot import (verified against KiCad 10.0.6 on 2026-10-04), so
+          # scripting KiCad goes through this wrapper, not the project venv.
+          kicadPython = pkgs.writeShellScriptBin "kicad-python" ''
+            export PYTHONPATH=${pkgs.kicad.base}/lib/python${pkgs.python314.pythonVersion}/site-packages''${PYTHONPATH:+:$PYTHONPATH}
+            exec ${pkgs.python314}/bin/python3 "$@"
+          '';
         in
         {
           default = pkgs.mkShell {
@@ -70,6 +78,7 @@
               pkgs.kicad
               pkgs.kicad.libraries.symbols
               pkgs.kicad.libraries.footprints
+              kicadPython
               # Python side is uv's alone; nix only supplies uv itself.
               pkgs.uv
               # Pre-commit hooks — the framework plus every tool the
