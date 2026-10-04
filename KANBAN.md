@@ -52,35 +52,35 @@ ______________________________________________________________________
   itself is T22b. The single ring node as its own small board, designed
   **before** the CI board — the CI board is eight of these tiles plus a
   supervisor (DESIGN.md §6). The DSL capture landed 2026-09-28: CH32V003
-  + PHY front-end (§2), charge-pump watchdog (§4), status LEDs (§4.1),
-  terminal protection (§7 checklist), two segment connectors (§3 pinout
-  — the T7bb `design/segment.py` block), plus the footprint-assignment
-  and annotation/back-annotation stages (§7). Design decisions settled
-  2026-09-29 (docs/node-board-2026-09-29.md, PR #24): 2-layer 0.8 mm
-  stackup (§9 resolved), TVS populated on the node boards, DNP
-  74LVC1G17 + fitted 0 Ω insurance on `sel` (§4), per-connector LEDs
-  merged onto one antiparallel GPIO (frees PC1, §4.1), PC7 test pad,
-  pogo strip at 2.54 mm pitch on a short edge, connectors on opposite
-  short edges, silkscreen ID + serial box on the back. Fab order
-  (2026-09-30): **the CI board fabs first** — its eight tiles are the
-  first bench articles — so this card's deliverable is the fully
-  thought-through node design the CI board tiles. Capture deltas landed
-  2026-09-30 (PR #24): LED merge (StatusLeds subcircuit + bench; caught
-  Dd dark-forever anode net), Schmitt bridge, PC7 pad, TVS parts-DB
-  record; KiCad application in the flake. The first layout attempt was
-  deleted as a dead end. The KiCad-10 constraint skeleton landed
-  2026-10-03 (`design/node_board.py` → `boards/node/`: stackup +
-  keepouts in the `.kicad_pcb`, net classes + board minimums in the
-  `.kicad_pro`, DRC enforcement verified headless, §7) — DRC and stackup
-  are set programmatically, no GUI step. The placement/routing checklist
-  from the 2026-10-04 passes lives in docs/node-layout-2026-10-04.md;
-  the feasibility place-and-route itself landed the same day (placement
-  + routing solved on two layers; outline, pours, and back-annotation
-  still open).
-  Remaining: board outline + mounting holes, GND pours, validate the
-  back-annotation join against the real `.kicad_pcb` (so far tested
-  against synthetic input only — the T7a caveat, §7).
-  **Blocked by:** — · **Unblocks:** T19, T28, T10
+  - PHY front-end (§2), charge-pump watchdog (§4), status LEDs (§4.1),
+    terminal protection (§7 checklist), two segment connectors (§3 pinout
+    — the T7bb `design/segment.py` block), plus the footprint-assignment
+    and annotation/back-annotation stages (§7). Design decisions settled
+    2026-09-29 (docs/node-board-2026-09-29.md, PR #24): 2-layer 0.8 mm
+    stackup (§9 resolved), TVS populated on the node boards, DNP
+    74LVC1G17 + fitted 0 Ω insurance on `sel` (§4), per-connector LEDs
+    merged onto one antiparallel GPIO (frees PC1, §4.1), PC7 test pad,
+    pogo strip at 2.54 mm pitch on a short edge, connectors on opposite
+    short edges, silkscreen ID + serial box on the back. Fab order
+    (2026-09-30): **the CI board fabs first** — its eight tiles are the
+    first bench articles — so this card's deliverable is the fully
+    thought-through node design the CI board tiles. Capture deltas landed
+    2026-09-30 (PR #24): LED merge (StatusLeds subcircuit + bench; caught
+    Dd dark-forever anode net), Schmitt bridge, PC7 pad, TVS parts-DB
+    record; KiCad application in the flake. The first layout attempt was
+    deleted as a dead end. The KiCad-10 constraint skeleton landed
+    2026-10-03 (`design/node_board.py` → `boards/node/`: stackup +
+    keepouts in the `.kicad_pcb`, net classes + board minimums in the
+    `.kicad_pro`, DRC enforcement verified headless, §7) — DRC and stackup
+    are set programmatically, no GUI step. The placement/routing checklist
+    from the 2026-10-04 passes lives in docs/node-layout-2026-10-04.md;
+    the feasibility place-and-route itself landed the same day (placement
+  - routing solved on two layers; outline, pours, and back-annotation
+    still open).
+    Remaining: board outline + mounting holes, GND pours, validate the
+    back-annotation join against the real `.kicad_pcb` (so far tested
+    against synthetic input only — the T7a caveat, §7).
+    **Blocked by:** — · **Unblocks:** T19, T28, T10
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
   in PR #17 review, 2026-09-28): `TEST_CASE`/`EXPECT` macros over a
   tiny report hook — failure index as exit code freestanding,
