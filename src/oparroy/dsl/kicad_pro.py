@@ -141,6 +141,9 @@ def _parse_minimums(root: Mapping[str, object]) -> BoardMinimums | None:
         min_copper_edge_clearance=_opt_number(
             data, "min_copper_edge_clearance", "minimum copper-edge clearance"
         ),
+        min_hole_clearance=_opt_number(
+            data, "min_hole_clearance", "minimum hole clearance"
+        ),
         solder_mask_clearance=_opt_number(
             data, "solder_mask_clearance", "solder-mask clearance"
         ),
