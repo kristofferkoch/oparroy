@@ -8,6 +8,15 @@
 # everything ahead of it, waits for `check` to pass on the rebased
 # head, and merges — so main is green after every merge without anyone
 # manually updating stale branches.
+#
+# In-place checks (batch_size 1 + max_parallel_checks 1 + identical
+# queue/merge conditions): Mergify re-runs CI on the rebased PR itself
+# instead of a temporary draft PR. Required because main's branch
+# protection has "Require branches to be up to date before merging",
+# which is incompatible with Mergify's two-step draft-PR checks.
+
+merge_queue:
+  max_parallel_checks: 1
 
 queue_rules:
   - name: default
