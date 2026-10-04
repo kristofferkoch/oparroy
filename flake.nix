@@ -62,10 +62,12 @@
               pkgs.aflplusplus
               # Subcircuit simulation unit tests (DESIGN.md §7).
               pkgs.ngspice
-              # KiCad symbol/footprint libraries — the DSL validates
-              # part references against these (DESIGN.md §7 DSL shape).
-              # Library data only; the KiCad application itself is for
-              # layout and joins when boards start.
+              # KiCad: symbol/footprint libraries — the DSL validates
+              # part references against these (DESIGN.md §7 DSL shape) —
+              # plus the application itself for layout (joins
+              # 2026-09-29, DESIGN.md §7). One pkgs.kicad, so pcbnew's
+              # version always matches the libraries.
+              pkgs.kicad
               pkgs.kicad.libraries.symbols
               pkgs.kicad.libraries.footprints
               # Python side is uv's alone; nix only supplies uv itself.
