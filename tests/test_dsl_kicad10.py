@@ -55,10 +55,22 @@ def test_kicad_drc_enforces_the_spec(tmp_path: Path) -> None:
     pcb = _write_project(tmp_path)
     # Two Bypass-class segments (nets 2 and 3 in the emitted net list):
     # 0.05 mm edge-to-edge against the class's 0.3 mm clearance, and
-    # 0.05 mm wide against the 0.1 mm board minimum.
+    # 0.05 mm wide against the 0.1 mm board minimum. A footprint pad
+    # 0.075 mm off an NPTH edge violates the 0.15 mm hole-clearance
+    # floor (the part-over-hole decision, 2026-10-04) — holes are only
+    # checked against pads, not tracks, and only when the pad carries
+    # a net.
     violating = (
         '  (segment (start 1 1) (end 9 1) (width 0.05) (layer "F.Cu") (net 2))\n'
         '  (segment (start 1 1.1) (end 9 1.1) (width 0.05) (layer "F.Cu") (net 3))\n'
+        '  (footprint "Test:LedHole" (layer "F.Cu")\n'
+        '    (uuid "12345678-1234-4234-8234-123456789abc")\n'
+        "    (at 20 20 0)\n"
+        '    (pad "" np_thru_hole oval (at 0 0) (size 1.8 2.4)\n'
+        '      (drill oval 1.8 2.4) (layers "*.Cu" "*.Mask"))\n'
+        '    (pad "1" smd roundrect (at 1.45 0) (size 0.95 1.75)\n'
+        '      (layers "F.Cu" "F.Mask" "F.Paste") (roundrect_rratio 0.2)\n'
+        '      (net "GND") (pintype "passive")))\n'
     )
     text = pcb.read_text(encoding="utf-8")
     pcb.write_text(text[:-2] + violating + ")\n", encoding="utf-8")
@@ -85,3 +97,5 @@ def test_kicad_drc_enforces_the_spec(tmp_path: Path) -> None:
         and "board setup constraints min width" in v["description"]
     ]
     assert widths, violations
+    hole_clearances = [v for v in violations if v["type"] == "hole_clearance"]
+    assert hole_clearances, violations

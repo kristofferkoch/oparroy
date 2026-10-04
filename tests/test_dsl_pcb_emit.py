@@ -92,6 +92,7 @@ EXPECTED_PROJECT = """\
       "rules": {
         "min_clearance": 0.1,
         "min_copper_edge_clearance": 0.3,
+        "min_hole_clearance": 0.15,
         "min_through_hole_diameter": 0.2,
         "min_track_width": 0.1,
         "min_via_diameter": 0.45,
@@ -211,6 +212,7 @@ def spec() -> PcbSpec:
             min_via_diameter=0.45,
             min_through_hole_diameter=0.2,
             min_copper_edge_clearance=0.3,
+            min_hole_clearance=0.15,
             solder_mask_clearance=0.05,
             solder_mask_min_width=0.1,
         ),

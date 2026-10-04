@@ -11,14 +11,17 @@ fab-floor minimums. ``main()`` writes the pair KiCad consumes:
 
 **Net classes.** ``Default`` is the implicit catch-all — KiCad puts
 every unassigned net in it, so it declares no nets here. ``Bypass``
-carries the §4 bypass-path copper: the four nets from J1's ring-A pin
+carries the §4 bypass-path copper: the three nets from J1's ring-A pin
 to J2's through the relaxed switch — ``RX_A`` (J1.5 through TVS Dar to
-series R Rar), ``opa_p`` (Rar to SW1.B1, the listen-only RX tap the
-MCU sits on), ``PHY1/txa_sw`` (SW1.COM to series R Rat, flattened
+series R Rar), ``PHY1/txa_sw`` (SW1.COM to series R Rat, flattened
 name in the board netlist), ``TX_A`` (Rat to
 J2.5 through TVS Dat). The class is wider than Default not for current
 (the 470 Ω series resistors cap it at mA) but for robustness: this is
-the one copper path the ring depends on when the node is dead. Ring B
+the one copper path the ring depends on when the node is dead. The
+listen-only RX tap ``opa_p`` (Rar to SW1.B1, the net the MCU sits on)
+stays Default (2026-10-04): the class's 0.3 mm clearance is unmeetable
+inside the MCU's TSSOP-20 footprint, whose 0.25 mm pad gap is fixed —
+and the tap is a sense stub off the path, not the path itself. Ring B
 has no bypass switch (§3) and stays Default. The clearance sits at
 0.3 mm — comfortable on a board this sparse, and above a KiCad 10.0.6
 reporting quirk found 2026-10-03: DRC enforces any class clearance,
@@ -43,7 +46,15 @@ guarantees 0.09 mm trace/space and 0.45/0.2 mm vias on 1 oz; the
 minimums here round to 0.1 mm with 0.2 mm holes and 0.3 mm copper-to-
 edge (router-bit clearance), deliberately tighter than nothing we
 intend to draw so a DRC flag means "fix the layout", never "fight the
-fab". Tune here when the quote lands — nowhere else.
+fab". The hole-clearance floor sits at 0.15 mm (2026-10-04, decided
+with the first DRC pass over real layout): the reverse-mount status
+LEDs sit over their routed light-pipe NPTHs (the §7 part-over-hole
+contract) with a footprint-fixed 0.175 mm pad-to-hole gap, so
+KiCad's 0.25 mm default flagged the intent itself; 0.15 keeps the
+floor just below the deliberate minimum while still catching
+accidents. JLCPCB's NPTH-to-copper capability verifies at quote time
+— if the fab floor lands above 0.175 mm, the LED footprint's hole
+shrinks, not the rule. Tune here when the quote lands — nowhere else.
 
 Usage (in the nix dev shell):
 
@@ -114,7 +125,7 @@ def spec() -> PcbSpec:
                 trace_width_mm=0.4,
                 via_dia_mm=0.8,
                 via_drill_mm=0.4,
-                nets=("RX_A", "TX_A", "opa_p", "PHY1/txa_sw"),
+                nets=("RX_A", "TX_A", "PHY1/txa_sw"),
                 description="§4 bypass-path copper — no firmware in this path",
             ),
             NetClassSpec(
@@ -133,6 +144,7 @@ def spec() -> PcbSpec:
             min_via_diameter=0.45,
             min_through_hole_diameter=0.2,
             min_copper_edge_clearance=0.3,
+            min_hole_clearance=0.15,
             solder_mask_clearance=0.05,
             solder_mask_min_width=0.1,
         ),

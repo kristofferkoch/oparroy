@@ -100,6 +100,7 @@ class BoardMinimums:
     min_via_diameter: float | None = None
     min_through_hole_diameter: float | None = None
     min_copper_edge_clearance: float | None = None
+    min_hole_clearance: float | None = None
     solder_mask_clearance: float | None = None
     solder_mask_min_width: float | None = None
 
@@ -211,6 +212,7 @@ def _rules_payload(minimums: BoardMinimums) -> dict[str, float]:
         "min_via_diameter": minimums.min_via_diameter,
         "min_through_hole_diameter": minimums.min_through_hole_diameter,
         "min_copper_edge_clearance": minimums.min_copper_edge_clearance,
+        "min_hole_clearance": minimums.min_hole_clearance,
         "solder_mask_clearance": minimums.solder_mask_clearance,
         "solder_mask_min_width": minimums.solder_mask_min_width,
     }
