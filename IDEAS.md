@@ -99,6 +99,21 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
+- **Content-addressed CI gating** (2026-10-04): path-filter CI ("this
+  change touches no C++, skip the firmware jobs") is fragile because
+  the filter's idea of a gate's inputs drifts from the build's real
+  inputs — a missed path skips a gate that should have run, silently.
+  The honest version builds the *worktree* from the declared inputs:
+  each sub-unit (pytest, firmware host, KLEE/fuzz/sim, rv32ec, lint)
+  declares its input file set; the gate key is a hash over exactly
+  those files plus flake.lock; and the job's checkout is materialized
+  from just those files. An input the declaration forgot is then
+  absent from the build tree, so a stale declaration fails loudly
+  instead of skipping silently — the same discipline nix already
+  enforces per derivation, lifted to the CI job level. Unchanged hash
+  ⇒ gate skipped (or replayed green from a previous run). Natural
+  companion to the parallel-gate-jobs CI split: each parallel job gets
+  its own input hash.
 - **Pin-map scarcity lint / auto-assignment** (2026-09-28, follows T9):
   `check_pin_map` verifies a hand-written binding; it does not yet
   *judge* it. A scarcity pass could warn when a pad with rare
