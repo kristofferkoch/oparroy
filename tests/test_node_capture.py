@@ -25,8 +25,9 @@ from oparroy.dsl import (
 GOLDEN = Path(__file__).parent / "golden" / "oparroy-node.net"
 
 #: The MCU pins the node leaves unconnected: the §6 payload-superset
-#: pads (PD5, PD6, PC4, PC5, PC6) plus the PC7 spare.
-EXPECTED_NC_WARNINGS = {f"U1.{pin} is not connected" for pin in (2, 3, 14, 15, 16, 17)}
+#: pads (PD5, PD6, PC4, PC5, PC6) plus PC1, freed by the §4.1 LED
+#: merge (PC7 is a spare too, but lands on the TP4 test pad).
+EXPECTED_NC_WARNINGS = {f"U1.{pin} is not connected" for pin in (2, 3, 11, 14, 15, 16)}
 
 
 def nets_of(circuit: Circuit) -> dict[str, set[str]]:
@@ -59,16 +60,40 @@ def test_terminal_protection_sits_connector_side(kicad_libs: KiCadLibraries) -> 
 
 
 def test_sel_drives_switch_and_brake(kicad_libs: KiCadLibraries) -> None:
-    # §2/§4: the watchdog's sel drives the bypass select and TIM1_BKIN
-    # (PC2, the hardware TX-kill) — bypass engaging brakes both TX.
+    # §2/§4: the watchdog's sel drives TIM1_BKIN (PC2, the hardware
+    # TX-kill) and, through the 0 Ω bridge (the DNP Schmitt buffer
+    # straddles it, 2026-09-29), the bypass select — bypass engaging
+    # brakes both TX.
     nets = nets_of(capture(kicad_libs))
     assert nets["sel"] == {
         "U1.12",
         "WD1/D1.2",
         "WD1/Cs.1",
         "WD1/Rb.1",
-        "PHY1/SW1.6",
+        "PHY1/Rsel.1",
+        "PHY1/BUF1.2",
     }
+    assert nets["PHY1/sel_sw"] == {"PHY1/Rsel.2", "PHY1/BUF1.4", "PHY1/SW1.6"}
+
+
+def test_connector_leds_share_one_antiparallel_gpio(kicad_libs: KiCadLibraries) -> None:
+    # §4.1 (2026-09-30): both connector LEDs sit on PC0 as an
+    # antiparallel pair behind one shared 470 Ω — pin high lights
+    # upstream (Du), pin low lights downstream (Dd), Hi-Z dark. Dd's
+    # anode returns to 3V3: the pin-low state sinks rail current
+    # through Dd and Rs into the pad. The block is the SL1 instance;
+    # the drive-state contract is sim-asserted in tb_status_leds.
+    nets = nets_of(capture(kicad_libs))
+    assert nets["led_seg"] == {"U1.10", "SL1/Rs.1"}
+    assert nets["SL1/led_x"] == {"SL1/Rs.2", "SL1/Du.2", "SL1/Dd.1"}
+    assert {"SL1/Du.1", "SL1/Dp.1", "SL1/Dw.1"} <= nets["GND"]
+    assert "SL1/Dd.2" in nets["3V3"]
+
+
+def test_pc7_spare_lands_on_a_test_pad(kicad_libs: KiCadLibraries) -> None:
+    # 2026-09-29: the PC7 spare is a bare test pad, not a floating pin.
+    nets = nets_of(capture(kicad_libs))
+    assert nets["pc7"] == {"U1.17", "TP4.1"}
 
 
 def test_threshold_divider_on_opa_negative(kicad_libs: KiCadLibraries) -> None:

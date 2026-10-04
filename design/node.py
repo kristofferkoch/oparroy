@@ -8,15 +8,18 @@ subcircuit: the node board below captures it directly, and the CI board
 (T10) tiles it eight times — one capture, both boards.
 
 MCU pin budget: pads bind from ``design/node_pins.py`` — the one
-authoritative table (16 function requests + the SWIO reservation =
-17 of 18 GPIO, PC7 spare; datasheets/CH32V003/notes/gpio-pinout.md).
+authoritative table (15 function requests + the SWIO reservation =
+16 of 18 GPIO, PC1 and PC7 spare; datasheets/CH32V003/notes/gpio-pinout.md).
 The plain node wires the ring PHY (the OPA pads, TIM1 TX channels,
 the brake), the watchdog (keepalive; TIM1_BKIN = ``sel`` — bypass
-engaging brakes both TX channels, §2/§4), the three status LEDs,
-OPO (the §2 DNP hysteresis fallback), and the SWIO pad. The payload
-pads (debug TX, pot, buzzer, buttons — the §6 demonstrator
-superset) and the PC7 spare stay unconnected on this board; the
-checker reports them by name as warnings, not errors.
+engaging brakes both TX channels, §2/§4), the status LEDs (passive
+power, working heartbeat, and the per-connector pair merged onto one
+antiparallel GPIO, §4.1), OPO (the §2 DNP hysteresis fallback), the
+SWIO pad, and the PC7 spare — landed on a TP4 test pad for bring-up
+observability (2026-09-30). The payload pads (debug TX, pot, buzzer,
+buttons — the §6 demonstrator superset) and the freed PC1 stay
+unconnected on this board; the checker reports them by name as
+warnings, not errors.
 
 Usage (in the nix dev shell):
 
@@ -34,11 +37,12 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from design.bins import C0603, R0603, LedRev1206
+from design.bins import C0603
 from design.ch32v003 import Ch32v003f4p6
 from design.node_pins import capture as capture_pin_map
 from design.phy_frontend import PhyFrontEnd
 from design.segment import SegmentConnector, segment_ports
+from design.status_leds import StatusLeds
 from design.watchdog_chargepump import WatchdogChargePump
 from oparroy.dsl import (
     Annotation,
@@ -63,7 +67,7 @@ if TYPE_CHECKING:
 
 
 class TestPoint(TypedPart):
-    """A single-pin test point (``Connector:TestPoint``) — the SWIO pad."""
+    """A single-pin test point (``Connector:TestPoint``) — the pogo pads."""
 
     symbol = "Connector:TestPoint"
     pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {"p": "1"}
@@ -91,13 +95,9 @@ class Node(Subcircuit):
         txa_drv = circuit.net("txa_drv")
         txb_drv = circuit.net("txb_drv")
         led_work = circuit.net("led_work")
-        led_up = circuit.net("led_up")
-        led_down = circuit.net("led_down")
+        led_seg = circuit.net("led_seg")
         swio = circuit.net("swio")
-        pwr_led = circuit.net("pwr_led")
-        ledw_a = circuit.net("ledw_a")
-        ledu_a = circuit.net("ledu_a")
-        ledd_a = circuit.net("ledd_a")
+        pc7 = circuit.net("pc7")
 
         circuit.part("J1", SegmentConnector(upstream))
         circuit.part("J2", SegmentConnector(downstream))
@@ -136,8 +136,7 @@ class Node(Subcircuit):
             "tx_kill": sel,
             "keepalive": ka,
             "led_working": led_work,
-            "led_upstream": led_up,
-            "led_downstream": led_down,
+            "led_segments": led_seg,
         }
         pads = pin_map.assignments
         circuit.part(
@@ -146,6 +145,7 @@ class Node(Subcircuit):
                 vdd=v3v3,
                 vss=gnd,
                 pd1=swio,  # the table's SWIO reservation, PD1
+                pc7=pc7,  # the table's spare — TP4 test pad (2026-09-30)
                 # Pad names arrive as data from the pin table — static
                 # checking can't follow the unpack; the pin map's typed
                 # binding and the capture checker cover it instead.
@@ -159,19 +159,17 @@ class Node(Subcircuit):
         circuit.part("C1", C0603("100n", a=v3v3, b=gnd))
         circuit.part("C2", C0603("10u", a=v3v3, b=gnd))
 
-        # §4.1 status LEDs: passive power LED, three MCU-driven.
-        circuit.part("Rp", R0603("1k", a=v3v3, b=pwr_led))
-        circuit.part(
-            "Dp", LedRev1206(anode=pwr_led, cathode=gnd, value="XL-3216SURC-FB")
+        # §4.1 status LEDs: the StatusLeds subcircuit (power, working,
+        # antiparallel link pair on led_seg) — its drive-state contract
+        # is sim-asserted in circuits/status-leds/tb_status_leds.cir.
+        circuit.instance(
+            "SL1",
+            StatusLeds(),
+            v3v3=v3v3,
+            gnd=gnd,
+            led_work=led_work,
+            led_seg=led_seg,
         )
-        circuit.part("Rw", R0603("1k", a=led_work, b=ledw_a))
-        circuit.part(
-            "Dw", LedRev1206(anode=ledw_a, cathode=gnd, value="XL-3216SYGC-FB")
-        )
-        circuit.part("Ru", R0603("1k", a=led_up, b=ledu_a))
-        circuit.part("Du", LedRev1206(anode=ledu_a, cathode=gnd, value="XL-3216UYC-FB"))
-        circuit.part("Rd", R0603("1k", a=led_down, b=ledd_a))
-        circuit.part("Dd", LedRev1206(anode=ledd_a, cathode=gnd, value="XL-3216UYC-FB"))
 
         # Programming: the SWIO + 3V3 + GND pogo strip (§6 production
         # flow). The programmer powers the board — brick recovery is a
@@ -180,6 +178,9 @@ class Node(Subcircuit):
         circuit.part("TP1", TestPoint("SWIO", p=swio))
         circuit.part("TP2", TestPoint("3V3", p=v3v3))
         circuit.part("TP3", TestPoint("GND", p=gnd))
+        # The PC7 spare lands on a bare pad — bring-up observability and
+        # a future expansion point without a respin (2026-09-29).
+        circuit.part("TP4", TestPoint("PC7", p=pc7))
 
 
 def capture(symbols: SymbolTable) -> Circuit:

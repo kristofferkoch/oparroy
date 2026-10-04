@@ -20,6 +20,10 @@ MCU pins):
 - **Hysteresis fallback** (§2): the OPO→OPP feedback resistor the T5
   noise bench rejected stays on the BOM as DNP — the footprint is there
   if real silicon disagrees with the simulation.
+- **`sel` Schmitt insurance** (§4's accepted 10 ns/V violation, settled
+  2026-09-29): a DNP 74LVC1G17 footprint in the sel path between the
+  watchdog and the switch, bridged by a fitted 0 Ω — if the bench
+  disagrees the fix is a resistor swap, not a respin.
 
 Ports: the connector-facing ``rx_a``/``tx_a``/``rx_b``/``tx_b`` (bound
 to the §3 segment ports by the parent), the MCU-facing
@@ -76,6 +80,37 @@ class Sn74lvc1g3157(TypedPart):
         )
 
 
+class Sn74lvc1g17(TypedPart):
+    """74LVC1G17 single Schmitt-trigger buffer (SOT-23-5).
+
+    The §4 sel-path insurance, placed DNP: ``a`` is the input, ``y``
+    the output. Pin 1 is a no-connect on the symbol and stays out of
+    the pin map.
+    """
+
+    symbol = "74xGxx:74LVC1G17"
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
+        "a": "2",
+        "gnd": "3",
+        "y": "4",
+        "vcc": "5",
+    }
+    default_value = "74LVC1G17"
+    default_footprint = "Package_TO_SOT_SMD:SOT-23-5"
+
+    def __init__(  # noqa: PLR0913 — one keyword per physical pin
+        self,
+        *,
+        a: Net | str,
+        y: Net | str,
+        vcc: Net | str,
+        gnd: Net | str,
+        value: str | None = None,
+        footprint: str | None = None,
+    ) -> None:
+        super().__init__(value, footprint, {"a": a, "y": y, "vcc": vcc, "gnd": gnd})
+
+
 class PhyFrontEnd(Subcircuit):
     """The §2/§3/§4 PHY front-end, as a reusable subcircuit."""
 
@@ -95,16 +130,27 @@ class PhyFrontEnd(Subcircuit):
         v3v3 = circuit.port("v3v3")
         gnd = circuit.port("gnd")
         txa_sw = circuit.net("txa_sw")
+        sel_sw = circuit.net("sel_sw")
 
         # Ring A: connector -> TVS -> R -> B1; the MCU listens at B1.
         circuit.part("Dar", TvsSod323(a=rx_a, b=gnd))
         circuit.part("Rar", R0603("470", a=rx_a, b=mcu_rx_a))
         circuit.part(
             "SW1",
-            Sn74lvc1g3157(a=txa_sw, b1=mcu_rx_a, b2=mcu_tx_a, s=sel, vcc=v3v3, gnd=gnd),
+            Sn74lvc1g3157(
+                a=txa_sw, b1=mcu_rx_a, b2=mcu_tx_a, s=sel_sw, vcc=v3v3, gnd=gnd
+            ),
         )
         circuit.part("Rat", R0603("470", a=txa_sw, b=tx_a))
         circuit.part("Dat", TvsSod323(a=tx_a, b=gnd))
+
+        # sel Schmitt insurance (§4, 2026-09-29): the watchdog drives the
+        # switch through a fitted 0 Ω bridge, with a DNP 74LVC1G17 across
+        # it — depopulate Rsel, populate BUF1 if the bench disagrees.
+        circuit.part("Rsel", R0603("0R", a=sel, b=sel_sw))
+        circuit.part(
+            "BUF1", Sn74lvc1g17(a=sel, y=sel_sw, vcc=v3v3, gnd=gnd, value="DNP")
+        )
 
         # Ring B: protected RX/TX, no switch (§3 second layer).
         circuit.part("Dbr", TvsSod323(a=rx_b, b=gnd))

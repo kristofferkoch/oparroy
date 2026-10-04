@@ -5,7 +5,7 @@
 //
 // oparroy ring-node pin map — CH32V003F4P6 (TSSOP-20). Function requests, pads bound late as
 // refinement data (T9; DESIGN.md §5).
-// 17 of 18 GPIO assigned; spare: PC7 (pin 17).
+// 16 of 18 GPIO assigned; spare: PC1 (pin 11), PC7 (pin 17).
 
 #include <cstdint>
 
@@ -61,11 +61,10 @@ inline constexpr Pad keepalive{.port_base = gpio_d_base, .bit = 3, .package_pin 
 // led_working — heartbeat LED; dark when firmware is hung or dead (§4.1).
 inline constexpr Pad led_working{.port_base = gpio_d_base, .bit = 0, .package_pin = 8};
 
-// led_upstream — link-status LED at the upstream segment connector (§4.1).
-inline constexpr Pad led_upstream{.port_base = gpio_c_base, .bit = 0, .package_pin = 10};
-
-// led_downstream — link-status LED at the downstream segment connector (§4.1).
-inline constexpr Pad led_downstream{.port_base = gpio_c_base, .bit = 1, .package_pin = 11};
+// led_segments — link-status LEDs at both segment connectors, one antiparallel pair behind a shared
+// series R on a single pin (§4.1): pin high lights upstream, pin low downstream, Hi-Z dark, a kHz
+// toggle lights both at half brightness.
+inline constexpr Pad led_segments{.port_base = gpio_c_base, .bit = 0, .package_pin = 10};
 
 // debug_tx — debug UART TX, collected by the supervisor (§6).
 inline constexpr Pad debug_tx{.port_base = gpio_d_base, .bit = 5, .package_pin = 2};

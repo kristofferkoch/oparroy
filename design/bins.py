@@ -5,8 +5,8 @@ typed-part subclass carrying the class-default footprint, so captures
 wire parts, not packages. 0603 is the project default for passives —
 hand-reworkable, stocked by every assembler (§6 inventory-driven
 selection). ``R0603``/``C0603`` are bound from the parts DB's records
-(T7c); the LED bin references its DB records but stays local (one bin,
-three colors); the TVS bin stays local until the DB grows a record.
+(T7c); the LED and TVS bins reference their DB records but stay local
+(the LED bin spans three colors; the TVS bin is a single picked part).
 """
 
 from design.parts_db import C0603, R0603
@@ -30,10 +30,11 @@ class LedRev1206(Led):
 class TvsSod323(TvsDiode):
     """The project's SOD-323 ESD-diode bin (§7 terminal protection).
 
-    Value is provisional — a low-capacitance bidirectional 3.3 V part
-    (PESD3V3L1BA class); per-part selection against assembler inventory
-    is the parts DB's job (T7c, §6).
+    The picked part lives in the parts DB's ``tvs-sod323`` record
+    (Brightking UDD32C03L01, 2026-09-30): VRWM 3.3 V, Cj 0.8 pF typ —
+    RC ≈ 0.4 ns against the 470 Ω series R, far inside the §2 decode
+    margin.
     """
 
-    default_value = "PESD3V3L1BA"
+    default_value = "UDD32C03L01"
     default_footprint = "Diode_SMD:D_SOD-323"

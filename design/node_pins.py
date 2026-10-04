@@ -3,7 +3,7 @@
 Every function a node may carry — the §2/§3 ring PHY, the §4 watchdog
 keep-alive, the §4.1 status LEDs, §6 debug, and the §5/§6 demonstrator
 payload superset — requested by name, with pads bound below as
-refinement data: 17 of 18 GPIO, PC7 spare (§3's "~16-17 of 18"
+refinement data: 16 of 18 GPIO, PC1 and PC7 spare (§3's "~16-17 of 18"
 budget, here verified by ``check_pin_map``). The one table feeds the
 firmware header (``emit_pin_header`` → ``firmware/node/pins.hpp``) and
 that budget check.
@@ -93,12 +93,11 @@ def capture() -> PinMap:
         doc="heartbeat LED; dark when firmware is hung or dead (§4.1).",
     )
     gpio.request(
-        "led_upstream",
-        doc="link-status LED at the upstream segment connector (§4.1).",
-    )
-    gpio.request(
-        "led_downstream",
-        doc="link-status LED at the downstream segment connector (§4.1).",
+        "led_segments",
+        doc="link-status LEDs at both segment connectors, one antiparallel "
+        "pair behind a shared series R on a single pin (§4.1): pin high "
+        "lights upstream, pin low downstream, Hi-Z dark, a kHz toggle "
+        "lights both at half brightness.",
     )
 
     # §6 debug: TX-only printf UART, collected by the supervisor.
@@ -141,15 +140,15 @@ def capture() -> PinMap:
         tx_kill="PC2",  # TIM1_BKIN, FT
         keepalive="PD3",
         led_working="PD0",
-        led_upstream="PC0",
-        led_downstream="PC1",  # FT — connector-adjacent
+        led_segments="PC0",
         debug_tx="PD5",  # USART_TX
         pot="PD6",  # ADC_IN6; USART_RX unused (TX-only debug)
         buzzer="PC4",  # TIM1_CH4; MCO unused
         button_a="PC5",  # FT
         button_b="PC6",  # FT
     )
-    # PC7 (pin 17) is the spare.
+    # The spares: PC1 (FT, freed by the §4.1 antiparallel LED merge,
+    # 2026-09-30) and PC7 (pin 17 — a test pad on the node board).
     return gpio
 
 
