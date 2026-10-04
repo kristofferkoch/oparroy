@@ -1,0 +1,30 @@
+# Mergify merge queue — GitHub's native merge queue requires an
+# organization-owned repository, and this repo lives on a personal
+# account, so Mergify provides the queue instead (free for public
+# repos).
+#
+# Flow: a PR against main whose `check` CI job is green enters the
+# queue automatically. The queue rebases each PR onto main plus
+# everything ahead of it, waits for `check` to pass on the rebased
+# head, and merges — so main is green after every merge without anyone
+# manually updating stale branches.
+
+queue_rules:
+  - name: default
+    queue_conditions:
+      - check-success=check
+    merge_conditions:
+      - check-success=check
+    merge_method: rebase
+    batch_size: 1
+
+pull_request_rules:
+  - name: queue PR when CI is green
+    conditions:
+      - base=main
+      - check-success=check
+      - -draft
+      - -conflict
+    actions:
+      queue:
+        name: default
