@@ -10,9 +10,14 @@
   from stomping on each other's checkout — never share a working tree
   between tasks. When the PR merges, remove the worktree
   (`git worktree remove ../oparroy-wt-<name>`) and delete the branch.
-- **Merging is automatic.** Once a PR's `check` CI job goes green,
-  Mergify queues it and merges it against the latest `main`
-  (`.mergify.yml`) — no session needs to stay open waiting for CI.
+- **Open PRs as drafts** (`gh pr create --draft`). Mergify skips
+  drafts, so nothing merges before its time. Mark a PR ready for
+  review only when the user explicitly authorizes it — otherwise leave
+  the flip to the user.
+- **Merging is automatic once ready.** When a non-draft PR's `check`
+  CI job goes green, Mergify queues it and merges it against the
+  latest `main` (`.mergify.yml`) — no session needs to stay open
+  waiting for CI.
 
 ## Documentation — the IDEAS / KANBAN / DESIGN split
 
