@@ -34,10 +34,10 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T22 --> T28[T28 instrumented CI design]
+    T22a --> T28[T28 instrumented CI design]
     T28 --> T24[T24 instrumentation with equivalence proof]
     T24 --> T10
-    T22[T22 node board design] --> T10
+    T22a[T22a node board design] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
     T11 --> T12
@@ -47,44 +47,82 @@ ______________________________________________________________________
 
 ## Next
 
-- **T22 — Node board design.** The single ring node as its own small
-  board, designed **before** the CI board — the CI board is eight of
-  these tiles plus a supervisor (DESIGN.md §6). The DSL capture landed
-  2026-09-28: CH32V003 + PHY front-end (§2), charge-pump watchdog (§4),
-  status LEDs (§4.1), terminal protection (§7 checklist), two segment
-  connectors (§3 pinout — the T7bb `design/segment.py` block), plus the
-  footprint-assignment and annotation/back-annotation stages (§7).
-  Design decisions settled 2026-09-29
-  (docs/node-board-2026-09-29.md, PR #24): 2-layer 0.8 mm stackup
-  (§9 resolved), TVS populated on the node boards, DNP 74LVC1G17 +
-  fitted 0 Ω insurance on `sel` (§4), per-connector LEDs merged onto
-  one antiparallel GPIO (frees PC1, §4.1), PC7 test pad, pogo strip at
-  2.54 mm pitch on a short edge, connectors on opposite short edges,
-  silkscreen ID + serial box on the back. Fab order (2026-09-30):
-  **the CI board fabs first** — its eight tiles are the first bench
-  articles — so this card's deliverable is the fully thought-through
-  node design the CI board tiles; the standalone board fabs second
-  (assemble 2, the minimum; blanks hand-solderable). Header buy-ahead
-  deferred (re-check C22385222 stock before ordering).
-  Capture deltas landed 2026-09-30 (PR #24): LED merge (StatusLeds
-  subcircuit + bench; caught Dd dark-forever anode net), Schmitt
-  bridge, PC7 pad, TVS parts-DB record; KiCad application in the
-  flake. The first layout attempt was deleted as a dead end.
-  The KiCad-10 constraint skeleton landed 2026-10-03
-  (`design/node_board.py` → `boards/node/`: stackup + keepouts in the
-  `.kicad_pcb`, net classes + board minimums in the `.kicad_pro`,
-  DRC enforcement verified headless, §7) — DRC and stackup are set
-  programmatically, no GUI step. The placement/routing checklist from
-  the 2026-10-04 passes lives in docs/node-layout-2026-10-04.md; the
-  feasibility place-and-route itself landed the same day (placement +
-  routing solved on two layers; outline, pours, and back-annotation
+- **T22a — Node board design: completion.** Split from T22
+  (2026-10-04): this card is the design the CI board tiles; the fab
+  itself is T22b. The single ring node as its own small board, designed
+  **before** the CI board — the CI board is eight of these tiles plus a
+  supervisor (DESIGN.md §6). The DSL capture landed 2026-09-28: CH32V003
+  + PHY front-end (§2), charge-pump watchdog (§4), status LEDs (§4.1),
+  terminal protection (§7 checklist), two segment connectors (§3 pinout
+  — the T7bb `design/segment.py` block), plus the footprint-assignment
+  and annotation/back-annotation stages (§7). Design decisions settled
+  2026-09-29 (docs/node-board-2026-09-29.md, PR #24): 2-layer 0.8 mm
+  stackup (§9 resolved), TVS populated on the node boards, DNP
+  74LVC1G17 + fitted 0 Ω insurance on `sel` (§4), per-connector LEDs
+  merged onto one antiparallel GPIO (frees PC1, §4.1), PC7 test pad,
+  pogo strip at 2.54 mm pitch on a short edge, connectors on opposite
+  short edges, silkscreen ID + serial box on the back. Fab order
+  (2026-09-30): **the CI board fabs first** — its eight tiles are the
+  first bench articles — so this card's deliverable is the fully
+  thought-through node design the CI board tiles. Capture deltas landed
+  2026-09-30 (PR #24): LED merge (StatusLeds subcircuit + bench; caught
+  Dd dark-forever anode net), Schmitt bridge, PC7 pad, TVS parts-DB
+  record; KiCad application in the flake. The first layout attempt was
+  deleted as a dead end. The KiCad-10 constraint skeleton landed
+  2026-10-03 (`design/node_board.py` → `boards/node/`: stackup +
+  keepouts in the `.kicad_pcb`, net classes + board minimums in the
+  `.kicad_pro`, DRC enforcement verified headless, §7) — DRC and stackup
+  are set programmatically, no GUI step. The placement/routing checklist
+  from the 2026-10-04 passes lives in docs/node-layout-2026-10-04.md;
+  the feasibility place-and-route itself landed the same day (placement
+  + routing solved on two layers; outline, pours, and back-annotation
   still open).
-  Remaining: BAT54S tier/stock still needs a human on jlcpcb.com;
-  board outline + mounting holes, GND pours, validate the
+  Remaining: board outline + mounting holes, GND pours, validate the
   back-annotation join against the real `.kicad_pcb` (so far tested
-  against synthetic input only — the T7a caveat, §7), and fab via
-  JLCPCB (§6).
-  **Blocked by:** — · **Unblocks:** T10
+  against synthetic input only — the T7a caveat, §7).
+  **Blocked by:** — · **Unblocks:** T19, T28, T10
+- **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
+  in PR #17 review, 2026-09-28): `TEST_CASE`/`EXPECT` macros over a
+  tiny report hook — failure index as exit code freestanding,
+  `write(2)` + manual itoa on host, so no hosted header enters the
+  tree (code-std.md §2) and tests keep compiling against the shipped
+  freestanding configuration (T16e's test-what-ships doctrine).
+  Packaged frameworks fail that bar: gtest/Catch2/doctest need
+  exceptions, RTTI, or a hosted runtime, and a per-target flag fork
+  for tests is exactly the test-build-vs-shipped-build split the
+  doctrine rejects; snitch is the packaged fallback if the harness
+  outgrows maintenance-in-house. First consumer: port
+  `firmware/lib/test_foundation.cpp`'s hand-rolled exit-code checks
+  into named cases that read as usage examples — §12's
+  examples-first doctrine, C++ side. The report hook takes the same
+  wiring-point shape as `lib::verify_failed`: target-side reporting
+  over the debug transport lands with T11/T12. Lands before T11 so
+  firmware v0 is written as named cases from day one, not ported later
+  (2026-10-04 ordering decision). **Blocked by:** — ·
+  **Unblocks:** —
+- **T11 — Node firmware v0.** Receive-and-forward ring node on the
+  CH32V003; the minimal slice that makes a multi-node ring pass bits.
+  Per-bit cut-through forwarding with on-the-fly slot rewrite
+  (DESIGN.md §2); bring up store-and-forward first for correctness,
+  then switch to cut-through and measure timing closure. Gap-latched
+  (vsync) output apply and input sampling per §2's global-shutter
+  rule.
+  Developed inside the verification harness (T16b–e) from the first
+  commit — no hardware needed, so it runs in parallel with the board
+  track (promoted to Next 2026-10-04). First consumer of the T9 pin
+  map: wire `firmware/node/pins.hpp` regeneration into meson as a
+  `custom_target()` (a documented manual step since 2026-09-28 —
+  `python -m design.node_pins > firmware/node/pins.hpp`, drift caught
+  by the golden + firmware-copy tests). Trill pattern
+  (docs/bela-lessons-2026-09-26.md §2): aim for
+  **one firmware image, personality by node-type ID** — a single HIL
+  target. Defines `lib::verify_failed`, the §4 VERIFY failure hook
+  whose wiring point T18 landed (2026-09-28): report over the debug
+  transport, then stop the keep-alive strobe so the charge-pump
+  watchdog engages RX→TX bypass. Programmer tooling (minichlink-class)
+  joins the flake alongside the firmware (§6, 2026-09-29).
+  **Blocked by:** — ·
+  **Unblocks:** T12, T13
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
   `circuits/watchdog-supervisor/` in the DSL — the charge pump's
@@ -97,7 +135,30 @@ ______________________________________________________________________
   `circuits/lib/*.spi`, subckt `params:`. Device models stay
   hand-written includes. On shipping, the hand-written DUT `.cir`
   files retire — the DSL becomes the single source of truth (§7), not
-  a second copy of it. **Blocked by:** — · **Unblocks:** —
+  a second copy of it. Lands before T24/T10 generate new captures, so
+  the equivalence pattern is settled before it multiplies (2026-10-04
+  ordering decision). **Blocked by:** — · **Unblocks:** —
+- **T29 — Drive pcbnew settings import through the KiCad API.**
+  *Shape: implementation.* Raised 2026-10-04 (from the
+  generated-vs-manual split in the board workflow; promoted from
+  IDEAS.md the same day): re-running `design/node_board.py` today
+  overwrites `boards/node/oparroy-node.kicad_pcb`, so a constraint
+  change (stackup, net classes, minimums) would clobber live layout —
+  a live hazard while T22a's outline/pours work is underway. The
+  manual fix is to emit the skeleton to a staging path and merge it in
+  via pcbnew's Board Setup → Import Settings from Another Board. The
+  card: script that same merge through KiCad's own code — the KiCad 9+
+  IPC API (`kicad-python`) or the pcbnew Python module: load the staged
+  skeleton, push its design settings into the live board, save.
+  Constraint updates then stay hands-off and CI-friendly without us
+  writing a `.kicad_pcb` merger — the §7 lean-on-KiCad principle over
+  the alternative (a DSL-side merge that splices DSL-owned subtrees
+  into the live board file). Open questions: whether the API exposes
+  settings-import directly or we copy design settings between two open
+  boards; whether import-from-board picks net classes up from the
+  source's sibling `.kicad_pro` (the emitter's split puts them there,
+  `src/oparroy/dsl/pcb_emit.py`); headless operation in the nix shell.
+  **Blocked by:** — · **Unblocks:** —
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
@@ -114,23 +175,16 @@ ______________________________________________________________________
   construction: plain-Python capture semantics hold (PB's `IntLike`
   interleaving is the anti-pattern). **Blocked by:** — ·
   **Unblocks:** —
-- **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
-  in PR #17 review, 2026-09-28): `TEST_CASE`/`EXPECT` macros over a
-  tiny report hook — failure index as exit code freestanding,
-  `write(2)` + manual itoa on host, so no hosted header enters the
-  tree (code-std.md §2) and tests keep compiling against the shipped
-  freestanding configuration (T16e's test-what-ships doctrine).
-  Packaged frameworks fail that bar: gtest/Catch2/doctest need
-  exceptions, RTTI, or a hosted runtime, and a per-target flag fork
-  for tests is exactly the test-build-vs-shipped-build split the
-  doctrine rejects; snitch is the packaged fallback if the harness
-  outgrows maintenance-in-house. First consumer: port
-  `firmware/lib/test_foundation.cpp`'s hand-rolled exit-code checks
-  into named cases that read as usage examples — §12's
-  examples-first doctrine, C++ side. The report hook takes the same
-  wiring-point shape as `lib::verify_failed`: target-side reporting
-  over the debug transport lands with T11/T12. **Blocked by:** — ·
-  **Unblocks:** —
+- **T22b — Node board fab.** *Shape: chore — needs a human.* Split
+  from T22 (2026-10-04): everything past the settled design. Verify
+  BAT54S C727126 assembly tier/stock on jlcpcb.com — the parts DB's
+  conservative filter never admits it until then
+  (`design/parts_db.py`, `check_stock` flags exactly this) — and
+  re-check C22385222 header stock before ordering (buy-ahead deferred
+  2026-09-29). Then fab via JLCPCB (§6): assemble 2, the minimum;
+  blanks hand-solderable. Fabs **second**, after the T10 CI board
+  (2026-09-30 decision): the CI board's eight tiles are the first
+  bench articles. **Blocked by:** T22a · **Unblocks:** —
 
 ## Backlog
 
@@ -170,7 +224,7 @@ ______________________________________________________________________
   budgets, corner radius, silkscreen ID fields, serial-box area,
   mounting holes + keepouts, adjacency/presence, bypass pad
   whitelisting), and the constraint-skeleton emitter (DESIGN.md §7).
-  Remaining, each wanting the first real board (T22) to calibrate
+  Remaining, each wanting the first real board (T22a) to calibrate
   against: **copper-geometry bypass independence** beyond pad
   whitelisting (bypass-net segments/vias must not touch node-logic
   copper between RX and TX, §4 — includes parsing copper arc tracks,
@@ -178,15 +232,15 @@ ______________________________________________________________________
   and other silkscreen text (needs board-absolute pad positions —
   footprint rotation is not yet modeled); **TVS/series-R placement
   contracts** (§7 checklist: TVS adjacent to its connector, R between
-  TVS and µC pin — needs the T22 capture to name the parts);
+  TVS and µC pin — needs the T22a capture to name the parts);
   **footprint-set equality** (the B.Cu footprint set is exactly the
   segment connectors) and **part-over-hole** (each reverse-mount
   status LED over its routed hole) — the §7 contracts added
   2026-09-29; **channelization hook** (per-instance layout replication keyed on
   T7ba sheetpath metadata, meaningless until a hierarchical board
   exists); **pcbnew ingest validation** of the emitted skeleton (real
-  KiCad round trip — T22 exercises the first one).
-  **Blocked by:** T22 · **Unblocks:** T10
+  KiCad round trip — T22a exercises the first one).
+  **Blocked by:** T22a · **Unblocks:** T10
 - **T28 — Instrumented CI design.** *Shape: design.* Settles the
   instrumented half that today exists only as §6 prose (raised
   2026-09-29: T24 has no instrumented design to transform, and the
@@ -196,9 +250,9 @@ ______________________________________________________________________
   selection, the supervisor-override design for human I/O (pot-wiper
   mux, button parallel), the boundary node's tap set, and the
   shift-register control plane's wiring and power-on reset levels.
-  Expressed as the **transform list** against the settled T22 node
+  Expressed as the **transform list** against the settled T22a node
   design — the artifact T24's machinery encodes and T10's capture
-  consumes. **Blocked by:** T22 · **Unblocks:** T24, T10
+  consumes. **Blocked by:** T22a · **Unblocks:** T24, T10
 - **T24 — DSL instrumentation transforms with reset-state equivalence.**
   The CI board is the node design plus injected controllability and
   observability (§6: fault-injection muxes, supervisor-override muxes,
@@ -221,7 +275,7 @@ ______________________________________________________________________
   unmerged 2026-09-29) — transforms hierarchical per-tile, reset
   levels derived from shift-register power-on state, overrides as a
   `substitute` transform kind, CI capture as node subcircuit ×8.
-  **Blocked by:** T22, T28 · **Unblocks:** T10
+  **Blocked by:** T22a, T28 · **Unblocks:** T10
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, clock kill),
   all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
@@ -232,7 +286,7 @@ ______________________________________________________________________
   **instrumented boundary node**: the supervisor-adjacent node's RX/TX
   ring segments (plus comparator-output and working-LED taps) wired to
   RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
-  §6). Nodes tile the T22 node-board design; captured in the DSL,
+  §6). Nodes tile the T22a node-board design; captured in the DSL,
   layout in KiCad. Bench-verify early with the §6 CI flash fan-out
   (2026-09-29): deselected-port noise margin (per-node 10 kΩ
   pull-ups fitted) and SDI false-trigger recovery — a
@@ -243,7 +297,7 @@ ______________________________________________________________________
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   Fabs **first**, ahead of the standalone node board (2026-09-30):
   its eight tiles are the first bench articles for the §2/§4 claims.
-  **Blocked by:** T19, T22, T24 · **Unblocks:** T12, T15
+  **Blocked by:** T19, T22a, T24 · **Unblocks:** T12, T15
 - **T27 — Node programming jig.** The bench deliverable of the §6
   programming flow (2026-09-29): a pogo jig targeting the node board's
   TP1/TP2/TP3 (SWIO/3V3/GND) strip, a WCH-LinkE driving — **the probe
@@ -254,29 +308,7 @@ ______________________________________________________________________
   unit serial (§7 checklist). Bela lesson
   (docs/bela-lessons-2026-09-26.md §5): the test rig is a first-class
   deliverable with its own schedule risk — budget for it.
-  **Blocked by:** T22 · **Unblocks:** —
-- **T11 — Node firmware v0.** Receive-and-forward ring node on the
-  CH32V003; the minimal slice that makes a multi-node ring pass bits.
-  Per-bit cut-through forwarding with on-the-fly slot rewrite
-  (DESIGN.md §2); bring up store-and-forward first for correctness,
-  then switch to cut-through and measure timing closure. Gap-latched
-  (vsync) output apply and input sampling per §2's global-shutter
-  rule.
-  Developed inside the verification harness (T16b–e) from the first
-  commit. First consumer of the T9 pin map: wire
-  `firmware/node/pins.hpp` regeneration into meson as a
-  `custom_target()` (a documented manual step since 2026-09-28 —
-  `python -m design.node_pins > firmware/node/pins.hpp`, drift caught
-  by the golden + firmware-copy tests). Trill pattern
-  (docs/bela-lessons-2026-09-26.md §2): aim for
-  **one firmware image, personality by node-type ID** — a single HIL
-  target. Defines `lib::verify_failed`, the §4 VERIFY failure hook
-  whose wiring point T18 landed (2026-09-28): report over the debug
-  transport, then stop the keep-alive strobe so the charge-pump
-  watchdog engages RX→TX bypass. Programmer tooling (minichlink-class)
-  joins the flake alongside the firmware (§6, 2026-09-29).
-  **Blocked by:** — ·
-  **Unblocks:** T12, T13
+  **Blocked by:** T22a · **Unblocks:** —
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11 ·
@@ -287,10 +319,10 @@ ______________________________________________________________________
   (DESIGN.md §7). Remaining: **bypass-path continuity under
   single-fault models** and **watchdog default-state assertions** —
   both inspect board-level topology (the bypass switch, the
-  supervisor) that only the T22 node-board capture provides. Also
+  supervisor) that only the T22a node-board capture provides. Also
   **pin/part-level ranges**: a regulator's output range, an MCU pin's
   input range — declarations fed by the T7c parts DB, extending ranges
-  beyond scalar ports (port arrays, bundles). **Blocked by:** T22 ·
+  beyond scalar ports (port arrays, bundles). **Blocked by:** T22a ·
   **Unblocks:** —
 - **T15 — Cable reach: bench confirmation and §2 adoption.** *Shape:
   research.* Sim half landed 2026-09-28

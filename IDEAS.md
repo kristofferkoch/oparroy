@@ -99,24 +99,6 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
-- **Drive pcbnew's settings import through the KiCad API** (2026-10-04,
-  from the generated-vs-manual split in the board workflow): re-running
-  `design/node_board.py` today overwrites
-  `boards/node/oparroy-node.kicad_pcb`, so a constraint change (stackup,
-  net classes, minimums) would clobber live layout. The manual fix is to
-  emit the skeleton to a staging path and merge it in via pcbnew's Board
-  Setup → Import Settings from Another Board. The idea: script that same
-  merge through KiCad's own code — the KiCad 9+ IPC API
-  (`kicad-python`) or the pcbnew Python module: load the staged
-  skeleton, push its design settings into the live board, save.
-  Constraint updates then stay hands-off and CI-friendly without us
-  writing a `.kicad_pcb` merger — the §7 lean-on-KiCad principle over
-  the alternative (a DSL-side merge that splices DSL-owned subtrees into
-  the live board file). Open questions: whether the API exposes
-  settings-import directly or we copy design settings between two open
-  boards; whether import-from-board picks net classes up from the
-  source's sibling `.kicad_pro` (the emitter's split puts them there,
-  `src/oparroy/dsl/pcb_emit.py`); headless operation in the nix shell.
 - **Pin-map scarcity lint / auto-assignment** (2026-09-28, follows T9):
   `check_pin_map` verifies a hand-written binding; it does not yet
   *judge* it. A scarcity pass could warn when a pad with rare
