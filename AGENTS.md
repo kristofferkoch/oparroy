@@ -1,5 +1,16 @@
 # Project notes for agents
 
+## Making changes — PRs only, one worktree per PR
+
+- **All changes land via pull request.** Never commit directly to
+  `main`; open a PR, even for one-line fixes.
+- **Each PR gets its own git worktree.** From the main checkout:
+  `git worktree add ../oparroy-wt-<name> -b <branch>`, then work
+  entirely inside that directory. Worktrees keep simultaneous agents
+  from stomping on each other's checkout — never share a working tree
+  between tasks. When the PR merges, remove the worktree
+  (`git worktree remove ../oparroy-wt-<name>`) and delete the branch.
+
 ## Documentation — the IDEAS / KANBAN / DESIGN split
 
 - **`IDEAS.md`** — stray, not-yet-planned thoughts. Append; never lose
