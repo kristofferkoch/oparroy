@@ -192,7 +192,7 @@ ______________________________________________________________________
   §6 on resolution. **Blocked by:** — · **Unblocks:** T10
 - **T34 — CI board block diagram.** *Shape: docs.* One page showing
   the whole CI board as blocks and the wires between them: the USB-C
-  inlet → 5 V → 3.3 V regulator power tree (T29), the RP2040
+  inlet → 5 V → 3.3 V regulator power tree (T35), the RP2040
   supervisor and its PIO roles (T30), the scan control/observe chain
   and the mux hierarchy it drives (T31), the eight node tiles with
   their fault-injection complement (T28), the instrumented boundary
@@ -217,27 +217,6 @@ ______________________________________________________________________
   a second copy of it. Lands before T24/T10 generate new captures, so
   the equivalence pattern is settled before it multiplies (2026-10-04
   ordering decision). **Blocked by:** — · **Unblocks:** —
-- **T29 — Drive pcbnew settings import through the KiCad API.**
-  *Shape: implementation.* Raised 2026-10-04 (from the
-  generated-vs-manual split in the board workflow; promoted from
-  IDEAS.md the same day): re-running `design/node_board.py` today
-  overwrites `boards/node/oparroy-node.kicad_pcb`, so a constraint
-  change (stackup, net classes, minimums) would clobber live layout —
-  a live hazard while T22a's outline/pours work is underway. The
-  manual fix is to emit the skeleton to a staging path and merge it in
-  via pcbnew's Board Setup → Import Settings from Another Board. The
-  card: script that same merge through KiCad's own code — the KiCad 9+
-  IPC API (`kicad-python`) or the pcbnew Python module: load the staged
-  skeleton, push its design settings into the live board, save.
-  Constraint updates then stay hands-off and CI-friendly without us
-  writing a `.kicad_pcb` merger — the §7 lean-on-KiCad principle over
-  the alternative (a DSL-side merge that splices DSL-owned subtrees
-  into the live board file). Open questions: whether the API exposes
-  settings-import directly or we copy design settings between two open
-  boards; whether import-from-board picks net classes up from the
-  source's sibling `.kicad_pro` (the emitter's split puts them there,
-  `src/oparroy/dsl/pcb_emit.py`); headless operation in the nix shell.
-  **Blocked by:** — · **Unblocks:** —
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
