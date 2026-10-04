@@ -8,6 +8,15 @@
 #   2. Create a cache auth token there and add it to this repo as the
 #      Actions secret CACHIX_AUTH_TOKEN (Settings → Secrets → Actions).
 # Fork PRs see no secret: they pull from the cache but never push.
+#
+# The gates run as parallel jobs — none of them consumes another's
+# output, so wall-clock is the slowest job, not their sum. Each job
+# pays the fixed install-nix + cache-pull cost (~a minute, warm
+# cache). The `check` job only aggregates: branch protection and
+# .mergify.yml both require the single context `check`, so it fails
+# when any need fails and stays green otherwise. Intra-job parallelism
+# is already maximal: ninja/meson drive klee-proofs, fuzz, sim, and
+# the unit tests across all cores.
 name: ci
 
 on:
@@ -20,7 +29,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # Python side (uv's lane): DSL unit tests + doctests. The shell
+  # hook exports OPARROY_KICAD_* so the KiCad-library tests run.
+  pytest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -35,32 +46,105 @@ jobs:
           name: oparroy
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      # Python side (uv's lane): DSL unit tests + doctests. The shell
-      # hook exports OPARROY_KICAD_* so the KiCad-library tests run.
-      - name: pytest
-        run: nix develop -c sh -c 'uv sync --frozen && uv run --frozen pytest'
+      - run: nix develop -c sh -c 'uv sync --frozen && uv run --frozen pytest'
 
-      # Firmware: host build + unit tests, KLEE proofs, bounded fuzz
-      # runs, ngspice subcircuit benches, and the rv32ec cross build.
-      - name: firmware host build and tests
-        run: |
+  # Firmware: host build + unit tests, KLEE proofs, bounded fuzz
+  # runs, ngspice subcircuit benches.
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: oparroy
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - run: |
           nix develop -c meson setup build/host --native-file meson/native/clang.ini
           nix develop -c ninja -C build/host
           nix develop -c meson test -C build/host --print-errorlogs
           nix develop -c ninja -C build/host klee-proofs fuzz sim
 
-      - name: firmware rv32ec cross build
-        run: |
+  # Firmware rv32ec cross build.
+  rv32ec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: oparroy
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - run: |
           nix develop -c meson setup build/rv32ec --cross-file meson/cross/rv32ec.ini
           nix develop -c ninja -C build/rv32ec
 
-      # Reproducibility gate (DESIGN.md §8): builds every configuration
-      # twice at different absolute paths and compares artifact hashes.
-      - name: reproducibility gate
-        run: nix develop -c ninja -C build/host check-reproducible
+  # Reproducibility gate (DESIGN.md §8): builds every configuration
+  # twice at different absolute paths and compares artifact hashes.
+  # The script makes its own fresh build dirs; the configured
+  # build/host exists only because the gate is wired as a run_target.
+  reproducibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
 
-      # Same hooks as local pre-commit (language: system → the nix
-      # shell supplies every binary): ruff, ty, clang-format,
-      # clang-tidy, mdformat, markdownlint, lychee.
-      - name: pre-commit
-        run: nix develop -c pre-commit run --all-files --show-diff-on-failure
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: oparroy
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - run: |
+          nix develop -c meson setup build/host --native-file meson/native/clang.ini
+          nix develop -c ninja -C build/host check-reproducible
+
+  # Same hooks as local pre-commit (language: system → the nix
+  # shell supplies every binary): ruff, ty, clang-format,
+  # clang-tidy, mdformat, markdownlint, lychee.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: oparroy
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - run: nix develop -c pre-commit run --all-files --show-diff-on-failure
+
+  # Aggregate the parallel gates into the single required context
+  # branch protection and Mergify key on. if: always() so a failed
+  # need (which skips dependents by default) still turns this red.
+  check:
+    if: always()
+    needs: [pytest, firmware, rv32ec, reproducibility, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: aggregate gate results
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo '${{ toJSON(needs) }}'
+            exit 1
+          fi
