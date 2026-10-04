@@ -10,6 +10,9 @@
   from stomping on each other's checkout — never share a working tree
   between tasks. When the PR merges, remove the worktree
   (`git worktree remove ../oparroy-wt-<name>`) and delete the branch.
+- **Merging is automatic.** Once a PR's `check` CI job goes green,
+  Mergify queues it and merges it against the latest `main`
+  (`.mergify.yml`) — no session needs to stay open waiting for CI.
 
 ## Documentation — the IDEAS / KANBAN / DESIGN split
 
