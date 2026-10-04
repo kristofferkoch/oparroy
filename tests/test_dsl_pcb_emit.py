@@ -293,6 +293,19 @@ def test_project_round_trip_through_parser() -> None:
     assert project.minimums == spec().minimums
 
 
+def test_project_reads_kicad10_list_assignments() -> None:
+    """KiCad 10 re-saves netclass_assignments as lists (meta version 5)."""
+    project = parse_project(
+        '{"net_settings": {"classes": ['
+        '{"name": "Default", "track_width": 0.2},'
+        '{"name": "Power", "track_width": 0.5}],'
+        '"netclass_assignments": {"BYPASS": ["Power"], "GND": ["Default"]}}}'
+    )
+    assert project.assignments == {"BYPASS": "Power", "GND": "Default"}
+    by_name = {nc.name: nc for nc in project.net_classes}
+    assert by_name["Power"].nets == frozenset({"BYPASS"})
+
+
 def test_emitted_skeleton_passes_stackup_check() -> None:
     board = parse_board(emit_pcb(spec()))
     rules = LayoutRules(copper_layers=2, thickness_mm=_THICKNESS_MM)

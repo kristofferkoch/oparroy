@@ -136,6 +136,26 @@ def test_power_and_mixed_inner_layers_count_as_copper() -> None:
     assert board.copper_layers == ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
 
 
+def test_kicad10_named_nets() -> None:
+    """KiCad 10's native format (20260206): net names inline, no code table."""
+    board = parse_board(
+        '(kicad_pcb (version 20260206) (generator "pcbnew") (layers)'
+        ' (footprint "Lib:Name" (layer "F.Cu") (at 1 2 0)'
+        '  (property "Reference" "J1" (at 0 0 0) (layer "F.SilkS"))'
+        '  (pad "1" smd rect (at 0 0) (size 1 1) (layers "F.Cu")'
+        '   (net "GND")))'
+        ' (segment (start 0 0) (end 1 1) (width 0.2) (layer "F.Cu")'
+        '  (net "BYPASS"))'
+        ' (via (at 2 2) (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu")'
+        '  (net "SIG"))'
+        ' (segment (start 3 3) (end 4 4) (width 0.2) (layer "F.Cu") (net "")))'
+    )
+    assert board.nets == {}
+    assert board.footprints[0].pads[0].net == "GND"
+    assert [segment.net for segment in board.segments] == ["BYPASS", ""]
+    assert board.vias[0].net == "SIG"
+
+
 def test_malformed_net_code_raises_pcb_error() -> None:
     with pytest.raises(PcbError, match="expected an integer for net code"):
         parse_board(

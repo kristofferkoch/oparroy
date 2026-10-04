@@ -6,7 +6,10 @@ Layout is drawn in KiCad, but the DSL audits it: this module reads a
 :mod:`oparroy.dsl.layout_check` asserts project properties against —
 placement, geometry, stackup, silkscreen. The reader is tolerant:
 anything the model does not need (3-D models, render settings, …) is
-skipped, so files from newer KiCad versions keep parsing.
+skipped, so files from newer KiCad versions keep parsing. KiCad 10's
+native format (20260206) drops the numeric net table and writes net
+names inline on segments, vias, and pads; both forms read (verified
+against 10.0.6 on 2026-10-04).
 """
 
 from __future__ import annotations
@@ -383,8 +386,16 @@ def _parse_pad(node: list[Sexp]) -> Pad:
         number=_atom(node, 1) or "",
         kind=_atom(node, 2) or "",
         at=_point(_child(node, "at")),
-        net=_atom(net_node, 2) if net_node is not None else None,
+        net=_pad_net(net_node),
     )
+
+
+def _pad_net(net_node: list[Sexp] | None) -> str | None:
+    if net_node is None:
+        return None
+    # Old form: (net <code> "<name>"); KiCad 10 (20260206): (net "<name>").
+    name = _atom(net_node, 2)
+    return name if name is not None else _atom(net_node, 1)
 
 
 def _net_name(node: list[Sexp], net_codes: Mapping[int, str], *, numbered: bool) -> str:
@@ -394,7 +405,13 @@ def _net_name(node: list[Sexp], net_codes: Mapping[int, str], *, numbered: bool)
     code = _atom(net_node, 1)
     if code is None:
         return ""
-    return net_codes.get(_int(code, "net code"), "") if numbered else code
+    if not numbered:
+        return code
+    if net_codes:
+        return net_codes.get(_int(code, "net code"), "")
+    # KiCad 10's native format (20260206) drops the net-code table and
+    # writes net names inline — verified against 10.0.6 on 2026-10-04.
+    return code
 
 
 def _parse_segment(node: list[Sexp], net_codes: Mapping[int, str]) -> Segment:
