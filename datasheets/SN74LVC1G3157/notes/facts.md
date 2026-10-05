@@ -44,3 +44,11 @@ A–B2.**
   bypass switch and its watchdog must be powered from the always-on ring
   rail, not the per-node switchable rail, or a node power cut kills the
   bypass with the node.
+- **On-state switch current ±128 mA abs max** (SCES424O §5.1, I_I/O) —
+  extracted 2026-10-05 for the §6 fault-injection design: the segment
+  short-injection legs (3.3 V / 470 Ω ≈ 7 mA) sit ~18× inside the
+  limit.
+- **Capacitance** (SCES424O §5.5, extracted 2026-10-05 for the §6
+  tap/shunt residual budgets): control input CI = 2.7 pF; switch port
+  Cio(off) = 5.2 pF; Cio(on) = 17.3 pF. A NC-throw "open" still hangs
+  the 5.2 pF off-port capacitance on the common net.
