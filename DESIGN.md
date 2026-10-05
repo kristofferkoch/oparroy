@@ -1406,6 +1406,22 @@ resolves each is in KANBAN.md):
   accepting more flex under the IDC mating shear the hand-soldered SMD
   headers take (§3). JLCPCB's exact 2-layer thickness offerings verify
   at quote time.
+- **Payload terminal on the standalone node board** (§5, §6) — raised
+  2026-10-05 (kristofferkoch/oparroy#35, "Add potentiometer to
+  single-node design?"). The node board as settled wires no payload
+  pads at all: pot/buzzer/buttons/debug TX stay NC and only PC7 gets a
+  test pad, because human-facing I/O was designed onto the CI board's
+  tiles (§6 dual role) — the production-form node is a pure comms
+  bead. The open question is whether the single-node board grows a
+  payload terminal, and in what form. The hooks already exist: the
+  pin map reserves the §5/§6 payload superset (pot on PD6/ADC, buzzer
+  PWM on PC4/TIM1_CH4, buttons on FT PC5/PC6, spares PC1/PC7),
+  actuator-class power is the UNREG rail's job (§2.1: per-payload
+  regulation, never per-node), and any external terminal follows the
+  §7 terminal rule (series R, FT pins, per-terminal TVS). User
+  leaning (2026-10-05): a row of unpopulated PTH holes, so a function
+  can be hand-soldered to specialize individual nodes — issue #35's
+  DNP 3-pin pot footprint is the minimal instance.
 - **Cable reach** (§2) — maximum segment length unamplified, and with
   an amplifier/re-driver node in the segment; line coding is settled
   (§2), so this is drive strength, comparator sensitivity, and cable
