@@ -120,7 +120,7 @@
 			(outputdirectory "")
 		)
 	)
-	(footprint "LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm"
+	(footprint "Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm"
 		(layer "F.Cu")
 		(uuid "02887e60-d19a-4bbb-8acd-4295950839a7")
 		(at 113.920208 73.014686)
@@ -311,8 +311,8 @@
 		)
 		(pad "" np_thru_hole oval
 			(at 0 0)
-			(size 1.8 2.4)
-			(drill oval 1.8 2.4)
+			(size 1.5 2.4)
+			(drill oval 1.5 2.4)
 			(layers "*.Cu" "*.Mask")
 			(uuid "d6a3099c-9c6b-4b3a-afb1-8648e06e4390")
 		)
@@ -1642,7 +1642,7 @@
 			)
 		)
 	)
-	(footprint "LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm"
+	(footprint "Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm"
 		(layer "F.Cu")
 		(uuid "3df7a67f-f25a-41c9-ac4c-8a01fcbb4852")
 		(at 131.445 73.025)
@@ -1833,8 +1833,8 @@
 		)
 		(pad "" np_thru_hole oval
 			(at 0 0)
-			(size 1.8 2.4)
-			(drill oval 1.8 2.4)
+			(size 1.5 2.4)
+			(drill oval 1.5 2.4)
 			(layers "*.Cu" "*.Mask")
 			(uuid "f99fd135-b4dd-42ad-86ab-94226ef29b14")
 		)
@@ -3237,7 +3237,7 @@
 			)
 		)
 	)
-	(footprint "LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm"
+	(footprint "Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm"
 		(layer "F.Cu")
 		(uuid "6ac94a53-1e86-407b-b8b6-6e46db7ac9b0")
 		(at 103.125208 73.014686)
@@ -3428,8 +3428,8 @@
 		)
 		(pad "" np_thru_hole oval
 			(at 0 0)
-			(size 1.8 2.4)
-			(drill oval 1.8 2.4)
+			(size 1.5 2.4)
+			(drill oval 1.5 2.4)
 			(layers "*.Cu" "*.Mask")
 			(uuid "cc947063-cb63-42cc-9e4b-72281e1314d1")
 		)
@@ -4042,7 +4042,7 @@
 		)
 		(embedded_fonts no)
 	)
-	(footprint "LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm"
+	(footprint "Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm"
 		(layer "F.Cu")
 		(uuid "873d1100-3863-458c-bfe3-1490a2f95aba")
 		(at 120.015 73.025)
@@ -4233,8 +4233,8 @@
 		)
 		(pad "" np_thru_hole oval
 			(at 0 0)
-			(size 1.8 2.4)
-			(drill oval 1.8 2.4)
+			(size 1.5 2.4)
+			(drill oval 1.5 2.4)
 			(layers "*.Cu" "*.Mask")
 			(uuid "731fce4c-4ad6-4a47-a106-f7f03ccf1612")
 		)
