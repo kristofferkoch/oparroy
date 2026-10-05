@@ -10,7 +10,7 @@ Settled (2026-09-26):
 - Design capture: **home-rolled DSL** (not SKiDL) — owns its IR, emits
   KiCad netlists, constraint checks, firmware headers, simulation netlists
 - Test board: **8 ring nodes + 1 supervisor**, **full fault injection**
-  (per-segment open/short, per-node power cut, clock kill — all scriptable)
+  (per-segment open/short, per-node power cut, keep-alive cut — all scriptable)
 - CI: **local script first** (`test-hw` style target), CI platform
   integration deferred until the board exists
 - Firmware language: **freestanding C++ — no standard library**,
@@ -557,9 +557,9 @@ application traffic.
 
 Decided: **8 ring nodes + 1 supervisor** (supervisor = MCU or USB bridge
 that can power-cycle nodes, inject faults, collect debug UART).
-**Full fault injection**: per-segment open/short switches (analog muxes
-or relays), per-node power cut, clock kill — everything scriptable from
-the supervisor so test runs are fully hands-off.
+**Full fault injection**: per-segment open/short switches, per-node
+power cut, keep-alive cut — everything scriptable from the supervisor so
+test runs are fully hands-off (design settled 2026-10-05, below).
 
 Dual role (2026-09-26): the CI board is also the **demonstrator**.
 Beyond hands-off test runs, it must show the protocol to a human —
@@ -574,11 +574,11 @@ the ring carry on) is the demo. Constraint: the human I/O must never
 be required for operation — every input is also drivable/readable
 scriptably, so the hands-off CI role is unaffected by a knob being in
 the wrong position. Board-design consequence: human inputs are
-**overridable from the supervisor** — e.g. the potentiometer's wiper
-goes through an analog mux so the supervisor can substitute its own
-DAC/filtered-PWM voltage during scripted runs (same injection pattern
-as the fault muxes), and buttons parallel a supervisor-driven
-optocoupler/transistor.
+**overridable from the supervisor** — settled 2026-10-05 (the
+fault-injection paragraph below): the potentiometer's wiper goes
+through an analog mux so the supervisor can substitute its own
+filtered-PWM voltage during scripted runs (same injection pattern
+as the fault muxes), and buttons parallel a supervisor-driven N-FET.
 
 Board fabrication (2026-09-26): the CI/test board is **4-layer** — the
 fault-injection muxes and per-node debug plumbing want the routing room,
@@ -691,6 +691,38 @@ board; chain length scales with the fault-injection complement
 instead of consuming GPIO, and every actuator is one bit — no I2C
 addressing, no bus contention, fully deterministic.
 
+Fault-injection design (2026-10-05;
+[docs/instrumented-ci-2026-10-05.md](docs/instrumented-ci-2026-10-05.md)
+— the transform list the transform machinery encodes and the CI
+capture consumes): every segment wire gets a scriptable four-state
+injector — pass / open / short-to-GND / short-to-3V3 — built from
+three SN74LVC1G3157 SPDTs (one series break, two 470 Ω-legged
+shunts; every latched bit pattern is electrically safe, no
+interlocks), placed once per segment at each tile's downstream
+connector, plus the same on the supervisor's originator port.
+**Per-node power cut** is a P-FET high-side switch (AO3401A-class)
+splitting the tile's 3.3 V into an always domain (bypass switch,
+injectors — the §4 no-Ioff constraint) and a node domain (MCU, status
+LEDs, payload); it doubles as the brick-recovery power cycle. The
+**clock-kill fault class does not exist on this node** — HSI-only
+(§5), NRST option-byte-disabled
+([quirks](datasheets/CH32V003/notes/quirks.md)) — and resolves to the
+power cut (dead), a series switch on the keep-alive strobe (hung:
+watchdog bypass engages with the MCU alive and observable), and SWIO
+halt on the debug DUT. Control rides the shift-register plane under
+one invariant: **bit 0 = the plain-board state on every control
+bit**, so the reset-state load is all-zeros — these levels are the
+reset-state equivalence proof's inputs. Human-I/O overrides: the pot
+wiper through a 3157 substitution mux (supervisor drives filtered
+PWM), buttons paralleled by 2N7002-class N-FETs (optocoupler
+rejected — the board is common-ground). The boundary node's four
+taps (`opa_p`, `TX_A#b` post-injector, comparator-out, working-LED) carry **no series
+resistors** — stimulus drives against the segment's existing 470 Ω —
+and the watchdog-defeat bit is a 3157 shunt forcing `sel` high. The
+doc also carries the residual register (every reset-state difference
+from the plain node, enumerated and budgeted) and the bench-verify
+list.
+
 Board power and host link (2026-09-30): one **USB-C receptacle** is
 both the power inlet and the supervisor's host link. 5 V in — CC
 sink pull-downs only, no PD negotiation; the load (8 tiles at tens
@@ -701,7 +733,9 @@ D+/D− wire to the RP2040's USB (it keeps its 12 MHz crystal for
 exactly this, §5), so one cable is power, host channel, and debug
 transport uplink. Regulator and connector are inventory-driven picks
 (§6); the per-node power-cut switches of the fault complement sit
-between the rail and each tile.
+between the rail and each tile — P-FET high-side per tile (2026-10-05,
+above), so the bypass switch and the fault injectors stay on the
+always-on rail per §4 while the MCU domain is cut.
 
 Open: runtime debug transport (UART per node? shared bus?). The
 segment connector is settled (2026-09-29, §3) — and stays deliberately

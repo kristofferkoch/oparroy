@@ -54,7 +54,7 @@ infrastructure, by contrast, may cost freely.
   cooked data (Bela/Trill pattern, see
   [docs/bela-lessons-2026-09-26.md](docs/bela-lessons-2026-09-26.md)).
 - **Test board**: 8 ring nodes + supervisor, full fault injection
-  (per-segment open/short, per-node power cut, clock kill), everything
+  (per-segment open/short, per-node power cut, keep-alive cut), everything
   scriptable for hands-off hardware-in-the-loop testing. Doubles as
   the **demonstrator**: some nodes carry human-facing I/O
   (potentiometer, buttons, LEDs, buzzer), each input overridable by
