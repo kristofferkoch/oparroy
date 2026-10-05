@@ -9,7 +9,7 @@ description = "Design-capture DSL for the oparroy fault-tolerant ring (DESIGN.md
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Kristoffer Koch" }]
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = []
 
 [dependency-groups]
@@ -24,7 +24,7 @@ requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 # Import roots: the package (src), the tests, and the repo root itself
 # so `design` resolves as first-party.
 src = ["src", "tests", "."]
@@ -51,6 +51,10 @@ ignore = [
     # docstrings restate it.
     "D105", # undocumented-magic-method
     "D107", # undocumented-public-init
+    # PEP 649 (py314 target) makes ruff want annotation-only imports moved
+    # into TYPE_CHECKING blocks; plain imports keep get_type_hints working.
+    "TC001", # typing-only application import
+    "TC003", # typing-only stdlib import
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -67,4 +71,4 @@ addopts = ["-ra", "--strict-config", "--strict-markers", "--doctest-modules"]
 pythonpath = ["."]
 
 [tool.ty.environment]
-python-version = "3.13"
+python-version = "3.14"

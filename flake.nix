@@ -38,14 +38,6 @@
             ps.mdformat
             ps.mdformat-gfm
           ]);
-          # Interpreter for the pcbnew SWIG API (src/oparroy/dsl/pcb_merge.py):
-          # nixpkgs' pcbnew is built for Python 3.14, which uv's pinned 3.13
-          # cannot import (verified against KiCad 10.0.6 on 2026-10-04), so
-          # scripting KiCad goes through this wrapper, not the project venv.
-          kicadPython = pkgs.writeShellScriptBin "kicad-python" ''
-            export PYTHONPATH=${pkgs.kicad.base}/lib/python${pkgs.python314.pythonVersion}/site-packages''${PYTHONPATH:+:$PYTHONPATH}
-            exec ${pkgs.python314}/bin/python3 "$@"
-          '';
         in
         {
           default = pkgs.mkShell {
@@ -78,7 +70,6 @@
               pkgs.kicad
               pkgs.kicad.libraries.symbols
               pkgs.kicad.libraries.footprints
-              kicadPython
               # Python side is uv's alone; nix only supplies uv itself.
               pkgs.uv
               # Pre-commit hooks — the framework plus every tool the
@@ -96,6 +87,13 @@
               # Where the DSL finds KiCad's libraries (DESIGN.md §7).
               export OPARROY_KICAD_SYMBOL_DIR=${pkgs.kicad.libraries.symbols}/share/kicad/symbols
               export OPARROY_KICAD_FOOTPRINT_DIR=${pkgs.kicad.libraries.footprints}/share/kicad/footprints
+              # pcbnew's SWIG module (src/oparroy/dsl/pcb_merge.py): nixpkgs
+              # builds it for Python 3.14, the same 3.14 the project pins —
+              # uv finds nix's interpreter on PATH, so exporting pcbnew's
+              # site-packages makes `import pcbnew` work in the project venv
+              # (verified against KiCad 10.0.6 on 2026-10-05). The
+              # python314 pin must track kicad's build.
+              export PYTHONPATH=${pkgs.kicad.base}/lib/python${pkgs.python314.pythonVersion}/site-packages''${PYTHONPATH:+:$PYTHONPATH}
               echo "== oparroy dev shell =="
               riscv64-none-elf-gcc --version | head -1
               arm-none-eabi-gcc --version | head -1

@@ -117,7 +117,7 @@ infrastructure, by contrast, may cost freely.
 - **nix flake** provides everything non-Python (riscv/arm cross GCC,
   clang 19 + KLEE, AFL++, ngspice, KiCad, uv itself), pinned by
   `flake.lock` — `nix develop` enters the shell (`.envrc` provided for
-  direnv users); **uv** owns Python alone (3.13, ruff strict, ty,
+  direnv users); **uv** owns Python alone (3.14, ruff strict, ty,
   pytest): `uv sync`, then `uv run pytest` / `uv run ruff check` /
   `uv run ty check`.
 - **Pre-commit hooks** (`pre-commit install`): clang-format,

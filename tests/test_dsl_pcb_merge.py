@@ -1,15 +1,18 @@
 """Real-pcbnew validation of the settings merge (src/oparroy/dsl/pcb_merge.py).
 
 Skipped outside the nix dev shell (same pattern as ``test_dsl_kicad10``'s
-``kicad-cli`` gate): the merge runs through the flake's ``kicad-python``
-wrapper. A drifted "live" board — real layout items, tampered class
-values and board minimums, a GUI-style DRC exclusion — must come out of
-the merge with its layout and exclusions intact and the staged
-skeleton's classes, minimums, and stackup re-imposed.
+``kicad-cli`` gate): the dev shell puts nixpkgs' pcbnew on ``PYTHONPATH``
+and the project pins the same Python 3.14 it is built for, so the merge
+runs under the venv's own interpreter. A drifted "live" board — real
+layout items, tampered class values and board minimums, a GUI-style DRC
+exclusion — must come out of the merge with its layout and exclusions
+intact and the staged skeleton's classes, minimums, and stackup
+re-imposed.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -24,12 +27,12 @@ from oparroy.dsl import emit_pcb, emit_project
 from oparroy.dsl.kicad_pcb import parse_board
 from oparroy.dsl.kicad_pro import parse_project
 
-KICAD_PYTHON = shutil.which("kicad-python")
+PCBNEW = importlib.util.find_spec("pcbnew")
 KICAD_CLI = shutil.which("kicad-cli")
 
 pytestmark = pytest.mark.skipif(
-    KICAD_PYTHON is None,
-    reason="kicad-python not provisioned (outside the nix dev shell)",
+    PCBNEW is None,
+    reason="pcbnew not importable (outside the nix dev shell)",
 )
 
 _SRC = Path(__file__).parent.parent / "src"
@@ -92,16 +95,13 @@ def _drift_live(directory: Path) -> None:
 
 
 def _merge(staged: Path, live: Path) -> subprocess.CompletedProcess[str]:
-    assert KICAD_PYTHON is not None  # pytestmark skips the module otherwise
-    env = os.environ.copy()
-    pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = f"{_SRC}{os.pathsep}{pythonpath}" if pythonpath else str(_SRC)
-    return subprocess.run(  # noqa: S603 — runs the nix-provisioned kicad-python
-        [KICAD_PYTHON, "-m", "oparroy.dsl.pcb_merge", str(staged), str(live)],
+    # Through the CLI under the venv's own interpreter — pcbnew comes
+    # from the dev shell's PYTHONPATH export, inherited here.
+    return subprocess.run(  # noqa: S603 — runs the project venv's interpreter
+        [sys.executable, "-m", "oparroy.dsl.pcb_merge", str(staged), str(live)],
         check=False,
         capture_output=True,
         text=True,
-        env=env,
     )
 
 
@@ -207,7 +207,7 @@ def test_non_skeleton_staged_board_is_refused(tmp_path: Path) -> None:
 
 def test_main_is_importable_without_pcbnew() -> None:
     # --doctest-modules covers the import; this pins that calling into the
-    # merge under the uv interpreter (no pcbnew for Python 3.13) fails
+    # merge with PYTHONPATH stripped of the dev shell's pcbnew export fails
     # with the plain missing-module error, not a half-initialized state.
     result = subprocess.run(
         [

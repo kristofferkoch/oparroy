@@ -65,18 +65,17 @@ Usage (in the nix dev shell):
 The plain modes stay the pure emitter — a seed, not a merge: running
 them against ``boards/node/`` overwrites the live board. ``--apply``
 emits the skeleton to a staging directory and merges it into DIR's
-board through KiCad's own pcbnew API (:mod:`oparroy.dsl.pcb_merge`,
-driven by the flake's ``kicad-python`` wrapper — scripted 2026-10-04,
-replacing the manual Board Setup → Import Settings from Another Board
-step).
+board in process through KiCad's own pcbnew API
+(:mod:`oparroy.dsl.pcb_merge`; the dev shell puts nixpkgs' pcbnew on
+``PYTHONPATH``, and the project pins the same Python 3.14 it is built
+for). Scripted 2026-10-04, replacing the manual Board Setup → Import
+Settings from Another Board step.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
-import shutil
-import subprocess
+import importlib.util
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -89,6 +88,7 @@ from oparroy.dsl import (
     emit_pcb,
     emit_project,
 )
+from oparroy.dsl.pcb_merge import PcbMergeError, merge_settings
 
 _OUT_DIR = Path(__file__).parent.parent / "boards" / "node"
 
@@ -197,28 +197,23 @@ def _emit(out_dir: Path) -> None:
 
 
 def _apply(live_dir: Path) -> None:
-    """Emit to a staging directory and merge into LIVE_DIR via kicad-python."""
-    kicad_python = shutil.which("kicad-python")
-    if kicad_python is None:
-        sys.stderr.write("kicad-python not on PATH — run inside the nix dev shell\n")
+    """Emit to a staging directory and merge into LIVE_DIR via pcbnew."""
+    if importlib.util.find_spec("pcbnew") is None:
+        sys.stderr.write("pcbnew not importable — run inside the nix dev shell\n")
         raise SystemExit(2)
-    env = os.environ.copy()
-    src = Path(__file__).parent.parent / "src"
-    pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = f"{src}{os.pathsep}{pythonpath}" if pythonpath else str(src)
     with TemporaryDirectory() as staging:
         _emit(Path(staging))
-        subprocess.run(  # noqa: S603 — runs the nix-provisioned kicad-python
-            [
-                kicad_python,
-                "-m",
-                "oparroy.dsl.pcb_merge",
-                staging,
-                str(live_dir),
-            ],
-            check=True,
-            env=env,
-        )
+        try:
+            report = merge_settings(Path(staging), live_dir)
+        except PcbMergeError as error:
+            sys.stderr.write(f"pcb_merge: {error}\n")
+            raise SystemExit(2) from None
+    sys.stdout.write(
+        f"merged {report.staged_pcb} → {report.live_pcb}:"
+        f" net classes {', '.join(report.net_classes) or '(none)'},"
+        f" stackup {'applied' if report.stackup else 'absent'},"
+        f" board minimums {'applied' if report.minimums else 'absent'}\n"
+    )
 
 
 if __name__ == "__main__":
