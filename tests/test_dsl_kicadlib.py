@@ -55,10 +55,46 @@ def test_footprint_existence(kicad_libs: KiCadLibraries) -> None:
     assert not kicad_libs.exists("Resistor_SMD:NOPE")
 
 
+def test_project_footprint_dir_resolves(tmp_path: Path) -> None:
+    kicad_root = tmp_path / "kicad"
+    project_root = tmp_path / "project"
+    local = project_root / "Oparroy.pretty" / "Local.kicad_mod"
+    local.parent.mkdir(parents=True)
+    local.write_text("(kicad_mod)", encoding="utf-8")
+    libs = KiCadLibraries(kicad_root, kicad_root, (project_root,))
+    assert libs.exists("Oparroy:Local")
+    assert not libs.exists("Oparroy:Nope")
+    # Without the extra root, the same ref does not resolve.
+    assert not KiCadLibraries(kicad_root, kicad_root).exists("Oparroy:Local")
+
+
 def test_from_env_requires_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPARROY_KICAD_SYMBOL_DIR", raising=False)
     monkeypatch.delenv("OPARROY_KICAD_FOOTPRINT_DIR", raising=False)
     with pytest.raises(LibraryError, match="nix dev shell"):
+        KiCadLibraries.from_env()
+
+
+def test_from_env_picks_up_project_footprint_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project_root = tmp_path / "project"
+    local = project_root / "Oparroy.pretty" / "Local.kicad_mod"
+    local.parent.mkdir(parents=True)
+    local.write_text("(kicad_mod)", encoding="utf-8")
+    monkeypatch.setenv("OPARROY_KICAD_SYMBOL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPARROY_KICAD_FOOTPRINT_DIR", str(tmp_path))
+    monkeypatch.setenv("OPARROY_PROJECT_FOOTPRINT_DIR", str(project_root))
+    assert KiCadLibraries.from_env().exists("Oparroy:Local")
+
+
+def test_from_env_rejects_missing_project_footprint_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPARROY_KICAD_SYMBOL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPARROY_KICAD_FOOTPRINT_DIR", str(tmp_path))
+    monkeypatch.setenv("OPARROY_PROJECT_FOOTPRINT_DIR", str(tmp_path / "nope"))
+    with pytest.raises(LibraryError, match="OPARROY_PROJECT_FOOTPRINT_DIR"):
         KiCadLibraries.from_env()
 
 

@@ -87,6 +87,9 @@
               # Where the DSL finds KiCad's libraries (DESIGN.md §7).
               export OPARROY_KICAD_SYMBOL_DIR=${pkgs.kicad.libraries.symbols}/share/kicad/symbols
               export OPARROY_KICAD_FOOTPRINT_DIR=${pkgs.kicad.libraries.footprints}/share/kicad/footprints
+              # Project-owned footprints (boards/lib/) resolve alongside
+              # KiCad's; searched after the nix-store roots.
+              export OPARROY_PROJECT_FOOTPRINT_DIR="$PWD/boards/lib"
               # pcbnew's SWIG module (src/oparroy/dsl/pcb_merge.py): nixpkgs
               # builds it for Python 3.14, the same 3.14 the project pins —
               # uv finds nix's interpreter on PATH, so exporting pcbnew's

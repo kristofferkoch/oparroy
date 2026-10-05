@@ -7,7 +7,9 @@ not flattened), footprints are checked by their presence on disk
 (``<Lib>.pretty/<Name>.kicad_mod``). The library roots
 come from the nix dev shell (``OPARROY_KICAD_SYMBOL_DIR`` /
 ``OPARROY_KICAD_FOOTPRINT_DIR``, see flake.nix) so the validated data is
-exactly what the pinned KiCad would use.
+exactly what the pinned KiCad would use. Project-owned footprints
+(``boards/lib/``) resolve through the optional
+``OPARROY_PROJECT_FOOTPRINT_DIR`` root, searched after KiCad's.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from oparroy.dsl.sexpr import Sexp, parse
 
 _SYMBOL_DIR_ENV = "OPARROY_KICAD_SYMBOL_DIR"
 _FOOTPRINT_DIR_ENV = "OPARROY_KICAD_FOOTPRINT_DIR"
+_PROJECT_FOOTPRINT_DIR_ENV = "OPARROY_PROJECT_FOOTPRINT_DIR"
 
 _SUBSYMBOL = re.compile(r"_(\d+)_(\d+)$")
 
@@ -107,9 +110,14 @@ def _parse_pin(node: list[Sexp]) -> SymbolPin | None:
 class KiCadLibraries:
     """Symbol and footprint tables backed by on-disk KiCad libraries."""
 
-    def __init__(self, symbol_dir: Path, footprint_dir: Path) -> None:
+    def __init__(
+        self,
+        symbol_dir: Path,
+        footprint_dir: Path,
+        extra_footprint_dirs: tuple[Path, ...] = (),
+    ) -> None:
         self._symbol_dir = symbol_dir
-        self._footprint_dir = footprint_dir
+        self._footprint_dirs = (footprint_dir, *extra_footprint_dirs)
         self._lib_cache: dict[str, dict[str, list[Sexp]]] = {}
 
     @classmethod
@@ -130,7 +138,17 @@ class KiCadLibraries:
             if not Path(raw).is_dir():
                 msg = f"{env_var} points at {raw}, which is not a directory"
                 raise LibraryError(msg)
-        return cls(Path(symbol_dir), Path(footprint_dir))
+        extra: tuple[Path, ...] = ()
+        project_footprint_dir = os.environ.get(_PROJECT_FOOTPRINT_DIR_ENV)
+        if project_footprint_dir is not None:
+            if not Path(project_footprint_dir).is_dir():
+                msg = (
+                    f"{_PROJECT_FOOTPRINT_DIR_ENV} points at "
+                    f"{project_footprint_dir}, which is not a directory"
+                )
+                raise LibraryError(msg)
+            extra = (Path(project_footprint_dir),)
+        return cls(Path(symbol_dir), Path(footprint_dir), extra)
 
     def lookup(self, ref: str) -> Symbol:
         """Resolve ``Lib:Name`` to a Symbol, following ``extends`` chains."""
@@ -193,8 +211,8 @@ class KiCadLibraries:
     def exists(self, footprint: str) -> bool:
         """Check that ``Lib:Name`` resolves to a .kicad_mod file on disk."""
         lib_name, fp_name = split_ref(footprint)
-        path = self._footprint_dir / f"{lib_name}.pretty" / f"{fp_name}.kicad_mod"
-        return path.is_file()
+        rel = Path(f"{lib_name}.pretty") / f"{fp_name}.kicad_mod"
+        return any((root / rel).is_file() for root in self._footprint_dirs)
 
     def _load_lib(self, lib_name: str) -> dict[str, list[Sexp]]:
         if lib_name in self._lib_cache:
