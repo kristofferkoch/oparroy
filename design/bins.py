@@ -24,7 +24,7 @@ class LedRev1206(Led):
     XL-3216-FB records live in the parts DB.
     """
 
-    default_footprint = "LED_SMD:LED_1206_3216Metric_ReverseMount_Hole1.8x2.4mm"
+    default_footprint = "Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm"
 
 
 class TvsSod323(TvsDiode):
