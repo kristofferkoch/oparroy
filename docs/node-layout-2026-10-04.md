@@ -87,7 +87,11 @@ are deliberately looser than the fab's.
   `copper_edge_clearance` (the 0.3 mm router-bit edge floor also
   judges holes — footprint-fixed 0.175 mm pad-to-hole) and
   `npth_inside_courtyard` under the connectors; both deliberate, both
-  pending exclusion or a footprint/quote decision.
+  pending exclusion or a footprint/quote decision. **LED NPTHs
+  resolved 2026-10-05** — the footprint's slot shrank to 1.5×2.4 mm
+  (project-local `Oparroy:` variant, 0.325 mm pad-to-slot nominal),
+  clearing the edge floor; the connector `npth_inside_courtyard`
+  pair stays as the remaining intrinsic set.
 - [ ] B.Cu footprint set is exactly J1 + J2.
 - [ ] Each reverse-mount LED over its hole; TVS adjacent to its
   connector with the R between TVS and µC.

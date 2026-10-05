@@ -49,12 +49,16 @@ intend to draw so a DRC flag means "fix the layout", never "fight the
 fab". The hole-clearance floor sits at 0.15 mm (2026-10-04, decided
 with the first DRC pass over real layout): the reverse-mount status
 LEDs sit over their routed light-pipe NPTHs (the §7 part-over-hole
-contract) with a footprint-fixed 0.175 mm pad-to-hole gap, so
-KiCad's 0.25 mm default flagged the intent itself; 0.15 keeps the
-floor just below the deliberate minimum while still catching
-accidents. JLCPCB's NPTH-to-copper capability verifies at quote time
-— if the fab floor lands above 0.175 mm, the LED footprint's hole
-shrinks, not the rule. Tune here when the quote lands — nowhere else.
+contract) and KiCad's 0.25 mm default flagged the intent itself;
+0.15 keeps the floor below the deliberate geometry while still
+catching accidents. The pad-to-slot gap is footprint-fixed, and the
+stock footprint's 0.175 mm also lost to the 0.3 mm copper-to-edge
+floor (KiCad judges routed NPTH walls like board edges) — settled
+2026-10-05 in the footprint's favor, not the rule's: the project-local
+``Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm`` narrows
+the slot to 1.5 x 2.4 mm for a 0.325 mm nominal gap, still wider than
+the LED's 1.2 mm lens. JLCPCB's NPTH-to-copper capability verifies
+at quote time. Tune here when the quote lands — nowhere else.
 
 Usage (in the nix dev shell):
 

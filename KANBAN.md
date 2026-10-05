@@ -91,11 +91,12 @@ ______________________________________________________________________
       clearance is unmeetable inside the MCU's TSSOP-20 pad gap) and an
       explicit 0.15 mm `min_hole_clearance` floor — KiCad's 0.25 mm
       default flagged the §7 part-over-hole LEDs' intent itself
-      (`design/node_board.py`).
-      Remaining: the intrinsic LED NPTH `copper_edge_clearance` pairs
-      (the 0.3 mm router-bit edge floor also judges the light-pipe holes
-      — DRC exclusions vs a scoped rule vs shrinking the footprint hole,
-      decided with the fab quote), silkscreen nudges, and JLCPCB's
+      (`design/node_board.py`). The LED light-pipe NPTH clearance
+      settled 2026-10-05 in the footprint's favor: the slot shrank to
+      1.5×2.4 mm in a project-local `Oparroy:` variant (0.325 mm
+      pad-to-slot nominal), so the 0.3 mm router-bit edge floor stands
+      and the 8 `copper_edge_clearance` pairs are gone.
+      Remaining: silkscreen nudges, and JLCPCB's
       NPTH-to-copper capability check at quote time.
       **Blocked by:** — · **Unblocks:** T19, T28, T10
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
