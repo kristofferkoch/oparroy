@@ -19,7 +19,7 @@ Settled (2026-09-26):
 - Tool provisioning: **nix flake** for everything non-Python (SDCC/GCC
   toolchains, KLEE/clang, ngspice, KiCad, provers); **uv** for Python
   deps — see §8
-- Python tooling: **3.13, uv, ruff (strict), ty, pytest** — package
+- Python tooling: **3.14, uv, ruff (strict), ty, pytest** — package
   scaffold landed 2026-09-26: `src/oparroy/` layout, ruff `ALL`
   (formatter-conflicts off), ty, pytest wired via pre-commit
 - MCU (2026-09-26): node = **[CH32V003F4P6](datasheets/CH32V003/)**
@@ -785,8 +785,10 @@ DSL shape (2026-09-26, from the initial design interrogation):
   Board Setup's Import Settings from Another Board for constraints;
   the DSL emits and audits. The Import Settings step is itself scripted
   since 2026-10-04: `src/oparroy/dsl/pcb_merge.py` drives the same
-  merge through pcbnew's SWIG API (the flake's `kicad-python` wrapper;
-  `python -m design.node_board --apply DIR`), keeping layout and
+  merge through pcbnew's SWIG API, run in the project venv — the dev
+  shell puts nixpkgs' pcbnew on `PYTHONPATH` and the project pins the
+  same Python 3.14 it is built for
+  (`python -m design.node_board --apply DIR`), keeping layout and
   GUI-authored project state intact while re-imposing the emitted
   constraints.
 - **The pipeline is not one-way** (2026-09-27). Between capture and

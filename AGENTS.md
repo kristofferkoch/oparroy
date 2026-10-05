@@ -94,6 +94,8 @@ C++ (no standard library; RAII, placement new on memory-mapped I/O)
 under an aviation-grade rule set, statically checked, KLEE-verified
 from the start (DESIGN.md §8).
 Tool provisioning: nix flake for everything non-Python (compilers,
-provers, ngspice, KiCad, uv itself); uv owns Python alone — 3.13, ruff
-(strict), ty, pytest. Test philosophy: hands-off hardware-in-the-loop
+provers, ngspice, KiCad, uv itself); uv owns Python alone — 3.14,
+pinned to match nixpkgs' pcbnew build so the dev shell's `PYTHONPATH`
+export makes `import pcbnew` work in the project venv (one interpreter
+runs the test suite and KiCad scripting), ruff (strict), ty, pytest. Test philosophy: hands-off hardware-in-the-loop
 from day one (see DESIGN.md §6, §8).

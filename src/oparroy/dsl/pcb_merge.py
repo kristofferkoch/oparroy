@@ -42,15 +42,18 @@ against KiCad 10.0.6 on 2026-10-04 (against behavior and source —
   355 tracks on the node board), GUI-owned project keys
   (``board.design_settings.defaults``, viewports) preserved.
 
-Run it with the flake's ``kicad-python`` wrapper — nixpkgs' pcbnew is
-built for Python 3.14, which the uv-pinned 3.13 interpreter cannot
-import (verified 2026-10-04). Hence the lazy ``import pcbnew`` inside
-:func:`merge_settings`: the module stays stdlib-only at import time so
-pytest's ``--doctest-modules`` can import it under 3.13.
+Run it under the project venv inside the nix dev shell: nixpkgs' pcbnew
+is built for Python 3.14, the project pins the same 3.14 (uv finds
+nix's interpreter on PATH), and the dev shell puts pcbnew's
+site-packages on ``PYTHONPATH``, so ``import pcbnew`` resolves in
+process (verified against KiCad 10.0.6 on 2026-10-05). The lazy
+``import pcbnew`` inside :func:`merge_settings` keeps the module
+stdlib-only at import time so pytest's ``--doctest-modules`` can import
+it outside the dev shell.
 
 Usage (in the nix dev shell):
 
-    kicad-python -m oparroy.dsl.pcb_merge <staged_dir> <live_dir>
+    python -m oparroy.dsl.pcb_merge <staged_dir> <live_dir>
 
 ``python -m design.node_board --apply DIR`` wraps exactly this call.
 """
@@ -89,7 +92,7 @@ def merge_settings(staged_dir: Path, live_dir: Path) -> MergeReport:
     arguments are swapped, and the merge refuses rather than
     overwriting live layout with an empty board.
     """
-    import pcbnew  # ty: ignore[unresolved-import]  # noqa: PLC0415 — lazy: see the module docstring
+    import pcbnew  # noqa: PLC0415 — lazy: see the module docstring
 
     staged_pcb = _single_pcb(staged_dir, "staged")
     live_pcb = live_dir / staged_pcb.name
