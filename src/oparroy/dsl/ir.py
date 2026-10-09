@@ -245,6 +245,22 @@ class Waiver:
 
 
 @dataclass(frozen=True)
+class Provenance:
+    """Base-design origin of a transform-created part or net (T24a).
+
+    Instrumentation transforms (:mod:`oparroy.dsl.transform`) tag every
+    part and net they create: ``transform`` is the transform record's
+    label (``"F1"``), ``base`` the capture name of the base net it
+    derives from, relative to the tile the transform applied in. The
+    reset-state equivalence proof (T24b) consumes exactly these tags —
+    no name-matching heuristics. Base-capture elements carry None.
+    """
+
+    transform: str
+    base: str
+
+
+@dataclass(frozen=True)
 class SymbolPin:
     """One pin of a library symbol: number, display name, electrical type."""
 
@@ -409,16 +425,24 @@ class Placement:
     physical pin shared by placed units is one ``Pin``.
     ``unit_names`` carries the typed per-unit pin names a
     ``MultiUnitPart`` placement declared — the currency of
-    ``Part.unit`` handles.
+    ``Part.unit`` handles. ``pin_names`` carries the typed pin
+    keywords of a plain ``TypedPart`` placement (keyword → pin
+    numbers), so passes can address pins by their capture names
+    (``Rat.b``) — the T24a instrumentation transforms' pin addressing.
     """
 
     path: tuple[str, ...] = ()
     units: tuple[int, ...] | None = None
     unit_names: dict[int, dict[str, str]] | None = None
+    pin_names: dict[str, tuple[str, ...]] | None = None
 
 
 class Part:
-    """One placed component: an explicit reference bound to a symbol."""
+    """One placed component: an explicit reference bound to a symbol.
+
+    ``provenance`` is None for base-capture parts; instrumentation
+    transforms tag the parts they create (T24a).
+    """
 
     def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + identity/placement
         self,
@@ -434,6 +458,7 @@ class Part:
         self._symbol = symbol
         self.value = value
         self.footprint = footprint
+        self.provenance: Provenance | None = None
         self._identity = ref if identity is None else identity
         base = Placement() if placement is None else placement
         units = base.units
@@ -445,6 +470,7 @@ class Part:
                 path=base.path,
                 units=tuple(sorted(units)),
                 unit_names=base.unit_names,
+                pin_names=base.pin_names,
             )
         self._placement = base
         self._pins = {sp.number: Pin(self, sp) for sp in symbol.pins_for_units(units)}
@@ -486,6 +512,17 @@ class Part:
         return self._placement.units
 
     @property
+    def pin_names(self) -> dict[str, tuple[str, ...]] | None:
+        """The typed pin keywords this part was placed with, keyword → numbers.
+
+        Set for parts placed from a plain ``TypedPart`` (a keyword may
+        own several pin numbers, like a connector's ground member);
+        None for symbol-placed and multi-unit parts. Transform pin
+        addresses (``Rat.b``) resolve through it.
+        """
+        return self._placement.pin_names
+
+    @property
     def pins(self) -> tuple[Pin, ...]:
         """All pins, ordered by pin number."""
         return tuple(self._pins[n] for n in sorted(self._pins, key=natural_key))
@@ -523,14 +560,24 @@ class Part:
         return UnitHandle(self, number, names)
 
     def _flattened_placement(self, path: tuple[str, ...]) -> Placement:
-        """Return the placement for the flat copy: same units, new path."""
+        """Return the placement for the flat copy: same units, path prefixed.
+
+        The part's existing path elements survive under the new prefix:
+        a part already flattened per-tile by the instrumentation
+        transform pass (``Instance.flatten_hierarchy``) carries its
+        in-tile path (``("PHY1",)``), and the parent's flatten prepends
+        the instance path (``("T0", "PHY1")``). Captured parts have an
+        empty path, so plain flattening is unchanged.
+        """
         names = self._placement.unit_names
+        pin_names = self._placement.pin_names
         return Placement(
-            path=path,
+            path=(*path, *self._placement.path),
             units=self._placement.units,
             unit_names=None
             if names is None
             else {u: dict(pins) for u, pins in names.items()},
+            pin_names=None if pin_names is None else dict(pin_names),
         )
 
     def __getitem__(self, number: int | str) -> Pin:
@@ -600,7 +647,11 @@ class UnitHandle(Mapping[str, Pin]):
 
 
 class Net:
-    """A named equipotential: the set of pins joined together."""
+    """A named equipotential: the set of pins joined together.
+
+    ``provenance`` is None for base-capture nets; instrumentation
+    transforms tag the nets they create (T24a).
+    """
 
     def __init__(
         self,
@@ -615,6 +666,7 @@ class Net:
         self._source = source
         self._sink = sink
         self._pins: list[Pin] = []
+        self.provenance: Provenance | None = None
 
     @property
     def name(self) -> str:
@@ -665,6 +717,11 @@ class Net:
             raise DefinitionError(msg)
         pin._net = self  # noqa: SLF001 — same module; Pin.net is module-private
         self._pins.append(pin)
+
+    def _detach(self, pin: Pin) -> None:
+        """Remove a pin from this net; called by ``Circuit.cut_net``."""
+        self._pins.remove(pin)
+        pin._net = None  # noqa: SLF001 — same module; Pin.net is module-private
 
     def __repr__(self) -> str:
         return f"<Net {self._name} ({len(self._pins)} pins)>"
@@ -881,7 +938,9 @@ class Instance:
     Built by ``Circuit.instance``; carries the child circuit, the port
     bindings (port name → parent net), and the socket bindings
     (socket reference → packing decision) that ``Circuit.flatten``
-    consumes.
+    consumes. The capture callable is kept as the instance's subcircuit
+    identity — the sheetpath key the instrumentation transform pass
+    (:mod:`oparroy.dsl.transform`, T24a) scopes per-tile declarations on.
     """
 
     def __init__(
@@ -890,11 +949,14 @@ class Instance:
         circuit: Circuit,
         connections: dict[str, Net],
         socket_bindings: dict[str, PackedSocket | StandaloneSocket],
+        *,
+        subcircuit: Callable[[Circuit], None] | None = None,
     ) -> None:
         self._name = name
         self._circuit = circuit
         self._connections = dict(connections)
         self._socket_bindings = dict(socket_bindings)
+        self._subcircuit = subcircuit
 
     @property
     def name(self) -> str:
@@ -907,6 +969,16 @@ class Instance:
         return self._circuit
 
     @property
+    def subcircuit(self) -> Callable[[Circuit], None] | None:
+        """The capture callable this instance was built from.
+
+        A ``Subcircuit`` instance (match on its type for per-tile
+        keying) or any capture callable (match on identity); None only
+        for a hand-built Instance.
+        """
+        return self._subcircuit
+
+    @property
     def connections(self) -> dict[str, Net]:
         """Port bindings: port name → the parent net it sits on."""
         return dict(self._connections)
@@ -915,6 +987,53 @@ class Instance:
     def socket_bindings(self) -> dict[str, PackedSocket | StandaloneSocket]:
         """Socket bindings: socket reference → the packing decision."""
         return dict(self._socket_bindings)
+
+    def bind(self, port: str, net: Net) -> None:
+        """Bind a port after instantiation: late binding for pass machinery.
+
+        Instrumentation transforms (T24a) add control and tap ports to
+        an already-placed instance's child; this binds one to its
+        parent net. ``port`` must name an unbound port of the child
+        circuit; the net's membership in the parent is the caller's
+        responsibility (the transform engine validates it).
+        """
+        target = self._circuit._nets.get(port)  # noqa: SLF001 — same module
+        if target is None or not target.is_port:
+            msg = f"instance {self._name!r}: the child has no port {port!r}"
+            raise DefinitionError(msg)
+        if port in self._connections:
+            msg = f"instance {self._name!r}: port {port!r} is already bound"
+            raise DefinitionError(msg)
+        self._connections[port] = net
+
+    def flatten_hierarchy(self) -> Circuit:
+        """Flatten the captured child's own hierarchy in place.
+
+        Pass machinery (the T24a instrumentation transforms) operates on
+        the per-tile flat form: the child's internal instances resolve
+        (``PHY1/Rat`` refs, in-tile paths), ports keep their names and
+        flags, waivers are preserved with their paths prefixed, and
+        socket bindings are consumed. Semantically transparent to the
+        parent's flatten — refs, nets, and paths come out as if the
+        child had never been touched. Idempotent.
+        """
+        for binding in self._socket_bindings.values():
+            if isinstance(binding, PackedSocket):
+                msg = (
+                    f"instance {self._name!r}: cannot flatten a child whose "
+                    "sockets are packed into parent-placed units — the "
+                    "parent parts are out of reach"
+                )
+                raise DefinitionError(msg)
+        flat = Circuit(
+            self._circuit._name,  # noqa: SLF001 — same module
+            self._circuit._symbols,  # noqa: SLF001 — same module
+        )
+        self._circuit._flatten_into(flat, (), {}, self._socket_bindings)  # noqa: SLF001
+        flat._waivers.extend(hierarchical_waivers(self._circuit))  # noqa: SLF001
+        self._circuit = flat
+        self._socket_bindings = {}
+        return flat
 
     def __repr__(self) -> str:
         return f"<Instance {self._name} of {self._circuit.name!r}>"
@@ -1090,6 +1209,11 @@ class Circuit:
             resolved,
             spec.value,
             footprint if footprint is not None else spec.footprint,
+            placement=Placement(
+                pin_names={
+                    kw: _pin_numbers(mapped) for kw, mapped in spec.pin_map.items()
+                }
+            ),
         )
         for kw, net in wiring.items():
             for number in _pin_numbers(spec.pin_map[kw]):
@@ -1362,6 +1486,59 @@ class Circuit:
             msg = f"no net named {net!r} in circuit {self._name!r}"
             raise DefinitionError(msg) from None
 
+    def cut_net(self, net: Net | str, pins: Iterable[Pin], *, name: str) -> Net:
+        """Move pins off a net onto a fresh net: the split primitive.
+
+        Pass machinery (the T24a instrumentation transforms) cuts a net
+        into sides by moving each side's pins out; every pin must sit
+        on ``net``. Moving every pin out is legal — the emptied net is
+        ``remove_net``'s to delete. The new net is internal (never a
+        port): the interface side stays on the original net, which
+        keeps its name, port flag, and limit ranges.
+        """
+        resolved = self._resolve_net(net)
+        moved = list(pins)
+        if not moved:
+            msg = f"cut_net on {resolved.name!r} needs at least one pin"
+            raise DefinitionError(msg)
+        if len(set(moved)) != len(moved):
+            msg = f"cut_net on {resolved.name!r} lists a pin twice"
+            raise DefinitionError(msg)
+        for pin in moved:
+            if pin.net is not resolved:
+                msg = f"{pin.part.ref}.{pin.number} is not on net {resolved.name!r}"
+                raise DefinitionError(msg)
+        created = self._add_net(name, is_port=False)
+        for pin in moved:
+            resolved._detach(pin)  # noqa: SLF001 — same module
+            created._attach(pin)  # noqa: SLF001 — same module
+        return created
+
+    def remove_net(self, name: str) -> None:
+        """Delete a pin-less internal net — the empty remnant of a cut."""
+        resolved = self._resolve_net(name)
+        if resolved.pins:
+            msg = f"net {name!r} still has pins"
+            raise DefinitionError(msg)
+        if resolved.is_port:
+            msg = f"net {name!r} is a port — ports are the interface contract"
+            raise DefinitionError(msg)
+        del self._nets[name]
+
+    def export_net(self, name: str) -> Net:
+        """Promote an internal net to the interface: a port in place.
+
+        Pass machinery (T24a's ``add_tap``) exports a net so the
+        instantiating parent can bind it — the net keeps its name, its
+        pins, and its identity; only its port flag changes.
+        """
+        resolved = self._resolve_net(name)
+        if resolved.is_port:
+            msg = f"net {name!r} is already a port"
+            raise DefinitionError(msg)
+        resolved._is_port = True  # noqa: SLF001 — same module
+        return resolved
+
     def instance(
         self,
         name: str,
@@ -1438,7 +1615,7 @@ class Circuit:
                     raise DefinitionError(msg)
                 resolved[port_name] = target
                 sources[port_name] = source
-        placed = Instance(name, child, resolved, socket_bindings)
+        placed = Instance(name, child, resolved, socket_bindings, subcircuit=subcircuit)
         self._instances[name] = placed
         self._allocations.update(allocations)
         return placed
@@ -1589,12 +1766,14 @@ class Circuit:
             else:
                 # Prefixed names carry '/' — bypass the capture-time
                 # separator check (it guards captured names only).
-                nets[net] = flat._add_net(
+                created = flat._add_net(
                     f"{prefix}{name}",
                     is_port=net.is_port,
                     source=net.source,
                     sink=net.sink,
                 )
+                created.provenance = net.provenance
+                nets[net] = created
         for part in self._parts.values():
             if part.symbol.is_socket:
                 continue
@@ -1605,6 +1784,7 @@ class Circuit:
                 part.footprint,
                 placement=part._flattened_placement(path),  # noqa: SLF001 — same module
             )
+            placed.provenance = part.provenance
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
@@ -1648,6 +1828,7 @@ class Circuit:
                 part_class.default_footprint,
                 placement=Placement(path=path),
             )
+            placed.provenance = placeholder.provenance
             for pin in placeholder.pins:
                 if pin.net is not None:
                     for number in _pin_numbers(part_class.pin_map[pin.number]):
@@ -1670,7 +1851,9 @@ class Circuit:
         renamed = Circuit(self._name, self._symbols)
         nets: dict[Net, Net] = {}
         for name, net in self._nets.items():
-            nets[net] = renamed._add_net(name, is_port=net.is_port)
+            copied = renamed._add_net(name, is_port=net.is_port)
+            copied.provenance = net.provenance
+            nets[net] = copied
         for part in self._parts.values():
             placed = renamed._place(
                 refs.get(part.identity, refs.get(part.ref, part.ref)),
@@ -1678,8 +1861,10 @@ class Circuit:
                 part.value,
                 part.footprint,
                 identity=part.identity,
-                placement=part._flattened_placement(part.path),  # noqa: SLF001 — same module
+                # The empty prefix keeps the part's own path as-is.
+                placement=part._flattened_placement(()),  # noqa: SLF001 — same module
             )
+            placed.provenance = part.provenance
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
@@ -1726,3 +1911,26 @@ class Circuit:
 
     def __str__(self) -> str:
         return self.dump()
+
+
+def hierarchical_waivers(circuit: Circuit) -> list[Waiver]:
+    """Gather a circuit's and its instances' waivers, paths fully prefixed.
+
+    A waiver declared inside a subcircuit addresses a path relative to
+    that subcircuit; instantiation prefixes it with the instance path,
+    so ``IN1/vin`` inside ``WD1`` addresses ``WD1/IN1/vin``. The
+    validation pass applies these; ``Instance.flatten_hierarchy``
+    re-homes them on the per-tile flat form.
+    """
+    return _collect_waivers(circuit, ())
+
+
+def _collect_waivers(circuit: Circuit, prefix: tuple[str, ...]) -> list[Waiver]:
+    base = "/".join(prefix)
+    collected = [
+        Waiver(w.check, f"{base}/{w.path}" if base else w.path, w.reason)
+        for w in circuit.waivers
+    ]
+    for instance in circuit.instances.values():
+        collected.extend(_collect_waivers(instance.circuit, (*prefix, instance.name)))
+    return collected

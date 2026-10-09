@@ -14,7 +14,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from oparroy.dsl.ir import Circuit, Limits, Net, Part, PinType, Waiver, natural_key
+from oparroy.dsl.ir import (
+    Circuit,
+    Limits,
+    Net,
+    Part,
+    PinType,
+    Waiver,
+    hierarchical_waivers,
+    natural_key,
+)
 from oparroy.dsl.kicadlib import LibraryError
 
 _MIN_NET_PINS = 2
@@ -84,7 +93,7 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
     """
     issues: list[Issue] = []
     issues.extend(_check_port_ranges(circuit, ()))
-    waivers = tuple(_collect_waivers(circuit, ()))
+    waivers = tuple(hierarchical_waivers(circuit))
     if circuit.instances or circuit.sockets:
         circuit = circuit.flatten()
     for ref in sorted(circuit.parts, key=natural_key):
@@ -92,23 +101,6 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
     for name in sorted(circuit.nets, key=natural_key):
         issues.extend(_check_net(circuit.nets[name]))
     return _apply_waivers(issues, waivers)
-
-
-def _collect_waivers(circuit: Circuit, prefix: tuple[str, ...]) -> list[Waiver]:
-    """Gather the circuit's and its instances' waivers, paths fully prefixed.
-
-    A waiver declared inside a subcircuit addresses a path relative to
-    that subcircuit; instantiation prefixes it with the instance path,
-    so ``IN1/vin`` inside ``WD1`` addresses ``WD1/IN1/vin``.
-    """
-    base = "/".join(prefix)
-    collected = [
-        Waiver(w.check, f"{base}/{w.path}" if base else w.path, w.reason)
-        for w in circuit.waivers
-    ]
-    for instance in circuit.instances.values():
-        collected.extend(_collect_waivers(instance.circuit, (*prefix, instance.name)))
-    return collected
 
 
 def _check_port_ranges(circuit: Circuit, prefix: tuple[str, ...]) -> list[Issue]:

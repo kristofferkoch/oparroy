@@ -4,7 +4,9 @@ Single source of truth for schematic capture: a separable IR
 (:mod:`oparroy.dsl.ir`) behind a plain function-call capture API —
 including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.subcircuit`) — a validation pass
-(:mod:`oparroy.dsl.check`), the stages between capture and pcbnew —
+(:mod:`oparroy.dsl.check`), instrumentation transforms with provenance
+tags (:mod:`oparroy.dsl.transform`), the stages between capture and
+pcbnew —
 footprint assignment (:mod:`oparroy.dsl.assign`) and annotation with
 back-annotation (:mod:`oparroy.dsl.annotate`) — and emitters — KiCad
 netlist (:mod:`oparroy.dsl.kicad_emit`), Graphviz dot
@@ -57,6 +59,7 @@ from oparroy.dsl.ir import (
     Pin,
     PinType,
     PortArray,
+    Provenance,
     SocketSpec,
     Symbol,
     SymbolPin,
@@ -136,10 +139,24 @@ from oparroy.dsl.pinmap import (
 )
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
+from oparroy.dsl.transform import (
+    AddShunt,
+    AddTap,
+    InsertSeries,
+    PerInstance,
+    PerTile,
+    Scope,
+    Substitute,
+    Transform,
+    TransformPart,
+    apply_transforms,
+)
 
 __all__ = [
     "CH32V003F4P6",
     "RANGE_CONTAINMENT",
+    "AddShunt",
+    "AddTap",
     "AdjacencyRule",
     "Annotation",
     "AnnotationError",
@@ -161,6 +178,7 @@ __all__ = [
     "EdgeKind",
     "Footprint",
     "FootprintTable",
+    "InsertSeries",
     "Instance",
     "Interval",
     "Issue",
@@ -184,6 +202,8 @@ __all__ = [
     "PcbPad",
     "PcbSpec",
     "PcbSpecError",
+    "PerInstance",
+    "PerTile",
     "Pin",
     "PinMap",
     "PinRequest",
@@ -192,8 +212,10 @@ __all__ = [
     "PortArray",
     "Project",
     "ProjectError",
+    "Provenance",
     "Rect",
     "Resistor",
+    "Scope",
     "Segment",
     "Severity",
     "SocketSpec",
@@ -201,12 +223,15 @@ __all__ = [
     "StackupLayer",
     "Stock",
     "Subcircuit",
+    "Substitute",
     "Symbol",
     "SymbolPin",
     "SymbolTable",
     "SymbolUnit",
     "Text",
     "Tier",
+    "Transform",
+    "TransformPart",
     "TvsDiode",
     "TypedPart",
     "UnitHandle",
@@ -217,6 +242,7 @@ __all__ = [
     "annotate",
     "annotation_from_pcb",
     "apply_annotation",
+    "apply_transforms",
     "assign_footprints",
     "check",
     "check_layout",

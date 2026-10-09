@@ -34,8 +34,7 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T24a[T24a instrumentation transforms] --> T24b[T24b reset-state equivalence proof]
-    T24b --> T10
+    T24b[T24b reset-state equivalence proof] --> T10
     T31[T31 scan control/observe plane] --> T10
     T35[T35 CI power: USB-C + 3V3] --> T10
     T30[T30 RP2040 supervisor subcircuit] --> T10
@@ -51,41 +50,44 @@ ______________________________________________________________________
 
 ## Next
 
-- **T24a — DSL instrumentation transforms.** Split from T24
-  (2026-10-09); the equivalence proof is T24b. The CI board is the
-  node design plus injected controllability and observability (§6:
-  fault-injection muxes, supervisor-override muxes, sense taps) — and
-  that makes it *dangerously different* from the plain node it is
-  meant to exercise (raised 2026-09-27). Capture instrumentation as an
-  **explicit transformation** of the uninstrumented design — insert a
-  series switch on this net, hang a sense tap off that one — never a
-  hand-maintained second capture, so the two can never drift.
-  Transforms are data (typed records), not code patches, in four
-  kinds: `insert_series` (cut a net into `#a`/`#b`, bridge through a
-  part, return control-pin handles for the capture to wire to the
-  scan plane), `add_tap` (high-impedance sense point, no cut),
-  `substitute` (who-drives replacement for the §6 human-I/O
-  overrides), and `add_shunt` (switched branch between a net and a
-  rail, no cut — the memo's three kinds grew this fourth in the
-  settled instrumented design). Every part/net a transform creates is
-  tagged with its base provenance — the tags are T24b's proof input,
-  no name-matching heuristics — and the plain capture never carries
-  CI-only parts, so the base board stays fab-able while the CI board
-  is a strict superset produced mechanically. Application is
-  **hierarchical, per-tile** (settled 2026-09-29, memo Q1): one
-  declaration keyed on `Placement.path` sheetpath metadata
-  instruments all eight node tiles; tiles that diverge (boundary tile
-  0, input tiles 2/5) carry per-instance declarations on top. Starting
-  points: the design memo + four settled decisions on the retained
-  branch `t24-dsl-instrumentation`
-  (`docs/instrumentation-equivalence-2026-09-29.md`; PR #23 closed
-  unmerged 2026-09-29) and the settled transform list with control
-  bits (`docs/instrumented-ci-2026-10-05.md` §7, 2026-10-05). Test
-  fixture: each kind applies correctly on a minimal circuit, per-tile
-  keying instruments every instance, provenance survives flattening.
-  The real consumer — `design/ci_board.py` transforming
-  `design/node.py` ×8 — is T10's capture work.
-  **Blocked by:** — · **Unblocks:** T24b
+- **T24b — DSL reset-state equivalence proof.** Split from T24
+  (2026-10-09); the transform machinery it consumes landed 2026-10-10
+  (`src/oparroy/dsl/transform.py`: the four transform kinds, per-tile
+  application, provenance tags through flattening). A checker pass
+  `check_equivalent(base, instrumented)` consumes the transform
+  provenance and proves the instrumented board **in reset state** is
+  equivalent to the plain board: every inserted series element in its
+  default/pass-through state reduces to a wire (net merge), every tap
+  is high-impedance (input-class `PinType` or a declared impedance
+  limit), no base part or net is lost or re-connected (the anti-drift
+  bijection), and residual differences — the series element's
+  on-resistance in the §2 decode-margin budget, tap capacitance on the
+  §6 short-stub contract — are enumerated as data
+  `(net, residual_kind, magnitude)` and each carries a **budget
+  citation**; a residual without a budget is an error. "Almost
+  equivalent" is exactly the enumerated residual set. Reset levels
+  derive from the control plane's silicon power-on state (settled
+  2026-09-29, memo Q2 — the 74HC595-class stage's datasheet behavior
+  and the bit-0-is-plain-board POR invariant,
+  `docs/instrumented-ci-2026-10-05.md` §8), consumed as proof inputs,
+  never assumed. The residual register the proof budgets against is
+  settled (same doc §9). Output shape mirrors `check.py`'s `Issue`
+  list; waivers-as-data cover the exceptional case. Open questions to
+  settle on pickup (memo §4): **Q3** — residual magnitude source:
+  electrical residuals from the parts DB (schema extension) vs
+  transform annotations, with geometry residuals (stub length) emitted
+  as obligations for the §7 layout checker; **Q5** — proof
+  granularity: one pass over the whole CI board vs per-tile proofs
+  composed upward (per-tile follows from the Q1 decision and keeps
+  failure messages local). The proof is not a spice equivalence, not a
+  proof of the injected states (those are *supposed* to differ — the
+  T10/T12 harness's job), and not layout equivalence (copper-level
+  contracts stay with the §7 layout checker). Test fixture: a minimal
+  base circuit + one series insert + one tap passes; a tampered
+  variant (base part deleted) fails the bijection; a residual without
+  a budget errors. Promoted to Next 2026-10-10: the transform
+  machinery has landed.
+  **Blocked by:** — · **Unblocks:** T10
 - **T19 — DSL layout property checker, remaining checks.** First slice
   landed 2026-09-28: `.kicad_pcb` parser, the `LayoutRules` contract
   with the first check set (stackup, net-class width/via, trace
@@ -234,8 +236,8 @@ ______________________________________________________________________
   `circuits/lib/*.spi`, subckt `params:`. Device models stay
   hand-written includes. On shipping, the hand-written DUT `.cir`
   files retire — the DSL becomes the single source of truth (§7), not
-  a second copy of it. Lands before T24a/T10 generate new captures, so
-  the equivalence pattern is settled before it multiplies (2026-10-04
+  a second copy of it. Lands before T10 generates new captures, so the
+  equivalence pattern is settled before it multiplies (2026-10-04
   ordering decision). **Blocked by:** — · **Unblocks:** —
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
@@ -334,40 +336,6 @@ ______________________________________________________________________
   goldens; not `.kicad_sch` — editable output is SKiDL's trap and buys
   review nothing. T7bd's port direction tags are the block view's
   natural input. **Blocked by:** T7bd · **Unblocks:** —
-- **T24b — DSL reset-state equivalence proof.** Split from T24
-  (2026-10-09); the transform machinery is T24a. A checker pass
-  `check_equivalent(base, instrumented)` consumes the transform
-  provenance and proves the instrumented board **in reset state** is
-  equivalent to the plain board: every inserted series element in its
-  default/pass-through state reduces to a wire (net merge), every tap
-  is high-impedance (input-class `PinType` or a declared impedance
-  limit), no base part or net is lost or re-connected (the anti-drift
-  bijection), and residual differences — the series element's
-  on-resistance in the §2 decode-margin budget, tap capacitance on the
-  §6 short-stub contract — are enumerated as data
-  `(net, residual_kind, magnitude)` and each carries a **budget
-  citation**; a residual without a budget is an error. "Almost
-  equivalent" is exactly the enumerated residual set. Reset levels
-  derive from the control plane's silicon power-on state (settled
-  2026-09-29, memo Q2 — the 74HC595-class stage's datasheet behavior
-  and the bit-0-is-plain-board POR invariant,
-  `docs/instrumented-ci-2026-10-05.md` §8), consumed as proof inputs,
-  never assumed. The residual register the proof budgets against is
-  settled (same doc §9). Output shape mirrors `check.py`'s `Issue`
-  list; waivers-as-data cover the exceptional case. Open questions to
-  settle on pickup (memo §4): **Q3** — residual magnitude source:
-  electrical residuals from the parts DB (schema extension) vs
-  transform annotations, with geometry residuals (stub length) emitted
-  as obligations for the §7 layout checker; **Q5** — proof
-  granularity: one pass over the whole CI board vs per-tile proofs
-  composed upward (per-tile follows from the Q1 decision and keeps
-  failure messages local). The proof is not a spice equivalence, not a
-  proof of the injected states (those are *supposed* to differ — the
-  T10/T12 harness's job), and not layout equivalence (copper-level
-  contracts stay with the §7 layout checker). Test fixture: a minimal
-  base circuit + one series insert + one tap passes; a tampered
-  variant (base part deleted) fails the bijection; a residual without
-  a budget errors. **Blocked by:** T24a · **Unblocks:** T10
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, keep-alive
   cut),
