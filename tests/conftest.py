@@ -78,7 +78,8 @@ class StubSymbols:
     drive emitters (which bind on the KiCad symbol) without the
     nix-provisioned libraries. ``QD`` mirrors the BAT54ADW multi-unit
     model: four diode units, the anode pins shared between unit pairs
-    (DESIGN.md §7).
+    (DESIGN.md §7). ``SW`` is an SPDT analog-switch stub
+    (SN74LVC1G3157-class) for the instrumentation-transform tests.
     """
 
     def __init__(self) -> None:
@@ -99,6 +100,17 @@ class StubSymbols:
                     {"1": PinType.PASSIVE, "2": PinType.PASSIVE, "3": PinType.PASSIVE},
                     ("SOT?23*",),
                     pin_names={"1": "A", "2": "K", "3": "COM"},
+                ),
+                make_symbol(
+                    "SW",
+                    {
+                        "1": PinType.PASSIVE,
+                        "2": PinType.PASSIVE,
+                        "3": PinType.PASSIVE,
+                        "4": PinType.INPUT,
+                    },
+                    ("SOT?23?6*",),
+                    pin_names={"1": "A", "2": "B1", "3": "B2", "4": "S"},
                 ),
                 make_symbol("R", passive, ("R_*",), lib="Device"),
                 make_symbol("C", passive, ("C_*",), lib="Device"),

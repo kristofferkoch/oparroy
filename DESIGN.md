@@ -800,6 +800,15 @@ DSL shape (2026-09-26, from the initial design interrogation):
   invariants (unique references, a pin on at most one net) still raise
   at construction — they are not checks but what makes the IR
   well-formed.
+- **Instrumentation is a transform pass, not a second capture**
+  (2026-10-10). Test-board instrumentation (series inserts, shunts,
+  taps, substitutions) is declared as data and applied by
+  `src/oparroy/dsl/transform.py` to the hierarchical capture — after
+  instantiation, before check — flattening each matched tile instance
+  in place and rewriting its nets. Every part and net the engine
+  creates carries a `Provenance(transform, base)` tag that survives
+  flattening and renaming, so a later equivalence proof can map the
+  instrumented board back to the plain one.
 - **Plain function-call API, HDL-instantiation flavor.** Named
   connections, no operator overloading, no implicit global circuit.
   Sugar only if the call style proves tedious in use.
