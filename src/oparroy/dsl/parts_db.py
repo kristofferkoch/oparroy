@@ -33,6 +33,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from oparroy.dsl.check import Issue, Severity
+from oparroy.dsl.ir import Residuals
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -99,7 +100,10 @@ class PartRecord:
     assembly tier is unverified — a conservative filter never admits
     it. ``stock=None`` means the assembler was never queried for this
     part. ``area_mm2`` is the nominal body rectangle, the currency of
-    the area-bound filter knobs.
+    the area-bound filter knobs. ``residuals`` carries the electrical
+    residual magnitudes the reset-state equivalence proof enumerates
+    (``docs/instrumentation-equivalence-2026-09-29.md`` §4 Q3) — the
+    parts DB is the single home for part facts.
     """
 
     name: str
@@ -113,6 +117,7 @@ class PartRecord:
     area_mm2: float | None = None
     spice: SpiceModel | None = None
     datasheet: str | None = None
+    residuals: Residuals | None = None
     note: str = ""
 
     def __post_init__(self) -> None:
@@ -243,7 +248,9 @@ class PartsDb:
 
         The record is authoritative: the returned subclass of ``base``
         carries its symbol, default value, and default footprint —
-        including Nones, which clear a base-class default. Binding is
+        including Nones, which clear a base-class default — plus the
+        electrical residual magnitudes (``residuals``), the equivalence
+        proof's per-part data. Binding is
         unconditional: stock status constrains *selection*, and stale
         or missing stock is the freshness audit's job, so a moving
         stock number never breaks a capture at import.
@@ -257,6 +264,7 @@ class PartsDb:
             "symbol": record.symbol,
             "default_value": record.value,
             "default_footprint": record.footprint,
+            "residuals": record.residuals,
         }
         return cast(
             "type[_TypedPartT]",

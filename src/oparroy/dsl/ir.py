@@ -261,6 +261,43 @@ class Provenance:
 
 
 @dataclass(frozen=True)
+class Residuals:
+    """Electrical residual magnitudes of a part in its pass-through state.
+
+    The reset-state equivalence proof's magnitude source
+    (``docs/instrumentation-equivalence-2026-09-29.md`` §4 Q3, settled
+    2026-10-10): a closed analog switch is 7 Ω, not 0 Ω — the proof
+    enumerates these per placed part against the residual register
+    (``docs/instrumented-ci-2026-10-05.md`` §9). Values come from the
+    parts DB (``PartRecord.residuals``) via the typed part class; a
+    field left None is no data, never zero. Geometry residuals (tap
+    stub capacitance) are not expressible here — they are layout
+    properties, emitted as layout-checker obligations.
+
+    >>> r = Residuals(on_resistance_ohm=7.0, on_capacitance_pf=17.3)
+    >>> r.on_resistance_ohm
+    7.0
+    """
+
+    on_resistance_ohm: float | None = None
+    on_capacitance_pf: float | None = None
+    off_capacitance_pf: float | None = None
+    leakage_ua: float | None = None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "on_resistance_ohm",
+            "on_capacitance_pf",
+            "off_capacitance_pf",
+            "leakage_ua",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and value < 0:
+                msg = f"residual {field_name} must not be negative, got {value}"
+                raise DefinitionError(msg)
+
+
+@dataclass(frozen=True)
 class SymbolPin:
     """One pin of a library symbol: number, display name, electrical type."""
 
@@ -441,7 +478,10 @@ class Part:
     """One placed component: an explicit reference bound to a symbol.
 
     ``provenance`` is None for base-capture parts; instrumentation
-    transforms tag the parts they create.
+    transforms tag the parts they create. ``residuals`` carries the
+    part's electrical residual magnitudes (:class:`Residuals`) when it
+    was placed from a typed part whose class declares them (the parts
+    DB's ``bind`` threads them through); None means no data.
     """
 
     def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + identity/placement
@@ -459,6 +499,7 @@ class Part:
         self.value = value
         self.footprint = footprint
         self.provenance: Provenance | None = None
+        self.residuals: Residuals | None = None
         self._identity = ref if identity is None else identity
         base = Placement() if placement is None else placement
         units = base.units
@@ -1183,7 +1224,9 @@ class Circuit:
             raise DefinitionError(msg)
         resolved = self._symbols.lookup(spec.symbol)
         if isinstance(spec, _MultiUnitPart):
-            return self._place_multi(ref, spec, footprint, resolved)
+            placed = self._place_multi(ref, spec, footprint, resolved)
+            placed.residuals = spec.residuals
+            return placed
         symbol_pins = {pin.number for pin in resolved.pins}
         targets = [
             number
@@ -1218,6 +1261,7 @@ class Circuit:
         for kw, net in wiring.items():
             for number in _pin_numbers(spec.pin_map[kw]):
                 net._attach(placed.pin(number))  # noqa: SLF001 — same module
+        placed.residuals = spec.residuals
         return placed
 
     def _place_multi(
@@ -1785,6 +1829,7 @@ class Circuit:
                 placement=part._flattened_placement(path),  # noqa: SLF001 — same module
             )
             placed.provenance = part.provenance
+            placed.residuals = part.residuals
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
@@ -1829,6 +1874,7 @@ class Circuit:
                 placement=Placement(path=path),
             )
             placed.provenance = placeholder.provenance
+            placed.residuals = part_class.residuals
             for pin in placeholder.pins:
                 if pin.net is not None:
                     for number in _pin_numbers(part_class.pin_map[pin.number]):
@@ -1865,6 +1911,7 @@ class Circuit:
                 placement=part._flattened_placement(()),  # noqa: SLF001 — same module
             )
             placed.provenance = part.provenance
+            placed.residuals = part.residuals
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001

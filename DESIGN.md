@@ -807,8 +807,17 @@ DSL shape (2026-09-26, from the initial design interrogation):
   instantiation, before check — flattening each matched tile instance
   in place and rewriting its nets. Every part and net the engine
   creates carries a `Provenance(transform, base)` tag that survives
-  flattening and renaming, so a later equivalence proof can map the
-  instrumented board back to the plain one.
+  flattening and renaming — the input of the **reset-state equivalence
+  proof** (`src/oparroy/dsl/equivalence.py`, same day):
+  `check_equivalent(base, instrumented, plan, …)` proves the
+  instrumented board in reset state reduces to the plain board (series
+  elements to wires, shunts absent, taps high-impedance, the anti-drift
+  bijection over base parts and nets), per tile and composed upward,
+  with every residual enumerated as data against a budget citation —
+  electrical magnitudes from the parts DB (`PartRecord.residuals`),
+  geometry residuals emitted as layout-checker obligations
+  (`docs/instrumentation-equivalence-2026-09-29.md` §2/§4, Q3/Q5
+  settled 2026-10-10).
 - **Plain function-call API, HDL-instantiation flavor.** Named
   connections, no operator overloading, no implicit global circuit.
   Sugar only if the call style proves tedious in use.

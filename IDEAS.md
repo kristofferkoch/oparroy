@@ -215,6 +215,14 @@ real work — **move**, don't copy. Reference, don't duplicate.
     natively (fits the ring topology), CI-oriented. No upstream CH32V003
     support found yet either, but far cheaper per peripheral than QEMU.
     HIL (§6) remains ground truth for anything timing-critical regardless.
+- **`Circuit.renamed()` drops port `source`/`sink` Limits**
+  (2026-10-10, spotted while landing the equivalence proof):
+  `ir.py`'s annotation pass copies nets with `_add_net(name, is_port=…)` only — the interval ranges the range-containment check
+  consumes vanish from the renamed IR. Harmless today (checks run
+  pre-annotation), but any pass running post-annotation — an
+  equivalence proof over an annotated board, say — sees a port with no
+  ranges. Fix is three lines (`source=net.source, sink=net.sink`), plus
+  a test.
 
 ## Related projects to mine
 

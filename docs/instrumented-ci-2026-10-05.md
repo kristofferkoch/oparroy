@@ -6,8 +6,8 @@ supervisor-override design for human I/O, and the boundary node's tap
 set — expressed as the **transform list** against the settled node board
 design (`design/node.py`, `boards/node/`), the artifact the
 instrumentation-transform machinery
-(`docs/instrumentation-equivalence-2026-09-29.md` on the
-retained branch `t24-dsl-instrumentation`) encodes and the CI board
+(`docs/instrumentation-equivalence-2026-09-29.md`) encodes and the CI
+board
 capture consumes.
 
 Net and part names below are capture names (the source of truth; the
