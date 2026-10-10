@@ -1,7 +1,7 @@
 #pragma once
 
 // VERIFY — the contract statement, the offensive-coding primitive
-// (code-std.md §6). A violated contract is a bug, so it traps; there is
+// (code-std-cpp.md#5-error-handling). A violated contract is a bug, so it traps; there is
 // no defensive return code for a caller that cannot act on it. KLEE
 // proves the trap unreachable — a reachable VERIFY is a proof failure
 // with a counterexample, never a hope — and the optimizer elides the
@@ -10,7 +10,7 @@
 // caller has a policy decision.
 //
 // UNREACHABLE is VERIFY's conditionless sibling: the exhaustive-enum
-// switch closer (code-std.md §3). It never degrades to silent UB — a
+// switch closer (code-std-cpp.md#2-control-flow). It never degrades to silent UB — a
 // reached UNREACHABLE is a contract violation like any other, loud on
 // every personality (KLEE reports a reached __builtin_unreachable() as
 // an exec error with a counterexample).
@@ -30,7 +30,7 @@
 // - Target (-DOPARROY_TARGET, meson/cross/rv32ec.ini, 2026-09-28):
 //   lib::verify_failed, the project failure hook — declared here,
 //   defined once per platform (the node firmware provides its own).
-//   Contract (code-std.md §6): report over the debug
+//   Contract (code-std-cpp.md#5-error-handling): report over the debug
 //   transport if the platform has one, then stop the §4 keep-alive
 //   strobe so the charge-pump watchdog engages RX→TX bypass within
 //   ~0.5 ms — deliberate bypass-engage, never a hung loop. The hook
@@ -41,7 +41,7 @@
 //   artifact; a constexpr-violated contract is a compile error.
 //
 // if/else form, not do-while — cppcoreguidelines-avoid-do-while is in
-// the tidy set (code-std.md §9), matching KLEE_PROVE/FUZZ_PROVE.
+// the tidy set (code-std.md#3-enforcement-split), matching KLEE_PROVE/FUZZ_PROVE.
 
 #if defined(OPARROY_KLEE)
 extern "C" [[noreturn]] void klee_report_error(const char* file, int line, const char* message,

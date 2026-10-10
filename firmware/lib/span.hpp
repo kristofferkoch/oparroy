@@ -2,12 +2,12 @@
 
 // Span<T> — the read-only view type, the first cell of the foundation
 // library (DESIGN.md §8). std::span is outside the
-// freestanding header set (code-std.md §2), so we grow our own. Views
+// freestanding header set (code-std-cpp.md#1-language-and-toolchain), so we grow our own. Views
 // and buffers cross interfaces as Span, never as T* plus a separate
-// length (code-std.md §5).
+// length (code-std-cpp.md#4-memory-and-ownership).
 //
 // Bounds are carried, not checked: the defect class is owned by KLEE's
-// out-of-bounds detection and fuzzing (code-std.md §1), with the
+// out-of-bounds detection and fuzzing (code-std.md#1-philosophy), with the
 // foundation library's VERIFY adding the target-side hook. No silent
 // clamping — a wrong index must stay loud.
 

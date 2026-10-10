@@ -3,7 +3,7 @@
 // StaticVector<T, Capacity> — the std::array's variable-length sibling:
 // statically allocated, bounded at Capacity, with a live size in
 // [0, Capacity]. The fixed-capacity container spine of the foundation
-// library (DESIGN.md §8, code-std.md §5).
+// library (DESIGN.md §8, code-std-cpp.md#4-memory-and-ownership).
 //
 // Elements are stored as a plain T array, so T must be
 // default-constructible, copy-assignable, and trivially destructible —
@@ -13,8 +13,9 @@
 // std::construct_at. Relax to raw storage the day a
 // non-default-constructible consumer appears.
 //
-// Growth is explicit (code-std.md §5), in two flavors (§6's offensive
-// split): push_back is the contract — full means the caller mis-sized,
+// Growth is explicit (code-std-cpp.md#4-memory-and-ownership), in two
+// flavors (code-std-cpp.md#5-error-handling's offensive split):
+// push_back is the contract — full means the caller mis-sized,
 // a bug, so it VERIFYs and KLEE proves the trap unreachable;
 // try_push_back is for data-driven fills, where "full" is
 // environmental and the caller holds the policy — it returns

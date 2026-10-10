@@ -1052,7 +1052,7 @@ requested by function (`gpio.request("keepalive")`), pads bind late as
 refinement data (`gpio.bind(keepalive="PD3")`), and the one
 authoritative table feeds both consumers: `emit_pin_header` (the
 freestanding-C++ header — `constexpr` pads plus peripheral-channel
-constants, code-std.md §7 style) and `check_pin_map` (the §5
+constants, [code-std-cpp.md#6-constants-and-configuration](code-std-cpp.md#6-constants-and-configuration) style) and `check_pin_map` (the §5
 GPIO-budget check: the bound pad carries every used signal, one
 function per pad, reservations honored, requests + reservations inside
 the chip's GPIO count). Chip data (`Chip`/`Pad`) is datasheet-derived —
@@ -1339,13 +1339,14 @@ slot pools, `UNREACHABLE`, VERIFY's target personality
 (`-DOPARROY_TARGET` → `lib::verify_failed`, the §4 wiring point — the
 node firmware's hook definition lands with the node firmware), `lib::move`
 (`utility.hpp` — AK's spelling; `<utility>` stays outside the
-freestanding header set, code-std.md §2), and the StaticVector → `Span`
+freestanding header set, [code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain)), and the StaticVector → `Span`
 implicit conversion (the `std::vector` → `std::span` analog, AK's
 `Vector`/`operator Span` shape) (2026-09-28).
 `Error` is a bare `enum class` code, not AK's string-carrying class —
 widen to a payload-carrying class the day an error needs more than a
 code. Rule set: **project-owned** (decided
-2026-09-26) — `code-std.md` at the repo root, borrowing the
+2026-09-26) — `code-std.md` at the repo root (general rules linking
+the per-language standards, split 2026-10-10), borrowing the
 defect-preventing rules from JSF AV C++ / MISRA C++:2023 / AUTOSAR
 C++14 / CERT and dropping checker-driven superstition (single-exit,
 mandatory `default`, essential-type cast noise) that KLEE/fuzz/UBSan
@@ -1422,7 +1423,7 @@ Build reproducibility (2026-09-26): **bit-for-bit reproducible builds
 are a hard constraint** — same source tree + same `flake.lock` ⇒
 byte-identical artifacts, on any machine. The flake's pinned toolchains
 are the foundation; on top of it: no `__DATE__`/`__TIME__`/
-`__TIMESTAMP__` (code-std.md §2 — version identity comes from git,
+`__TIMESTAMP__` ([code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain) — version identity comes from git,
 matching §7's board-version rule), `-ffile-prefix-map`/
 `-fdebug-prefix-map` on every compile so no build paths leak into
 outputs, deterministic archive mode, content-derived linker build-id.

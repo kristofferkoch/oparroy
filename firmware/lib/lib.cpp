@@ -1,7 +1,7 @@
 // Translation unit for the header-only foundation library: keeps the
 // GCC cross build (rv32ec) and clang-tidy compiling every lib/ header,
 // and hosts the constexpr static_assert proofs of each cell
-// (code-std.md §11). TRY's runtime paths live in test_foundation.cpp —
+// (code-std.md#4-tests). TRY's runtime paths live in test_foundation.cpp —
 // a statement expression can't be constant-evaluated, so the macro is
 // proved on the host test runner instead.
 

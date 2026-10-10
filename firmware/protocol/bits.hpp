@@ -23,7 +23,7 @@ enum class Bit : uint8_t {
 
 // A fixed run of bits over a byte view — e.g. the telemetry a node
 // stamps into its slot (DESIGN.md §2). Fixed-capacity by construction
-// (code-std.md §5); bit_count ≤ 8 × bytes.size() is the contract,
+// (code-std-cpp.md#4-memory-and-ownership); bit_count ≤ 8 × bytes.size() is the contract,
 // checked by valid().
 struct BitSlice {
     lib::Span<const uint8_t> bytes;

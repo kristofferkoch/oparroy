@@ -12,8 +12,8 @@ extern "C" [[noreturn]] void klee_report_error(const char* file, int line, const
 
 // The proof statement: KLEE hunts for any path that reaches the error;
 // none found = proved. Every harness was watched failing before it
-// passed (red/green, code-std.md §11). if/else form, not do-while —
-// cppcoreguidelines-avoid-do-while is in the tidy set (code-std.md §9).
+// passed (red/green, code-std.md#4-tests). if/else form, not do-while —
+// cppcoreguidelines-avoid-do-while is in the tidy set (code-std.md#3-enforcement-split).
 #define KLEE_PROVE(condition)                                                                      \
     if (condition) {                                                                               \
     } else {                                                                                       \

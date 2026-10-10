@@ -6,7 +6,7 @@ The one authoritative table then feeds both consumers:
 
 - ``emit_pin_header`` — the freestanding-C++ header the firmware
   includes (``constexpr`` pads and peripheral-channel constants,
-  code-std.md §7 style);
+  code-std-cpp.md#6-constants-and-configuration style);
 - ``check_pin_map`` — the GPIO-budget check of DESIGN.md §5/§3 ("lands
   at ~16-17 of 18"): every request bound to a fitting pad, no pad
   serving two functions, reservations (SWIO) and the total count
@@ -381,11 +381,12 @@ def emit_pin_header(
     regenerate: str,
     title: str,
 ) -> str:
-    """Emit the pin map as a freestanding-C++ header (code-std.md §7).
+    """Emit the pin map as a freestanding-C++ header.
 
     ``constexpr`` throughout — the preprocessor is for includes
-    (code-std.md §7): one ``Pad`` constant per function plus
-    ``uint8_t`` channel constants for the used signals and the
+    (code-std-cpp.md#6-constants-and-configuration): one ``Pad``
+    constant per function plus ``uint8_t`` channel constants for the
+    used signals and the
     capture-supplied ``const`` entries. Emission is byte-identical
     across runs (no dates, no paths beyond the caller's ``source``)
     and requires a clean, fully bound map: the check's errors raise,

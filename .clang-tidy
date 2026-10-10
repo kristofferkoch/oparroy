@@ -1,19 +1,19 @@
 ---
 # oparroy static analysis — cherry-picked AUTOSAR/CERT/CppCoreGuidelines
-# surface (code-std.md §9). Warnings are errors; the deviations register
-# (code-std.md §10) is the authority for what we deliberately leave out.
+# surface (code-std.md#3-enforcement-split). Warnings are errors; the deviations register
+# (code-std-cpp.md#8-deviations-register) is the authority for what we deliberately leave out.
 # Checks: cherry-picked AUTOSAR/CERT/CppCoreGuidelines surface
-# (code-std.md §9). Disabled below: magic-number policing, cast noise,
+# (code-std.md#3-enforcement-split). Disabled below: magic-number policing, cast noise,
 # readability-identifier-length, trailing-return-type — see the
-# deviations register (code-std.md §10). Also disabled:
+# deviations register (code-std-cpp.md#8-deviations-register). Also disabled:
 # cppcoreguidelines-owning-memory (no GSL in freestanding code;
-# placement new over MMIO storage is our idiom, code-std.md §5, and
+# placement new over MMIO storage is our idiom, code-std-cpp.md#4-memory-and-ownership, and
 # this check insists on gsl::owner<>). Same GSL gap for the bounds
 # profile (pro-bounds-pointer-arithmetic / -array-to-pointer-decay):
 # the fix they demand is gsl::span, outside the freestanding header
 # set — our Span (firmware/lib/span.hpp) carries the bound at every
-# interface instead (code-std.md §5), and KLEE's out-of-bounds
-# detection plus fuzzing own the defect class (code-std.md §1).
+# interface instead (code-std-cpp.md#4-memory-and-ownership), and KLEE's out-of-bounds
+# detection plus fuzzing own the defect class (code-std.md#1-philosophy).
 Checks: >
   bugprone-*,
   cert-*,
@@ -39,7 +39,7 @@ WarningsAsErrors: '*'
 HeaderFilterRegex: '^firmware/'
 FormatStyle: file
 CheckOptions:
-  # code-std.md §8 naming: types PascalCase, functions/variables
+  # code-std-cpp.md#7-naming-and-layout naming: types PascalCase, functions/variables
   # snake_case, macros SHOUTY.
   readability-identifier-naming.ClassCase: CamelCase
   readability-identifier-naming.StructCase: CamelCase

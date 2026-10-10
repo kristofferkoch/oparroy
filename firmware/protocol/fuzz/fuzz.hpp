@@ -21,8 +21,8 @@
 // The fuzz-side proof statement, KLEE_PROVE's sibling: a violated
 // invariant traps, and the engine reports the input as a crash
 // artifact. A VERIFY-class macro — the blessed preprocessor use beyond
-// includes and guards (code-std.md §7). if/else form, not do-while —
-// cppcoreguidelines-avoid-do-while is in the tidy set (code-std.md §9).
+// includes and guards (code-std-cpp.md#6-constants-and-configuration). if/else form, not do-while —
+// cppcoreguidelines-avoid-do-while is in the tidy set (code-std.md#3-enforcement-split).
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define FUZZ_PROVE(condition)                                                                      \
     if (condition) {                                                                               \
@@ -34,7 +34,7 @@ namespace oparroy::fuzz {
 
 // Consuming view over the fuzzer input — the project-owned
 // FuzzedDataProvider, so harnesses need no libFuzzer headers
-// (code-std.md §2's freestanding subset). Reads past the end yield 0:
+// (code-std-cpp.md#1-language-and-toolchain's freestanding subset). Reads past the end yield 0:
 // a short input is a zero-padded one, never an error.
 class Cursor {
 public:
@@ -97,7 +97,7 @@ struct Event {
 
 // Shadow model of one node's view of the input stream — assertions
 // check this independent model, never the implementation under test
-// (code-std.md §11; the klee/garbage.cpp pattern). Written from the
+// (code-std.md#4-tests; the klee/garbage.cpp pattern). Written from the
 // contract (node.hpp, DESIGN.md §2): Hunt until the first break,
 // Forward with on-the-fly slot stamping, Mute after an illegal cell or
 // an over-long frame, resync on break.

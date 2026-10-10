@@ -3,10 +3,10 @@
 // IntRange<T> / irange() — integer ranges, the second cell of the
 // foundation library (DESIGN.md §8). The std::ranges::iota_view stand-in:
 // <ranges>/<iterator> are outside the freestanding header set
-// (code-std.md §2), so we grow just enough iterator for range-for.
+// (code-std-cpp.md#1-language-and-toolchain), so we grow just enough iterator for range-for.
 //
 // Boundary reasoning lives here, once, instead of at every
-// for (i = 0; i < n; ++i) site (code-std.md §3): the interval is
+// for (i = 0; i < n; ++i) site (code-std-cpp.md#2-control-flow): the interval is
 // half-open, iteration stops on pos == end, and ++ only runs while
 // pos != end — so incrementing past the type's max is unreachable, on
 // any integer width. An inverted or empty range is clamped to empty in

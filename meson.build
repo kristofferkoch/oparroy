@@ -18,7 +18,7 @@ project('oparroy', 'cpp',
   ],
 )
 
-# Freestanding flag set (code-std.md §2) — the single source, replacing
+# Freestanding flag set (code-std-cpp.md#1-language-and-toolchain) — the single source, replacing
 # scripts/freestanding-flags.sh. Meson targets get -std=c++23
 # -Wall -Wextra -Wpedantic -Werror from default_options above; custom
 # compiles (the KLEE bitcode targets in firmware/protocol) must compose
