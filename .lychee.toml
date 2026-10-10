@@ -11,5 +11,14 @@ exclude = [
 ]
 include_fragments = 'anchor-only'
 max_concurrency = 12
-max_retries = 1
+# Retry transient failures (5xx, 408, 429, timeouts) with exponential
+# backoff starting at retry_wait_time: 2s, 4s, 8s.
+max_retries = 3
+retry_wait_time = 2
+# Cache verified links in .lycheecache (persisted across CI runs via
+# actions/cache in .github/workflows/ci.yml). Only successes are cached —
+# errors are re-checked every run so fixed or flaky URLs never go sticky.
+cache = true
+max_cache_age = '1d'
+cache_exclude_status = ['400..=599']
 timeout = 10
