@@ -65,15 +65,15 @@ flattened result.
 ## 2. The equivalence proof
 
 A checker pass
-`check_equivalent(base_circuit, instrumented_circuit, plan)`
+`check_equivalent(base, instrumented, plan, *, reset_levels, budgets)`
 consumes the transform provenance (plus the plan's role declarations —
 which escaped port is a control, which a tap) and proves:
 
 1. **Series elements reduce to wires in reset state.** Every inserted
    series part has a declared default/pass-through state (switch
-   control pin at its reset level ⇒ channel closed). The pass
-   simulates the reset-state netlist reduction: each such part is
-   replaced by a net merge of its `#a`/`#b` sides; each shunt branch
+   control pin at its reset level ⇒ channel closed). The pass performs
+   the reset-state netlist reduction by provenance: each such part's
+   `#a`/`#b` sides merge back onto the base net; each shunt branch
    is absent. Reset state is
    read from the control plane's power-on state (74HC595 output
    registers power up low/high per datasheet — the shift-register

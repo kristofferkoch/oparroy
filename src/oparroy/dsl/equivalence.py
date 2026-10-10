@@ -155,14 +155,16 @@ def check_equivalent(
     flat = instrumented.flatten()
     issues: list[Issue] = []
     drop_nets, seen_levels = _check_reset_levels(flat, tiles, reset_levels, issues)
-    tap_nets = _declared_tap_nets(instrumented, tiles, issues)
-    residuals = _enumerate_residuals(flat, tiles, budgets, issues)
+    tap_names = _declared_tap_nets(instrumented, tiles, base_names, issues)
+    residuals = _enumerate_residuals(
+        flat, tiles, budgets, base_names=base_names, tap_names=tap_names, issues=issues
+    )
     _check_base_bijection(
         base_flat,
         flat,
         base_names=base_names,
         drop_nets=drop_nets,
-        tap_nets=tap_nets,
+        tap_nets=set(tap_names.values()),
         issues=issues,
     )
     issues.extend(
@@ -218,7 +220,13 @@ def _name_base_nets(
     prefix = "/".join(path)
     for name, net in circuit.nets.items():
         if net.is_port and name in connections:
-            out[(path, name)] = named[id(connections[name])]
+            # A bound port takes the parent net's name — and a deeper
+            # instance bound straight to this port resolves to the same
+            # name, so the port itself must be recorded too (flatten
+            # keeps bound ports in its nets map for the same reason).
+            flat_name = named[id(connections[name])]
+            out[(path, name)] = flat_name
+            named[id(net)] = flat_name
         else:
             flat_name = f"{prefix}/{name}" if prefix else name
             out[(path, name)] = flat_name
@@ -311,17 +319,29 @@ def _check_level(
 def _declared_tap_nets(
     board: Circuit,
     tiles: dict[tuple[str, ...], list[Transform]],
+    base_names: dict[tuple[tuple[str, ...], str], str],
     issues: list[Issue],
-) -> set[str]:
-    """Board-net names a declared ``AddTap`` legitimates extra pins on."""
-    taps: set[str] = set()
+) -> dict[tuple[tuple[str, ...], str], str]:
+    """Map each declared ``AddTap`` to the flattened base net it legitimates.
+
+    The bound net is looked up by the tap's full name first — the sides
+    of a split internal net (``sense#a``) bind under their literal
+    names — falling back to the ``#``-stripped name for a port-split
+    alias (``TX#b``, whose port keeps the unsuffixed name). A tagged
+    bound net (a tap on a tile-internal net) resolves through its
+    provenance to the base net's flattened name; an untagged one (a
+    tap on a port) is already a base net.
+    """
+    taps: dict[tuple[tuple[str, ...], str], str] = {}
     for path in sorted(tiles):
         inst: Instance = _lookup_instance(board, path)
         for transform in tiles[path]:
             if not isinstance(transform, AddTap):
                 continue
-            local = transform.net.split("#")[0]
+            local = transform.net
             bound = inst.connections.get(local)
+            if bound is None and "#" in local:
+                bound = inst.connections.get(local.split("#")[0])
             if bound is None:
                 issues.append(
                     _issue(
@@ -332,14 +352,48 @@ def _declared_tap_nets(
                     )
                 )
                 continue
-            taps.add(bound.name)
+            if bound.provenance is None:
+                taps[(path, transform.net)] = bound.name
+                continue
+            key = (path, bound.provenance.base.split("/")[-1])
+            name = base_names.get(key)
+            if name is None:
+                issues.append(
+                    _issue(
+                        f"transform {transform.label!r}: tap net "
+                        f"{bound.name!r} derives from "
+                        f"{bound.provenance.base!r}, which is not a "
+                        "base-capture net",
+                        bound.name,
+                    )
+                )
+                continue
+            taps[(path, transform.net)] = name
     return taps
 
 
-def _enumerate_residuals(
+def _residual_net(
+    path: tuple[str, ...],
+    net: str,
+    base_names: dict[tuple[tuple[str, ...], str], str],
+) -> str:
+    """Return the flattened base-net name a residual loads (``Residual.net``).
+
+    ``net`` is the transform's tile-local handle; a split side
+    (``TX#b``) loads the same base net as the net it was cut from. The
+    fallback covers a drifted capture — the bijection reports it.
+    """
+    local = net.split("#", maxsplit=1)[0]
+    return base_names.get((path, local), f"{'/'.join(path)}/{local}")
+
+
+def _enumerate_residuals(  # noqa: PLR0913 — the enumeration context threaded through
     flat: Circuit,
     tiles: dict[tuple[str, ...], list[Transform]],
     budgets: Mapping[str, str],
+    *,
+    base_names: dict[tuple[tuple[str, ...], str], str],
+    tap_names: Mapping[tuple[tuple[str, ...], str], str],
     issues: list[Issue],
 ) -> list[Residual]:
     """Emit the residual set; a residual without a budget citation errors."""
@@ -347,18 +401,20 @@ def _enumerate_residuals(
     for path in sorted(tiles):
         prefix = "/".join(path)
         for transform in tiles[path]:
-            base_net = f"{prefix}/{transform.net.split('#')[0]}"
             if isinstance(transform, AddTap):
-                residuals.append(
-                    Residual(
-                        base_net,
-                        TAP_CAPACITANCE,
-                        "stub geometry — bounded, not known (memo Q3)",
-                        budgets.get(TAP_CAPACITANCE),
-                        layout_obligation=True,
+                tap_net = tap_names.get((path, transform.net))
+                if tap_net is not None:
+                    residuals.append(
+                        Residual(
+                            tap_net,
+                            TAP_CAPACITANCE,
+                            "stub geometry — bounded, not known (memo Q3)",
+                            budgets.get(TAP_CAPACITANCE),
+                            layout_obligation=True,
+                        )
                     )
-                )
                 continue
+            base_net = _residual_net(path, transform.net, base_names)
             placed = flat.parts.get(f"{prefix}/{transform.part.ref}")
             if placed is None or placed.provenance is None:
                 issues.append(

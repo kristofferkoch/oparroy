@@ -292,7 +292,7 @@ def test_residual_without_a_budget_errors(symbols: StubSymbols) -> None:
         budgets=budgets,
     )
     assert any(
-        f"residual {SERIES_ON_RESISTANCE} on 'T0/TX' has no budget citation" in m
+        f"residual {SERIES_ON_RESISTANCE} on 'SEG' has no budget citation" in m
         for m in errors(report)
     )
 
@@ -440,3 +440,61 @@ def test_per_tile_composes_over_instances(symbols: StubSymbols) -> None:
         "T0/sense",
         "T1/sense",
     }
+
+
+def test_tap_on_split_internal_net_side(symbols: StubSymbols) -> None:
+    """A tap on the #a side of a split internal net reduces to the base net."""
+    cut = InsertSeries(
+        label="F9",
+        net="sense",
+        pins=("Rwd.a",),
+        part=TransformPart("FI9/SWS", StubSwitch(a="@b", b1="@a", s="@control")),
+        control="SCT",
+    )
+    tap = AddTap(label="B2", net="sense#a")
+    plan = [PerInstance(("T0",), (f1(), cut, tap))]
+    board = build_base(symbols)
+    handles = apply_transforms(board, plan)
+    board.part("PROBE", StubProbe(sense=handles[(("T0",), "sense#a")]))
+    levels: dict[tuple[tuple[str, ...], str], int] = {
+        (("T0",), "BRK"): 0,
+        (("T0",), "SCT"): 0,
+    }
+    report = check_equivalent(
+        build_base(symbols),
+        board,
+        plan,
+        reset_levels=levels,
+        budgets=BUDGETS,
+    )
+    assert errors(report) == []
+    tap_residual = next(r for r in report.residuals if r.kind == TAP_CAPACITANCE)
+    assert tap_residual.net == "T0/sense"
+
+
+def test_port_passthrough_chain_resolves(symbols: StubSymbols) -> None:
+    """A port wired straight through to a deeper instance resolves (flatten parity)."""
+
+    class Inner(Subcircuit):
+        def capture(self, circuit: Circuit) -> None:
+            vin = circuit.port("vin")
+            gnd = circuit.port("gnd")
+            circuit.part(
+                "Rin", Resistor("470", a=vin, b=gnd, footprint="StubFP:R_0603")
+            )
+
+    class Outer(Subcircuit):
+        def capture(self, circuit: Circuit) -> None:
+            vin = circuit.port("vin")
+            gnd = circuit.port("gnd")
+            circuit.instance("IN1", Inner(), vin=vin, gnd=gnd)
+
+    def build(symbols: StubSymbols) -> Circuit:
+        board = Circuit("base", symbols)
+        board.instance("T0", Outer(), vin=board.net("SIG"), gnd=board.net("GND"))
+        return board
+
+    report = check_equivalent(
+        build(symbols), build(symbols), [], reset_levels={}, budgets={}
+    )
+    assert errors(report) == []
