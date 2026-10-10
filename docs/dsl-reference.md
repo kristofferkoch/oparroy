@@ -206,7 +206,13 @@ Separate flow around the live board: `parse_board` → `Board`
 `LayoutRules` (stackup, net-class width/via, `AdjacencyRule`, keepouts,
 …; `BypassRule` is the §4 contract: pad whitelisting plus
 copper-geometry independence — no bypass segment/arc/via touches
-another net's copper on a shared layer) (`layout_check.py`). `PcbSpec`
+another net's copper on a shared layer). Placement contracts:
+`TerminalProtectionRule` (§7 checklist chains, derived from the capture
+by `terminal_protection_rules`), `FootprintSetRule` (one copper layer's
+footprints are exactly a refdes set — the B.Cu-connectors-only rule),
+`PartOverHoleRule` (a matching footprint carries an unconnected
+`np_thru_hole` pad within tolerance of its anchor — the reverse-mount
+LED over its routed hole) (`layout_check.py`). `PcbSpec`
 (`StackupLayer`, `NetClassSpec`, `BoardMinimums`, `Keepout`) feeds
 `emit_pcb` / `emit_project`, the constraint-skeleton emitters that seed
 a board (`pcb_emit.py`; `PcbSpecError`). `pcb_merge.py`

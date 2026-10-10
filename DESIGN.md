@@ -1242,13 +1242,20 @@ copper on a shared layer — and the §7 terminal-protection placement
 contracts (TVS adjacent to its connector, series R straddling the
 exposed net near the protected logic; `terminal_protection_rules`
 derives them from the capture, which names the parts, so the contract
-survives KiCad's geographic renumbering)), and `pcb_emit.py` (a
+survives KiCad's geographic renumbering), plus the §7 board-placement
+contracts: footprint-set equality (a copper layer's footprints are
+exactly a refdes set — B.Cu carries only the segment connectors) and
+part-over-hole (a matching footprint carries an unconnected
+`np_thru_hole` pad within tolerance of its anchor — each reverse-mount
+status LED over its routed hole, rotation-free since the pad offset is
+footprint-local)), and `pcb_emit.py` (a
 byte-identical skeleton emitter pushing constraints into pcbnew
 pre-audit; round-trips through the parser). Proven against
 `tests/fixtures/board_pass.kicad_pcb` and calibrated against
 `boards/node/`, where the bypass chain clears all other copper by the
-class clearance (0.3 mm) and all four terminal chains meet the
-placement contract. Not yet
+class clearance (0.3 mm), all four terminal chains meet the
+placement contract, B.Cu carries exactly J1/J2, and all four status
+LEDs sit over their holes. Not yet
 landed: serial
 box pad/silkscreen clearance (waits on footprint rotation modeling)
 and

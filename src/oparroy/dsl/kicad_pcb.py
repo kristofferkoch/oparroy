@@ -55,13 +55,17 @@ class Pad:
 
     ``at`` is footprint-local (the pad's ``at`` inside its footprint);
     footprint rotation is not modeled, so board-absolute pad positions
-    are not yet recoverable.
+    are not yet recoverable. ``size`` and ``drill`` read the pad's
+    ``(size x y)`` and ``(drill [oval] x [y])`` nodes — a round drill
+    repeats its diameter; ``None`` when the node is absent.
     """
 
     number: str
     kind: str
     at: Point
     net: str | None
+    size: Point | None = None
+    drill: Point | None = None
 
 
 @dataclass(frozen=True)
@@ -486,7 +490,27 @@ def _parse_pad(node: list[Sexp]) -> Pad:
         kind=_atom(node, 2) or "",
         at=_point(_child(node, "at")),
         net=_pad_net(net_node),
+        size=_size_point(_child(node, "size")),
+        drill=_drill_point(_child(node, "drill")),
     )
+
+
+def _size_point(node: list[Sexp] | None) -> Point | None:
+    """Read a ``(size x y)`` node; ``None`` when absent."""
+    if node is None:
+        return None
+    return Point(_float(node[1], "pad size"), _float(node[2], "pad size"))
+
+
+def _drill_point(node: list[Sexp] | None) -> Point | None:
+    """Read a ``(drill [oval] x [y])`` node; a round drill repeats x."""
+    if node is None:
+        return None
+    atoms = [item for item in node[1:] if isinstance(item, str) and item != "oval"]
+    if not atoms:
+        return None
+    x = _float(atoms[0], "pad drill")
+    return Point(x, _float(atoms[1], "pad drill") if len(atoms) > 1 else x)
 
 
 def _pad_net(net_node: list[Sexp] | None) -> str | None:
