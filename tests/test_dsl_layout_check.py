@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 
 from oparroy.dsl import (
     AdjacencyRule,
@@ -251,3 +252,146 @@ def test_bypass_touches_node_logic(board_pass: Board) -> None:
             "may carry it — no node logic in the bypass path (§4)"
         )
     ]
+
+
+def test_net_class_arc_width_violation() -> None:
+    board = parse_board(
+        "(kicad_pcb (layers)"
+        ' (setup (net_class "Default" "" (trace_width 0.5) (add_net "SIG")))'
+        ' (net 1 "SIG")'
+        " (arc (start 10 0) (mid 0 10) (end -10 0) (width 0.3)"
+        '  (layer "F.Cu") (net 1)))'
+    )
+    issues = check_layout(board, LayoutRules())
+    assert [i.message for i in issues] == [
+        "arc on net 'SIG' is 0.3 mm wide, net class 'Default' requires 0.5 mm"
+    ]
+
+
+def test_trace_budget_counts_arcs() -> None:
+    """Arc copper counts toward the net's trace-length budget."""
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "SIG")'
+        " (arc (start 10 0) (mid 0 10) (end -10 0) (width 0.25)"
+        '  (layer "F.Cu") (net 1)))'
+    )
+    rules = LayoutRules(trace_budgets_mm={"SIG": 30})
+    issues = check_layout(board, rules)
+    # Semicircle of radius 10: 10π ≈ 31.42 mm.
+    assert [i.message for i in issues] == [
+        "net 'SIG' routes 31.42 mm of copper, over the 30 mm budget"
+    ]
+
+
+def test_bypass_copper_crossing_segment() -> None:
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "BYPASS") (net 2 "SIG")'
+        ' (segment (start 0 0) (end 10 0) (width 0.4) (layer "F.Cu") (net 1))'
+        ' (segment (start 5 -1) (end 5 1) (width 0.25) (layer "F.Cu") (net 2)))'
+    )
+    rules = LayoutRules(bypass=(BypassRule(net="BYPASS", allowed_refs=()),))
+    issues = check_layout(board, rules)
+    assert [i.message for i in issues] == [
+        (
+            "bypass net 'BYPASS' shares copper with a segment on net 'SIG' "
+            "at (5.00, 0.00) on F.Cu — no node logic in the bypass path (§4)"
+        )
+    ]
+
+
+def test_bypass_copper_via_overlap() -> None:
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "BYPASS") (net 2 "GND")'
+        ' (segment (start 0 0) (end 10 0) (width 0.4) (layer "F.Cu") (net 1))'
+        ' (via (at 5 0.5) (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu") (net 2)))'
+    )
+    rules = LayoutRules(bypass=(BypassRule(net="BYPASS", allowed_refs=()),))
+    issues = check_layout(board, rules)
+    assert [i.message for i in issues] == [
+        (
+            "bypass net 'BYPASS' shares copper with a via on net 'GND' "
+            "at (5.00, 0.25) on F.Cu — no node logic in the bypass path (§4)"
+        )
+    ]
+
+
+def test_bypass_copper_via_on_other_layers_is_clean() -> None:
+    """A via overlaps the track only when they share a layer."""
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "BYPASS") (net 2 "GND")'
+        ' (segment (start 0 0) (end 10 0) (width 0.4) (layer "F.Cu") (net 1))'
+        ' (via (at 5 0) (size 0.8) (drill 0.4) (layers "In1.Cu" "In2.Cu")'
+        "  (net 2)))"
+    )
+    rules = LayoutRules(bypass=(BypassRule(net="BYPASS", allowed_refs=()),))
+    assert check_layout(board, rules) == []
+
+
+def test_bypass_copper_same_net_joints_are_clean() -> None:
+    """Same-net contact is ordinary connectivity, never flagged."""
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "BYPASS") (net 2 "GND")'
+        ' (segment (start 0 0) (end 10 0) (width 0.4) (layer "F.Cu") (net 1))'
+        ' (segment (start 5 -1) (end 5 1) (width 0.4) (layer "F.Cu") (net 1))'
+        ' (via (at 10 0) (size 0.8) (drill 0.4) (layers "F.Cu" "B.Cu") (net 1)))'
+    )
+    rules = LayoutRules(bypass=(BypassRule(net="BYPASS", allowed_refs=()),))
+    assert check_layout(board, rules) == []
+
+
+def test_bypass_copper_arc_crossing_segment() -> None:
+    """The bypass side is an arc; the chord polygonization still catches it."""
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "BYPASS") (net 2 "SIG")'
+        " (arc (start 10 0) (mid 0 10) (end -10 0) (width 0.4)"
+        '  (layer "F.Cu") (net 1))'
+        ' (segment (start 0 8) (end 0 12) (width 0.25) (layer "F.Cu") (net 2)))'
+    )
+    rules = LayoutRules(bypass=(BypassRule(net="BYPASS", allowed_refs=()),))
+    issues = check_layout(board, rules)
+    assert [i.message for i in issues] == [
+        (
+            "bypass net 'BYPASS' shares copper with a segment on net 'SIG' "
+            "at (0.00, 10.00) on F.Cu — no node logic in the bypass path (§4)"
+        )
+    ]
+
+
+def test_bypass_copper_segment_crossing_arc() -> None:
+    """The other net's arc is copper too: it counts against the bypass."""
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "BYPASS") (net 2 "SIG")'
+        ' (segment (start 0 8) (end 0 12) (width 0.4) (layer "F.Cu") (net 1))'
+        " (arc (start 10 0) (mid 0 10) (end -10 0) (width 0.25)"
+        '  (layer "F.Cu") (net 2)))'
+    )
+    rules = LayoutRules(bypass=(BypassRule(net="BYPASS", allowed_refs=()),))
+    issues = check_layout(board, rules)
+    assert [i.message for i in issues] == [
+        (
+            "bypass net 'BYPASS' shares copper with an arc on net 'SIG' "
+            "at (0.00, 10.00) on F.Cu — no node logic in the bypass path (§4)"
+        )
+    ]
+
+
+_NODE_BOARD = (
+    Path(__file__).parent.parent / "boards" / "node" / "oparroy-node.kicad_pcb"
+)
+
+
+def test_node_board_bypass_copper_is_independent() -> None:
+    """The calibration board: the §4 bypass route shares no copper.
+
+    The carriers are the bypass chain itself: the segment connectors,
+    the TVS diodes, the series resistors, and U2, the relaxed analog
+    switch (see design/node_board.py's net-class notes).
+    """
+    board = parse_board(_NODE_BOARD.read_text())
+    rules = LayoutRules(
+        bypass=tuple(
+            BypassRule(net=net, allowed_refs=(r"J\d+", r"D\d+", r"R\d+", "U2"))
+            for net in ("RX_A", "PHY1/txa_sw", "TX_A")
+        )
+    )
+    assert check_layout(board, rules) == []

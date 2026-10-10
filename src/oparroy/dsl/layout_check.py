@@ -23,13 +23,14 @@ from oparroy.dsl.kicad_pcb import Board, Edge, EdgeKind, Footprint, Point
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from oparroy.dsl.kicad_pcb import NetClass
+    from oparroy.dsl.kicad_pcb import ArcSegment, NetClass, Segment, Via
     from oparroy.dsl.kicad_pro import Project
 
 _EPSILON_MM = 1e-6
 _COLLINEAR_COSINE = -0.999
 _JUNCTION_LINE_COUNT = 2
 _MIN_POLYGON_POINTS = 3
+_ARC_SAGITTA_MM = 0.01
 
 
 @dataclass(frozen=True)
@@ -48,11 +49,13 @@ class AdjacencyRule:
 
 @dataclass(frozen=True)
 class BypassRule:
-    """Copper independence for a bypass net (§4): only whitelisted parts.
+    """Copper independence for a bypass net (§4): parts and copper.
 
+    Two halves of one §4 contract — "no firmware in the bypass path".
     Every pad carrying ``net`` must belong to a footprint whose refdes
-    full-matches one of ``allowed_refs`` — the physical embodiment of
-    "no firmware in the bypass path".
+    full-matches one of ``allowed_refs``, and no copper primitive on
+    ``net`` (segment, arc, via) may geometrically touch another net's
+    copper on a shared layer.
     """
 
     net: str
@@ -99,6 +102,7 @@ def check_layout(
     issues.extend(_check_adjacency(board, rules))
     issues.extend(_check_required_footprints(board, rules))
     issues.extend(_check_bypass(board, rules))
+    issues.extend(_check_bypass_copper(board, rules))
     return issues
 
 
@@ -168,6 +172,19 @@ def _check_net_class_compliance(board: Board, project: Project | None) -> list[I
                     f"{net_class.name!r} requires {net_class.via_dia_mm} mm"
                 )
             )
+    for arc in board.arcs:
+        net_class = net_class_of(arc.net)
+        if (
+            net_class is not None
+            and net_class.trace_width_mm is not None
+            and arc.width + _EPSILON_MM < net_class.trace_width_mm
+        ):
+            issues.extend(
+                _error(
+                    f"arc on net {arc.net!r} is {arc.width} mm wide, net class "
+                    f"{net_class.name!r} requires {net_class.trace_width_mm} mm"
+                )
+            )
     return issues
 
 
@@ -175,6 +192,8 @@ def _check_trace_budgets(board: Board, rules: LayoutRules) -> list[Issue]:
     lengths: dict[str, float] = {}
     for segment in board.segments:
         lengths[segment.net] = lengths.get(segment.net, 0.0) + segment.length
+    for arc in board.arcs:
+        lengths[arc.net] = lengths.get(arc.net, 0.0) + arc.length
     issues: list[Issue] = []
     for net in sorted(rules.trace_budgets_mm, key=natural_key):
         budget = rules.trace_budgets_mm[net]
@@ -411,6 +430,137 @@ def _check_bypass(board: Board, rules: LayoutRules) -> list[Issue]:
                 )
             )
     return issues
+
+
+@dataclass(frozen=True)
+class _Copper:
+    """One copper primitive as a capsule on one layer (``a == b``: a via)."""
+
+    a: Point
+    b: Point
+    radius: float
+    layer: str
+    net: str
+    kind: str
+    source: Segment | ArcSegment | Via
+
+
+def _check_bypass_copper(board: Board, rules: LayoutRules) -> list[Issue]:
+    """No bypass copper touches another net's copper (§4).
+
+    Tracks are capsules (centerline ± width/2), vias circles (size/2)
+    on each of their layers; arcs are polygonized into chords at a
+    fixed sagitta. Same-net contact is ordinary connectivity — only
+    different-net overlap or exact touch on a shared layer flags.
+    Zones and pads stay out of scope: a zone's parsed polygon is its
+    outline, not the poured copper with clearance cutouts (checking it
+    would flag every poured board), and pads lack board-absolute
+    positions because footprint rotation is not modeled.
+    """
+    if not rules.bypass:
+        return []
+    copper = _board_copper(board)
+    issues: list[Issue] = []
+    for rule in rules.bypass:
+        own = [piece for piece in copper if piece.net == rule.net]
+        others = [piece for piece in copper if piece.net != rule.net]
+        flagged: set[tuple[int, int]] = set()
+        for mine in own:
+            for other in others:
+                if mine.layer != other.layer:
+                    continue
+                pair = (id(mine.source), id(other.source))
+                if pair in flagged:
+                    continue
+                gap, at = _capsule_contact(mine, other)
+                if gap <= _EPSILON_MM:
+                    flagged.add(pair)
+                    article = "an" if other.kind == "arc" else "a"
+                    issues.extend(
+                        _error(
+                            f"bypass net {rule.net!r} shares copper with "
+                            f"{article} {other.kind} on net {other.net!r} at "
+                            f"({at.x:.2f}, {at.y:.2f}) on {mine.layer} — "
+                            "no node logic in the bypass path (§4)"
+                        )
+                    )
+    return issues
+
+
+def _board_copper(board: Board) -> list[_Copper]:
+    return (
+        [
+            _Copper(
+                segment.start,
+                segment.end,
+                segment.width / 2,
+                segment.layer,
+                segment.net,
+                "segment",
+                segment,
+            )
+            for segment in board.segments
+        ]
+        + [
+            _Copper(a, b, arc.width / 2, arc.layer, arc.net, "arc", arc)
+            for arc in board.arcs
+            for a, b in arc.chords(_ARC_SAGITTA_MM)
+        ]
+        + [
+            _Copper(via.at, via.at, via.size / 2, layer, via.net, "via", via)
+            for via in board.vias
+            for layer in via.layers
+        ]
+    )
+
+
+def _capsule_contact(first: _Copper, second: _Copper) -> tuple[float, Point]:
+    """Centerline gap (radii subtracted) and the closest pair's midpoint."""
+    hit = (
+        None
+        if first.a == first.b or second.a == second.b
+        else _segment_intersection_point(first.a, first.b, second.a, second.b)
+    )
+    if hit is not None:
+        near_first = near_second = hit
+    else:
+        candidates = [
+            (end, _closest_on_segment(end, second.a, second.b))
+            for end in (first.a, first.b)
+        ] + [
+            (_closest_on_segment(end, first.a, first.b), end)
+            for end in (second.a, second.b)
+        ]
+        near_first, near_second = min(
+            candidates, key=lambda pair: pair[0].distance(pair[1])
+        )
+    at = Point((near_first.x + near_second.x) / 2, (near_first.y + near_second.y) / 2)
+    return near_first.distance(near_second) - first.radius - second.radius, at
+
+
+def _closest_on_segment(p: Point, a: Point, b: Point) -> Point:
+    """Return the closest point to ``p`` on segment a-b (``a == b``: a point)."""
+    dx, dy = b.x - a.x, b.y - a.y
+    length2 = dx * dx + dy * dy
+    if length2 < _EPSILON_MM:
+        return a
+    t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2
+    t = max(0.0, min(1.0, t))
+    return Point(a.x + t * dx, a.y + t * dy)
+
+
+def _segment_intersection_point(
+    p1: Point, p2: Point, p3: Point, p4: Point
+) -> Point | None:
+    """Return the crossing point of two segments; None when they don't cross."""
+    d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
+    if abs(d) < _EPSILON_MM:
+        return None
+    t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d
+    u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d
+    if -_EPSILON_MM <= t <= 1 + _EPSILON_MM and -_EPSILON_MM <= u <= 1 + _EPSILON_MM:
+        return Point(p1.x + t * (p2.x - p1.x), p1.y + t * (p2.y - p1.y))
+    return None
 
 
 def _ref_matches(board: Board, pattern: str) -> list[Footprint]:

@@ -81,6 +81,7 @@ from oparroy.dsl.ir import (
 )
 from oparroy.dsl.kicad_emit import emit_netlist
 from oparroy.dsl.kicad_pcb import (
+    ArcSegment,
     Board,
     Edge,
     EdgeKind,
@@ -171,6 +172,7 @@ __all__ = [
     "AdjacencyRule",
     "Annotation",
     "AnnotationError",
+    "ArcSegment",
     "Bat54adw",
     "Bat54s",
     "Board",

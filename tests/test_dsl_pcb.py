@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from oparroy.dsl import Board, EdgeKind, PcbError, Point, parse_board
@@ -11,6 +13,7 @@ _THICKNESS_MM = 1.6
 _DEFAULT_CLEARANCE_MM = 0.2
 _DEFAULT_WIDTH_MM = 0.25
 _BYPASS_WIDTH_MM = 0.5
+_ARC_WIDTH_MM = 0.4
 _VIA_SIZE_MM = 0.8
 _MOUNTING_HOLES = 4
 
@@ -91,6 +94,48 @@ def test_segments_resolve_net_codes(board_pass: Board) -> None:
     bypass_length = sum(seg.length for seg in by_net["BYPASS"])
     assert bypass_length == pytest.approx(26.0)
     assert all(seg.width == _BYPASS_WIDTH_MM for seg in by_net["BYPASS"])
+
+
+def test_arc_track_numbered_net() -> None:
+    """Copper arc tracks (board-level ``arc``, not ``gr_arc``) parse."""
+    board = parse_board(
+        '(kicad_pcb (layers) (net 1 "BYPASS")'
+        " (arc (start 10 0) (mid 7.071067812 7.071067812) (end 0 10)"
+        '  (width 0.4) (layer "F.Cu") (net 1)))'
+    )
+    assert len(board.arcs) == 1
+    arc = board.arcs[0]
+    assert arc.net == "BYPASS"
+    assert arc.width == _ARC_WIDTH_MM
+    assert arc.layer == "F.Cu"
+    assert arc.start == Point(10, 0)
+    assert arc.mid == Point(7.071067812, 7.071067812)
+    assert arc.end == Point(0, 10)
+    # Quarter circle of radius 10: 10 * π/2.
+    assert arc.length == pytest.approx(5 * math.pi)
+
+
+def test_arc_track_kicad10_named_net() -> None:
+    """KiCad 10's native format (20260206): the arc's net name is inline."""
+    board = parse_board(
+        '(kicad_pcb (version 20260206) (generator "pcbnew") (layers)'
+        " (arc (start 10 0) (mid 0 10) (end -10 0) (width 0.4)"
+        '  (layer "F.Cu") (net "BYPASS") (uuid "26b8a8c4-2af1-45bd")))'
+    )
+    assert len(board.arcs) == 1
+    assert board.arcs[0].net == "BYPASS"
+    # Semicircle of radius 10: 10 * π.
+    assert board.arcs[0].length == pytest.approx(10 * math.pi)
+
+
+def test_arc_track_degenerate_is_polyline_length() -> None:
+    """A collinear arc has no circumcircle: the polyline length."""
+    board = parse_board(
+        "(kicad_pcb (layers)"
+        " (arc (start 0 0) (mid 3 4) (end 6 8) (width 0.4)"
+        '  (layer "F.Cu") (net "SIG")))'
+    )
+    assert board.arcs[0].length == pytest.approx(10.0)
 
 
 def test_vias(board_pass: Board) -> None:
