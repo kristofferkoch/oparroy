@@ -12,3 +12,6 @@
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+
+# lychee link-check cache (.lychee.toml `cache = true`)
+/.lycheecache

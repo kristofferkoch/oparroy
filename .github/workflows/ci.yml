@@ -132,7 +132,21 @@ jobs:
           name: oparroy
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+      # lychee's link-check cache (.lychee.toml): only verified-good URLs
+      # are stored, so a warm cache keeps transient remote errors from
+      # failing links a PR never touched. PRs restore main's cache via
+      # restore-keys; lychee discards entries older than max_cache_age.
+      - uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: lychee-${{ runner.os }}-${{ github.ref }}
+          restore-keys: lychee-${{ runner.os }}-
+
+      # GITHUB_TOKEN: lychee checks github.com links via the REST API
+      # instead of unauthenticated HTML hits (rate-limit/load-shed flakes).
       - run: nix develop -c pre-commit run --all-files --show-diff-on-failure
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Aggregate the parallel gates into the single required context
   # branch protection and Mergify key on. if: always() so a failed
