@@ -10,7 +10,7 @@ is tolerant: keys the model does not need (GUI settings, plot
 parameters, …) are ignored, and net→class assignments read in both the
 emitter's scalar form (net-settings meta version 3) and KiCad 10's
 native list form (version 5 — what a KiCad re-save writes, verified
-against 10.0.6 on 2026-10-04).
+against 10.0.6).
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def _mapping(value: object, what: str) -> Mapping[str, object]:
 def _assignment(value: object) -> str:
     # KiCad 10's native net settings (meta version 5) write each net's
     # classes as a list; the first entry is the effective class
-    # (verified against 10.0.6 on 2026-10-04). The emitter's own seed
+    # (verified against 10.0.6). The emitter's own seed
     # (version 3) writes a scalar.
     if isinstance(value, list):
         if not value:

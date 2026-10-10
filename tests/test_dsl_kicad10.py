@@ -57,7 +57,7 @@ def test_kicad_drc_enforces_the_spec(tmp_path: Path) -> None:
     # 0.05 mm edge-to-edge against the class's 0.3 mm clearance, and
     # 0.05 mm wide against the 0.1 mm board minimum. A footprint pad
     # 0.075 mm off an NPTH edge violates the 0.15 mm hole-clearance
-    # floor (the part-over-hole decision, 2026-10-04) — holes are only
+    # floor (the part-over-hole decision) — holes are only
     # checked against pads, not tracks, and only when the pad carries
     # a net.
     violating = (

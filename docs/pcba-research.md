@@ -1,4 +1,4 @@
-# PCBA research — 2026-09-26
+# PCBA research
 
 Input to DESIGN.md §6; feeds the DSL parts DB's
 assembler-stock field (§7). Compiled by research agents; sources cited

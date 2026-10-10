@@ -25,22 +25,22 @@ infrastructure, by contrast, may cost freely.
 
 ## Hardware direction
 
-- **Node MCU: CH32V003F4P6** (decided 2026-09-26) — 48 MHz
+- **Node MCU: CH32V003F4P6** — 48 MHz
   RV32EC in TSSOP-20, on-chip comparator routable to timer capture,
   ~$0.14 @4k. Clocked from the factory-trimmed internal HSI — no
   crystal; the ratio-metric PHY makes absolute clock accuracy
   irrelevant. Rationale:
-  [docs/mcu-research-2026-09-26.md](docs/mcu-research-2026-09-26.md);
+  [docs/mcu-research.md](docs/mcu-research.md);
   extracted part facts: `datasheets/CH32V003/notes/`.
 - **Supervisor: RP2040** — its PIO is the re-timing PHY engine and
   golden-reference transceiver; on the test board its PIO also runs as
   a logic analyzer on the instrumented boundary node ([DESIGN.md §6](DESIGN.md#6-test-board)).
-- **PHY** (decided 2026-09-26): WS2812-compatible duty-coded
+- **PHY**: WS2812-compatible duty-coded
   PWM cells with ratio-metric decode at an 800 kbit/s anchor,
   comparator RX + DMA, per-bit cut-through re-timing, positional
   addressing, and the frame gap as a ring-wide vsync latch
   ([DESIGN.md §2](DESIGN.md#2-physical-layer); analysis:
-  [docs/phy-analysis-2026-09-26.md](docs/phy-analysis-2026-09-26.md)).
+  [docs/phy-analysis.md](docs/phy-analysis.md)).
 - **Segment interconnect** ([DESIGN.md §2.1](DESIGN.md#21-ring-power-rail), [§3](DESIGN.md#3-ring-topology-and-bypass)): 2x5-pin IDC
   connectors (2.54 mm box headers on 3M 3365/10 ribbon) carry both
   counter-rotating data rings plus power — a single 3.3 V
@@ -48,11 +48,11 @@ infrastructure, by contrast, may cost freely.
   5–18 V rail for payloads with their own buck. On 3M 3365 ribbon,
   segments reach **10 m unamplified**; the 470 Ω TX series resistor,
   not the cable, sets the limit (simulation:
-  [docs/cable-reach-2026-09-28.md](docs/cable-reach-2026-09-28.md)).
+  [docs/cable-reach.md](docs/cable-reach.md)).
 - **Node I/O**: potmeter, buttons/matrix, capacitive touch, I2C
   accelerometer, LEDs, buzzer — nodes are smart peripherals serving
   cooked data (Bela/Trill pattern, see
-  [docs/bela-lessons-2026-09-26.md](docs/bela-lessons-2026-09-26.md)).
+  [docs/bela-lessons.md](docs/bela-lessons.md)).
 - **Test board**: 8 ring nodes + supervisor, full fault injection
   (per-segment open/short, per-node power cut, keep-alive cut), everything
   scriptable for hands-off hardware-in-the-loop testing. Doubles as
@@ -60,7 +60,7 @@ infrastructure, by contrast, may cost freely.
   (potentiometer, buttons, LEDs, buzzer), each input overridable by
   the supervisor so scripted runs stay hands-off ([DESIGN.md §6](DESIGN.md#6-test-board)).
   4-layer, self-documenting silkscreen. Prototypes assembled by
-  **JLCPCB Economic PCBA** (decided 2026-09-26); part
+  **JLCPCB Economic PCBA**; part
   selection is inventory-driven — minimize unique Extended BOM lines.
 
 ## Firmware direction

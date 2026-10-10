@@ -50,8 +50,8 @@ ______________________________________________________________________
 ## Next
 
 - **T19 — DSL layout property checker, remaining checks.** First slice
-  landed 2026-09-28: `.kicad_pcb` parser, the `LayoutRules` contract
-  with the first check set (stackup, net-class width/via, trace
+  landed: `.kicad_pcb` parser, the `LayoutRules` contract with the
+  first check set (stackup, net-class width/via, trace
   budgets, corner radius, silkscreen ID fields, serial-box area,
   mounting holes + keepouts, adjacency/presence, bypass pad
   whitelisting), and the constraint-skeleton emitter (DESIGN.md §7).
@@ -66,17 +66,16 @@ ______________________________________________________________________
   TVS and µC pin — needs the node capture (`design/node.py`) to name
   the parts); **footprint-set equality** (the B.Cu footprint set is
   exactly the segment connectors) and **part-over-hole** (each
-  reverse-mount status LED over its routed hole) — the §7 contracts
-  added 2026-09-29; **channelization hook** (per-instance layout
+  reverse-mount status LED over its routed hole) — the §7 contracts;
+  **channelization hook** (per-instance layout
   replication keyed on T7ba sheetpath metadata, meaningless until a
   hierarchical board exists); **pcbnew ingest validation** of the
   emitted skeleton (real KiCad round trip — the node board was the
-  first, 2026-10-04). Promoted to Next 2026-10-05: the calibration
-  board exists.
+  first). Promoted to Next: the calibration board exists.
   **Blocked by:** — · **Unblocks:** T10
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
-  in PR #17 review, 2026-09-28): `TEST_CASE`/`EXPECT` macros over a
-  tiny report hook — failure index as exit code freestanding,
+  in PR #17 review): `TEST_CASE`/`EXPECT` macros over a tiny report
+  hook — failure index as exit code freestanding,
   `write(2)` + manual itoa on host, so no hosted header enters the
   tree ([code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain)) and tests keep compiling against the shipped
   freestanding configuration (T16e's test-what-ships doctrine).
@@ -92,8 +91,8 @@ ______________________________________________________________________
   C++ side. The report hook takes the same
   wiring-point shape as `lib::verify_failed`: target-side reporting
   over the debug transport lands with T11/T12. Lands before T11 so
-  firmware v0 is written as named cases from day one, not ported later
-  (2026-10-04 ordering decision). **Blocked by:** — ·
+  firmware v0 is written as named cases from day one, not ported
+  later. **Blocked by:** — ·
   **Unblocks:** —
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
@@ -104,23 +103,21 @@ ______________________________________________________________________
   rule.
   Developed inside the verification harness (T16b–e) from the first
   commit — no hardware needed, so it runs in parallel with the board
-  track (promoted to Next 2026-10-04). First consumer of the T9 pin
-  map: wire `firmware/node/pins.hpp` regeneration into meson as a
-  `custom_target()` (a documented manual step since 2026-09-28 —
-  `python -m design.node_pins > firmware/node/pins.hpp`, drift caught
-  by the golden + firmware-copy tests). Trill pattern
-  (docs/bela-lessons-2026-09-26.md §2): aim for
+  track (promoted to Next). First consumer of the T9 pin map: wire
+  `firmware/node/pins.hpp` regeneration into meson as a
+  `custom_target()` (a documented manual step — `python -m design.node_pins > firmware/node/pins.hpp`, drift caught by the
+  golden + firmware-copy tests). Trill pattern
+  (docs/bela-lessons.md §2): aim for
   **one firmware image, personality by node-type ID** — a single HIL
   target. Defines `lib::verify_failed`, the §4 VERIFY failure hook
-  whose wiring point T18 landed (2026-09-28): report over the debug
-  transport, then stop the keep-alive strobe so the charge-pump
-  watchdog engages RX→TX bypass. Programmer tooling (minichlink-class)
-  joins the flake alongside the firmware (§6, 2026-09-29).
+  whose wiring point T18 landed: report over the debug transport, then
+  stop the keep-alive strobe so the charge-pump watchdog engages RX→TX
+  bypass. Programmer tooling (minichlink-class) joins the flake
+  alongside the firmware (§6).
   **Blocked by:** — ·
   **Unblocks:** T12, T13
 - **T31 — CI scan control/observe plane.** *Shape: design.* Split out
-  of the instrumented-CI design work (2026-09-30). Settles the §6
-  (2026-09-29) shift-register
+  of the instrumented-CI design work. Settles the §6 shift-register
   plane as its own design: 74HC595-class control stages and
   74HC165-class observe stages in one daisy chain under a global
   latch/capture clock; chain partitioning (per-tile slices vs
@@ -130,23 +127,23 @@ ______________________________________________________________________
   bit (§6); and **power-on reset levels** — every control bit's POR
   state must reduce the instrumented board to the plain board, and
   these levels are the reset-state equivalence proof's inputs
-  (`src/oparroy/dsl/equivalence.py`, landed 2026-10-10). Also the analog-mux hierarchy the chain drives: the
-  fault-injection muxes, the SWIO flash mux
-  (§6, 2026-09-29), and the pot-wiper override muxes (§6 dual role).
+  (`src/oparroy/dsl/equivalence.py`). Also the analog-mux hierarchy
+  the chain drives: the fault-injection muxes, the SWIO flash mux
+  (§6), and the pot-wiper override muxes (§6 dual role).
   The architecture stands alone — 595/165 classes, chain topology,
   POR-level philosophy need nothing from the node design; the bit
   inventory finalizes against the settled instrumented design
-  (`docs/instrumented-ci-2026-10-05.md`: 77 control bits + SWIO mux
+  (`docs/instrumented-ci.md`: 77 control bits + SWIO mux
   select, the bit-0-is-plain-board POR invariant, 16 observe bits
   requested). **Blocked by:** — ·
   **Unblocks:** T10
 - **T35 — CI board power: USB-C inlet and 3.3 V rail.** DSL capture of
-  the board's power tree (§6, 2026-09-30): one USB-C receptacle is
+  the board's power tree (§6): one USB-C receptacle is
   both power inlet and host link — CC sink pull-downs (5.1 kΩ Rd ×2,
   no PD, 5 V only), 5 V distribution, and a **3.3 V regulator**
   feeding the ring rail (§2.1) and all board logic: 8 tiles through
   the per-node power-cut switches (the settled fault complement slots
-  in downstream of the rail — `docs/instrumented-ci-2026-10-05.md`),
+  in downstream of the rail — `docs/instrumented-ci.md`),
   RP2040, and the scan plane. Power budget
   against baseline USB-C 5 V delivery: tiles at tens of mA each
   (§2.1), RP2040, fault/scan logic. Regulator and connector are
@@ -157,8 +154,8 @@ ______________________________________________________________________
   supervisor: RP2040 minimal system — QSPI flash, 12 MHz crystal (§5:
   the supervisor keeps its crystal for USB), decoupling, boot/reset —
   with D+/D− from the board's single USB-C receptacle (shared with
-  power, §6 2026-09-30). Carries the GPIO/PIO budget: the SWIO flash
-  channel and its mux select (§6, 2026-09-29), the boundary node's
+  power, §6). Carries the GPIO/PIO budget: the SWIO flash channel and
+  its mux select (§6), the boundary node's
   four taps (RX, TX, comparator-out, working-LED — §6), scan-chain
   clock/data/latch (T31), and whatever the debug-transport decision
   (§9) adds — capture proceeds with those pins reserved, the budget
@@ -179,7 +176,7 @@ ______________________________________________________________________
   supervisor and its PIO roles (T30), the scan control/observe chain
   and the mux hierarchy it drives (T31), the eight node tiles with
   their fault-injection complement (settled:
-  `docs/instrumented-ci-2026-10-05.md`), the instrumented boundary
+  `docs/instrumented-ci.md`), the instrumented boundary
   node's tap set (§6), and the human-I/O override paths (§6 dual
   role). Mermaid in `docs/` so it diffs and reviews like the rest of
   the planning docs. Drawn from §6 prose as a first pass — it is the
@@ -190,8 +187,8 @@ ______________________________________________________________________
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
   `circuits/watchdog-supervisor/` in the DSL — the charge pump's
-  capture landed with T7d (2026-09-28) and its three benches already
-  run unmodified against the DSL emission — with equivalence tests:
+  capture landed with T7d and its three benches already run unmodified
+  against the DSL emission — with equivalence tests:
   the existing benches run against the DSL-emitted netlists and
   reproduce the measured numbers recorded in DESIGN.md §2/§4. Needs
   spice bindings beyond T7d's R/C/BAT54S set: external-subckt
@@ -200,8 +197,8 @@ ______________________________________________________________________
   hand-written includes. On shipping, the hand-written DUT `.cir`
   files retire — the DSL becomes the single source of truth (§7), not
   a second copy of it. Lands before T10 generates new captures, so the
-  equivalence pattern is settled before it multiplies (2026-10-04
-  ordering decision). **Blocked by:** — · **Unblocks:** —
+  equivalence pattern is settled before it multiplies.
+  **Blocked by:** — · **Unblocks:** —
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
@@ -210,8 +207,8 @@ ______________________________________________________________________
   met by any pair from a bin) and reporting the achieved error of the
   chosen values against the spec. Widens `Part.value` from `str` to a
   value-spec type (DESIGN.md §7). Generalizes to **ranges as the
-  universal value spec** and **generators** (PolymorphicBlocks steal,
-  2026-09-27): a solve pass between capture and check (capture → solve
+  universal value spec** and **generators** (PolymorphicBlocks
+  steal): a solve pass between capture and check (capture → solve
   → check → emit) where a subcircuit computes its own part values from
   context — the LED sizes its resistor from the actual rail voltage.
   Solving stays a pass over the finished IR, never tangled into
@@ -219,31 +216,30 @@ ______________________________________________________________________
   interleaving is the anti-pattern). **Blocked by:** — ·
   **Unblocks:** —
 - **T22b — Node board fab.** *Shape: chore — needs a human.* Split
-  from T22 (2026-10-04): everything past the settled design. BAT54S
-  verified 2026-10-04: KEXIN C369929, Extended tier, 1,181 in stock at
+  from T22: everything past the settled design. BAT54S verified
+  2026-10-04: KEXIN C369929, Extended tier, 1,181 in stock at
   $0.0158 @1 — the parts DB now binds it (`design/parts_db.py`); the
   never-queried TWGMC C727126 listing is dropped. Remaining: re-check
-  C22385222 header stock before ordering (buy-ahead deferred
-  2026-09-29); the node board's silkscreen nudges and JLCPCB's
-  NPTH-to-copper capability check at quote time (fab-prep leftovers
-  inherited from the node-board design, settled 2026-10-05 — the
-  board's remaining small DRC warnings stay deliberately unfixed
-  until then), then fab via JLCPCB (§6): assemble 2, the minimum;
-  blanks hand-solderable. Fabs **second**, after the T10 CI board
-  (2026-09-30 decision): the CI board's eight tiles are the first
+  C22385222 header stock before ordering (buy-ahead deferred); the
+  node board's silkscreen nudges and JLCPCB's NPTH-to-copper
+  capability check at quote time (fab-prep leftovers inherited from
+  the node-board design — the board's remaining small DRC warnings
+  stay deliberately unfixed until then), then fab via JLCPCB (§6):
+  assemble 2, the minimum; blanks hand-solderable. Fabs **second**,
+  after the T10 CI board: the CI board's eight tiles are the first
   bench articles. **Blocked by:** — · **Unblocks:** —
 - **T32 — Supervisor firmware (RP2040).** The RP2040 image that makes
   the CI board scriptable: USB CDC command channel to the host (the
   T12 harness is its client); the PIO SWIO flash engine — pipelined
-  round-robin through the flash mux, ≈1.6 s for all 8 nodes (§6,
-  2026-09-29); the scan-chain driver — shift/latch primitives plus the
+  round-robin through the flash mux, ≈1.6 s for all 8 nodes (§6); the
+  scan-chain driver — shift/latch primitives plus the
   reset-state load at boot (T31's POR levels); and PIO logic-analyzer
   capture + glitch stimulus on the boundary node's taps (§6).
   Developed against a stock Pico-class board from the first commit —
   the PIO programs and scan driver are board-agnostic — so it does not
   wait for T10 hardware. **Blocked by:** — · **Unblocks:** T12
 - **T8 — DSL constraint checking: board-level property checks.**
-  Partially shipped 2026-09-28: range-carrying typed ports, the per-net
+  Partially shipped: range-carrying typed ports, the per-net
   interval-containment check, and waivers-as-data are landed
   (DESIGN.md §7). Remaining: **bypass-path continuity under
   single-fault models** and **watchdog default-state assertions** —
@@ -251,26 +247,26 @@ ______________________________________________________________________
   supervisor) that only the node-board capture provides. Also
   **pin/part-level ranges**: a regulator's output range, an MCU pin's
   input range — declarations fed by the T7c parts DB, extending ranges
-  beyond scalar ports (port arrays, bundles). Promoted to Next
-  2026-10-05: the node-board capture it inspects has landed.
+  beyond scalar ports (port arrays, bundles). Promoted to Next: the
+  node-board capture it inspects has landed.
   **Blocked by:** — · **Unblocks:** —
 - **T27 — Node programming jig.** The bench deliverable of the §6
-  programming flow (2026-09-29): a pogo jig targeting the node board's
+  programming flow: a pogo jig targeting the node board's
   TP1/TP2/TP3 (SWIO/3V3/GND) strip, a WCH-LinkE driving — **the probe
   powers the board**, jig 3V3 never from the ring (brick recovery is a
   power cycle through reset, quirks). Flashes the single node image
   plus the personality type byte where a board carries one; reads the
   factory UNIID at flash time and logs it against the handwritten
   unit serial (§7 checklist). Bela lesson
-  (docs/bela-lessons-2026-09-26.md §5): the test rig is a first-class
+  (docs/bela-lessons.md §5): the test rig is a first-class
   deliverable with its own schedule risk — budget for it. Promoted to
-  Next 2026-10-05: the jig targets the landed node board.
+  Next: the jig targets the landed node board.
   **Blocked by:** — · **Unblocks:** —
 
 ## Backlog
 
-- **T7bd — DSL connection sugar.** Split out of T7b (2026-09-28); added
-  only as the flat style proves tedious: `chain()` over
+- **T7bd — DSL connection sugar.** Split out of T7b; added only as the
+  flat style proves tedious: `chain()` over
   `Input`/`Output`/`InOut`-tagged ports (the ring *is* a chain; `InOut`
   is the tapped RX-in-bypass semantics, §4) — requires port direction
   tags on T7ba's ports — named connections naming nets, a
@@ -279,7 +275,7 @@ ______________________________________________________________________
   by:** — · **Unblocks:** T26
 - **T26 — DSL review views: block + detail.** *Shape:
   implementation.* Follow-up of T21
-  (docs/prior-art-schematic-gen-2026-09-28.md — borrow the layout
+  (docs/prior-art-schematic-gen.md — borrow the layout
   engine, build only the view extraction, never build a
   placement/routing engine). **Block view first**: one box per
   subcircuit instance (`Part.path` carries the metadata), ports / port
@@ -311,18 +307,18 @@ ______________________________________________________________________
   ring segments (plus comparator-output and working-LED taps) wired to
   RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
   §6). Nodes tile the settled node-board design (`boards/node/`);
-  captured in the DSL, layout in KiCad. Bench-verify early with the §6 CI flash fan-out
-  (2026-09-29): deselected-port noise margin (per-node 10 kΩ
+  captured in the DSL, layout in KiCad. Bench-verify early with the §6
+  CI flash fan-out: deselected-port noise margin (per-node 10 kΩ
   pull-ups fitted) and SDI false-trigger recovery — a
   false-triggered node drives its own stub and must resync clean
   on reselect, before the control plane is committed.
-  Bela lesson (docs/bela-lessons-2026-09-26.md §5): the test rig is a
+  Bela lesson (docs/bela-lessons.md §5): the test rig is a
   first-class deliverable with its own schedule risk — budget for it,
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  Fabs **first**, ahead of the standalone node board (2026-09-30):
-  its eight tiles are the first bench articles for the §2/§4 claims.
-  Supervisor-side work splits out (2026-09-30): power inlet and 3.3 V
-  rail (T35), RP2040 subcircuit (T30), scan control/observe plane
+  Fabs **first**, ahead of the standalone node board: its eight tiles
+  are the first bench articles for the §2/§4 claims.
+  Supervisor-side work splits out: power inlet and 3.3 V rail (T35),
+  RP2040 subcircuit (T30), scan control/observe plane
   (T31), debug-transport decision (T33); the supervisor image itself
   is T32.
   **Blocked by:** T19, T30, T31, T33, T35 ·
@@ -333,8 +329,8 @@ ______________________________________________________________________
   T32 ·
   **Unblocks:** —
 - **T15 — Cable reach: bench confirmation and §2 adoption.** *Shape:
-  research.* Sim half landed 2026-09-28
-  (`docs/cable-reach-2026-09-28.md`): 10 m per segment on 3M 3365
+  research.* Sim half landed (`docs/cable-reach.md`): 10 m per segment
+  on 3M 3365
   ribbon with the §7 470 Ω protection, the 470 Ω TX series R (not the
   cable) sets the limit, analog re-slice repeaters *reduce* reach,
   power (not signal) binds under a connector break. Remaining:
@@ -349,10 +345,10 @@ ______________________________________________________________________
   injection). **Blocked by:** T10 · **Unblocks:** —
 - **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
   re-route vs hardware auto-bypass vs both (DESIGN.md §3, §9).
-  **Postponed 2026-09-28:** the decision is unratifiable before the
+  **Postponed:** the decision is unratifiable before the
   substrate it polices exists — no frame format, no firmware
   prototype, no node schematic. PR #6's analysis
-  (`docs/intermittent-fault-strategy-2026-09-28.md`, on the retained
+  (`docs/intermittent-fault-strategy.md`, on the retained
   branch `t13-intermittent-fault-strategy`; PR closed unmerged) is
   the starting point on pickup: it recommends a layered split —
   protocol re-route with anti-flap hysteresis for segment faults, the

@@ -1,25 +1,24 @@
-# Instrumentation transforms & reset-state equivalence — design memo (2026-09-29)
+# Instrumentation transforms & reset-state equivalence — design memo
 
 The CI board is the node design plus injected controllability and
 observability (DESIGN.md §6: fault-injection muxes, supervisor-override
 muxes, sense taps, the instrumented boundary node's PIO taps). That
 makes it *dangerously different* from the plain node it is meant to
-exercise (raised 2026-09-27). Hand-maintaining two captures guarantees
-drift; this memo designs the alternative: instrumentation as an
+exercise. Hand-maintaining two captures guarantees drift; this memo
+designs the alternative: instrumentation as an
 **explicit transformation** of the uninstrumented capture, plus a
 checker pass that proves the instrumented board **in reset state** is
 equivalent to the plain board up to an enumerated, budgeted set of
 residuals. "Almost equivalent" is exactly that set.
 
-**Status (2026-10-10):** landed on main. The transform machinery
-shipped 2026-10-10 (`src/oparroy/dsl/transform.py`: four transform
-kinds, per-tile application, `Provenance` tags through flattening and
-renaming); the `check_equivalent` proof shipped the same day
-(`src/oparroy/dsl/equivalence.py`). §4 records all six decisions —
-Q3 and Q5 settled on pickup 2026-10-10. (Pre-landing history: an
-earlier PR closed unmerged 2026-09-29 while the two designs it relates
-— the standalone node board and the instrumented CI design — were
-still unsettled.)
+**Status:** landed on main. The transform machinery shipped
+(`src/oparroy/dsl/transform.py`: four transform kinds, per-tile
+application, `Provenance` tags through flattening and renaming); the
+`check_equivalent` proof shipped with it
+(`src/oparroy/dsl/equivalence.py`). §4 records all six decisions.
+(Pre-landing history: an earlier PR closed unmerged while the two
+designs it relates — the standalone node board and the instrumented CI
+design — were still unsettled.)
 
 ## 1. Transform representation
 
@@ -57,7 +56,7 @@ declared transform list. Two consequences:
   stays buildable and fab-able (the standalone node board) while the
   CI board is a strict superset produced mechanically.
 
-Decided (2026-09-29, §4 Q1): transforms are expressed against the
+Decided (§4 Q1): transforms are expressed against the
 **hierarchical** IR — per-tile, sheetpath-keyed, one declaration
 instruments all eight node tiles — and the proof runs on the
 flattened result.
@@ -116,7 +115,7 @@ already exist for the exceptional case.
 
 ## 4. Decisions and open questions
 
-Decided 2026-09-29 (four calls taken before the card was re-blocked):
+Decided (four calls taken before the card was re-blocked):
 
 - **Q1 — Transform level: hierarchical, per-tile.** One transform
   declaration keyed on sheetpath metadata instruments all eight node
@@ -137,7 +136,7 @@ Decided 2026-09-29 (four calls taken before the card was re-blocked):
   requires the DSL composition to cover whole boards, connectors
   included.
 
-Settled on pickup 2026-10-10:
+Settled on pickup:
 
 - **Q3 — Residual magnitude source: split.** Electrical residuals
   (on-resistance, off-leakage, capacitance) are parts-DB attributes
@@ -155,7 +154,7 @@ Settled on pickup 2026-10-10:
 ## 5. The landed slice
 
 1. Transform records + provenance tags in `transform.py`, applied
-   per-tile between instantiation and check — landed 2026-10-10.
+   per-tile between instantiation and check.
 1. `check_equivalent()` in `equivalence.py` consuming the tags:
    reduction, bijection, residual enumeration. Budget citations as
    data on each residual; missing budget ⇒ error.

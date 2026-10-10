@@ -1,7 +1,7 @@
 """The §3 segment connector: the pinout as a bundle, the connector as a block.
 
 DESIGN.md §3 settles two 10-pin 2.54 mm 2x5 IDC box headers per node
-(2026-09-29, superseding the 2026-09-27 6-pin pinout) on 10-way 1.27
+(superseding the 6-pin pinout) on 10-way 1.27
 mm-pitch ribbon (3M 3365/10-class). The dual-row IDC straddle puts odd
 conductors in one connector row and even in the other, so the
 conductor order — UNREG, GND, 3V3, GND, A, GND, B, GND, 3V3, GND —

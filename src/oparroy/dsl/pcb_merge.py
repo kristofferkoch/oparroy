@@ -6,7 +6,7 @@ and GUI-authored project state (DRC exclusions, defaults, viewports).
 This module scripts pcbnew's Board Setup → Import Settings from Another
 Board merge through KiCad's own SWIG API (DESIGN.md §7: lean on KiCad's
 own code), so constraint updates stay hands-off. Mechanism verified
-against KiCad 10.0.6 on 2026-10-04 (against behavior and source —
+against KiCad 10.0.6 (against behavior and source —
 ``dialog_board_setup.cpp``'s import, ``board.cpp``,
 ``board_design_settings.cpp``):
 
@@ -46,7 +46,7 @@ Run it under the project venv inside the nix dev shell: nixpkgs' pcbnew
 is built for Python 3.14, the project pins the same 3.14 (uv finds
 nix's interpreter on PATH), and the dev shell puts pcbnew's
 site-packages on ``PYTHONPATH``, so ``import pcbnew`` resolves in
-process (verified against KiCad 10.0.6 on 2026-10-05). The lazy
+process (verified against KiCad 10.0.6). The lazy
 ``import pcbnew`` inside :func:`merge_settings` keeps the module
 stdlib-only at import time so pytest's ``--doctest-modules`` can import
 it outside the dev shell.

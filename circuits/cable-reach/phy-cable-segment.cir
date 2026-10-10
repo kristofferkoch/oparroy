@@ -23,7 +23,7 @@
 * C = 47.5 pF/m, L = 0.49 uH/m, td = 4.86 ns/m, R = 0.214 ohm/m.
 * Modeled as a lossless line (Z0, td) with the conductor R split
 * half per end: ngspice's LTRA (full RLGC) produces no output in
-* ngspice 45 (verified 2026-09-28), and G is unmeasurable at these
+* ngspice 45, and G is unmeasurable at these
 * frequencies anyway — dielectric loss binds only at 100s of MHz*m,
 * far past the lengths where the decode contract fails. Skin effect
 * unmodeled: at <= 50 m and <= 100 MHz edge content its excess loss is

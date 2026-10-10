@@ -23,11 +23,11 @@
 //   is the one exception: it stays __builtin_unreachable() under KLEE.
 //   Spelling it klee_report_error puts a noreturn call after the
 //   switch, which changes clang 19's codegen enough to emit `freeze`
-//   (2026-09-28, the garbage harness's feed_cell stopped inlining) —
+//   (the garbage harness's feed_cell stopped inlining) —
 //   and KLEE 3.2 has no Freeze handler, so the proof died with
 //   spurious "illegal instruction" exec errors. The proof semantics
 //   are identical either way, so the cheaper spelling wins.
-// - Target (-DOPARROY_TARGET, meson/cross/rv32ec.ini, 2026-09-28):
+// - Target (-DOPARROY_TARGET, meson/cross/rv32ec.ini):
 //   lib::verify_failed, the project failure hook — declared here,
 //   defined once per platform (the node firmware provides its own).
 //   Contract (code-std-cpp.md#5-error-handling): report over the debug

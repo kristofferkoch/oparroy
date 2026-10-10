@@ -4,7 +4,7 @@ The CI board is the plain capture plus declared instrumentation
 transforms (:mod:`oparroy.dsl.transform`); this pass proves the
 instrumented board **in reset state** is equivalent to the plain board
 up to an enumerated, budgeted set of residuals — "almost equivalent"
-is exactly that set (``docs/instrumentation-equivalence-2026-09-29.md``
+is exactly that set (``docs/instrumentation-equivalence.md``
 §2). The inputs are the two captures plus the same transform ``plan``
 handed to ``apply_transforms``: the :class:`Provenance` tags classify
 every part and net (transform-created vs base — no name-matching
@@ -12,8 +12,8 @@ heuristics), and the plan supplies the role declarations the tags
 deliberately do not carry — which escaped port is a control, which a
 substitute source, which nets are declared taps.
 
-The proof runs per tile and composes upward (memo Q5, settled
-2026-10-10), so findings report tile-local paths (``T3/ka``). Per tile:
+The proof runs per tile and composes upward (memo Q5), so findings
+report tile-local paths (``T3/ka``). Per tile:
 
 1. **Series elements reduce to wires in reset state.** Every
    ``InsertSeries``/``Substitute`` part drops out and its cut sides
@@ -35,12 +35,12 @@ The proof runs per tile and composes upward (memo Q5, settled
    (instrumentation is transforms only, never capture edits). Extra
    board-level parts are the scan plane and supervisor — allowed.
 4. **Residuals are enumerated, not assumed away.** Each reduced
-   element's electrical magnitudes come from the parts DB (memo Q3,
-   settled 2026-10-10: ``Residuals`` on the typed part, threaded onto
-   the placed part); geometry residuals (tap stub capacitance) are
+   element's electrical magnitudes come from the parts DB (memo Q3:
+   ``Residuals`` on the typed part, threaded onto the placed part);
+   geometry residuals (tap stub capacitance) are
    emitted as layout-checker obligations, bounded here, discharged by
    the §7 layout checker. Every residual must carry a budget citation
-   (the residual register, ``docs/instrumented-ci-2026-10-05.md`` §9);
+   (the residual register, ``docs/instrumented-ci.md`` §9);
    one without is an error.
 
 What this proof is not (memo §3): not a spice equivalence, not a proof
@@ -264,7 +264,7 @@ def _check_reset_levels(
     reset state the parts they steer sit in pass-through, so these nets
     are absent from the reduced circuit. The levels themselves are
     proof inputs (memo Q2) — the 74HC595-class stage's silicon power-on
-    state (``docs/instrumented-ci-2026-10-05.md`` §8), never assumed.
+    state (``docs/instrumented-ci.md`` §8), never assumed.
     """
     drop: set[str] = set()
     seen: set[TileNet] = set()

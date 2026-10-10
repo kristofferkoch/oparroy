@@ -16,7 +16,7 @@ engaging brakes both TX channels, §2/§4), the status LEDs (passive
 power, working heartbeat, and the per-connector pair merged onto one
 antiparallel GPIO, §4.1), OPO (the §2 DNP hysteresis fallback), the
 SWIO pad, and the PC7 spare — landed on a TP4 test pad for bring-up
-observability (2026-09-30). The payload pads (debug TX, pot, buzzer,
+observability. The payload pads (debug TX, pot, buzzer,
 buttons — the §6 demonstrator superset) and the freed PC1 stay
 unconnected on this board; the checker reports them by name as
 warnings, not errors.
@@ -145,7 +145,7 @@ class Node(Subcircuit):
                 vdd=v3v3,
                 vss=gnd,
                 pd1=swio,  # the table's SWIO reservation, PD1
-                pc7=pc7,  # the table's spare — TP4 test pad (2026-09-30)
+                pc7=pc7,  # the table's spare — TP4 test pad
                 # Pad names arrive as data from the pin table — static
                 # checking can't follow the unpack; the pin map's typed
                 # binding and the capture checker cover it instead.
@@ -179,7 +179,7 @@ class Node(Subcircuit):
         circuit.part("TP2", TestPoint("3V3", p=v3v3))
         circuit.part("TP3", TestPoint("GND", p=gnd))
         # The PC7 spare lands on a bare pad — bring-up observability and
-        # a future expansion point without a respin (2026-09-29).
+        # a future expansion point without a respin.
         circuit.part("TP4", TestPoint("PC7", p=pc7))
 
 

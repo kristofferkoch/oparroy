@@ -62,7 +62,7 @@ def test_terminal_protection_sits_connector_side(kicad_libs: KiCadLibraries) -> 
 def test_sel_drives_switch_and_brake(kicad_libs: KiCadLibraries) -> None:
     # §2/§4: the watchdog's sel drives TIM1_BKIN (PC2, the hardware
     # TX-kill) and, through the 0 Ω bridge (the DNP Schmitt buffer
-    # straddles it, 2026-09-29), the bypass select — bypass engaging
+    # straddles it), the bypass select — bypass engaging
     # brakes both TX.
     nets = nets_of(capture(kicad_libs))
     assert nets["sel"] == {
@@ -77,7 +77,7 @@ def test_sel_drives_switch_and_brake(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_connector_leds_share_one_antiparallel_gpio(kicad_libs: KiCadLibraries) -> None:
-    # §4.1 (2026-09-30): both connector LEDs sit on PC0 as an
+    # §4.1: both connector LEDs sit on PC0 as an
     # antiparallel pair behind one shared 470 Ω — pin high lights
     # upstream (Du), pin low lights downstream (Dd), Hi-Z dark. Dd's
     # anode returns to 3V3: the pin-low state sinks rail current
@@ -91,7 +91,7 @@ def test_connector_leds_share_one_antiparallel_gpio(kicad_libs: KiCadLibraries) 
 
 
 def test_pc7_spare_lands_on_a_test_pad(kicad_libs: KiCadLibraries) -> None:
-    # 2026-09-29: the PC7 spare is a bare test pad, not a floating pin.
+    # The PC7 spare is a bare test pad, not a floating pin.
     nets = nets_of(capture(kicad_libs))
     assert nets["pc7"] == {"U1.17", "TP4.1"}
 
@@ -104,7 +104,7 @@ def test_threshold_divider_on_opa_negative(kicad_libs: KiCadLibraries) -> None:
 
 def test_power_loop_enters_from_both_faces(kicad_libs: KiCadLibraries) -> None:
     # §3: UNREG/3V3/GND alias into both connectors; 3V3 is doubled and
-    # row 2 (pins 2/4/6/8/10) is a solid ground row (2026-09-29 pinout).
+    # row 2 (pins 2/4/6/8/10) is a solid ground row.
     nets = nets_of(capture(kicad_libs))
     assert {"J1.1", "J2.1"} <= nets["UNREG"]
     assert {"J1.3", "J1.9", "J2.3", "J2.9"} <= nets["3V3"]

@@ -3,7 +3,7 @@
 * shared 470 Ω: pin high lights Du (upstream), pin low lights Dd
 * (downstream), Hi-Z dark; the power LED is always on and the working
 * LED follows led_work. Written against the review that found Dd's
-* anode tied to GND (dark forever) instead of 3V3, 2026-09-30.
+* anode tied to GND (dark forever) instead of 3V3.
 *
 * Phases (1 ms each): led_seg high / low / Hi-Z. Hi-Z is real: S1
 * opens — a PWL-held voltage source would keep driving.

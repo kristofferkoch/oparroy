@@ -1,7 +1,7 @@
 """The node board constraint skeleton: stackup, net classes, DRC minimums.
 
 One :class:`PcbSpec` is the seed pcbnew opens: :func:`spec` pins the
-settled 2-layer 0.8 mm stackup (docs/node-board-2026-09-29.md, item 1
+settled 2-layer 0.8 mm stackup (docs/node-board.md, item 1
 — 35 µm copper around a ~0.71 mm FR4 core, ENIG; JLCPCB's exact
 thickness offerings verify at quote time), two net classes, and the
 fab-floor minimums. ``main()`` writes the pair KiCad consumes:
@@ -19,12 +19,12 @@ J2.5 through TVS Dat). The class is wider than Default not for current
 (the 470 Ω series resistors cap it at mA) but for robustness: this is
 the one copper path the ring depends on when the node is dead. The
 listen-only RX tap ``opa_p`` (Rar to SW1.B1, the net the MCU sits on)
-stays Default (2026-10-04): the class's 0.3 mm clearance is unmeetable
+stays Default: the class's 0.3 mm clearance is unmeetable
 inside the MCU's TSSOP-20 footprint, whose 0.25 mm pad gap is fixed —
 and the tap is a sense stub off the path, not the path itself. Ring B
 has no bypass switch (§3) and stays Default. The clearance sits at
 0.3 mm — comfortable on a board this sparse, and above a KiCad 10.0.6
-reporting quirk found 2026-10-03: DRC enforces any class clearance,
+reporting quirk: DRC enforces any class clearance,
 but the violation text only cites the class name when the clearance
 exceeds 0.25 mm; below that the same violation reports with an empty
 constraint name.
@@ -46,7 +46,7 @@ guarantees 0.09 mm trace/space and 0.45/0.2 mm vias on 1 oz; the
 minimums here round to 0.1 mm with 0.2 mm holes and 0.3 mm copper-to-
 edge (router-bit clearance), deliberately tighter than nothing we
 intend to draw so a DRC flag means "fix the layout", never "fight the
-fab". The hole-clearance floor sits at 0.15 mm (2026-10-04, decided
+fab". The hole-clearance floor sits at 0.15 mm (decided
 with the first DRC pass over real layout): the reverse-mount status
 LEDs sit over their routed light-pipe NPTHs (the §7 part-over-hole
 contract) and KiCad's 0.25 mm default flagged the intent itself;
@@ -54,7 +54,7 @@ contract) and KiCad's 0.25 mm default flagged the intent itself;
 catching accidents. The pad-to-slot gap is footprint-fixed, and the
 stock footprint's 0.175 mm also lost to the 0.3 mm copper-to-edge
 floor (KiCad judges routed NPTH walls like board edges) — settled
-2026-10-05 in the footprint's favor, not the rule's: the project-local
+in the footprint's favor, not the rule's: the project-local
 ``Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm`` narrows
 the slot to 1.5 x 2.4 mm for a 0.325 mm nominal gap, still wider than
 the LED's 1.2 mm lens. JLCPCB's NPTH-to-copper capability verifies
@@ -72,7 +72,7 @@ emits the skeleton to a staging directory and merges it into DIR's
 board in process through KiCad's own pcbnew API
 (:mod:`oparroy.dsl.pcb_merge`; the dev shell puts nixpkgs' pcbnew on
 ``PYTHONPATH``, and the project pins the same Python 3.14 it is built
-for). Scripted 2026-10-04, replacing the manual Board Setup → Import
+for). Scripted, replacing the manual Board Setup → Import
 Settings from Another Board step.
 """
 

@@ -1,4 +1,4 @@
-# Cable reach — findings (2026-09-28)
+# Cable reach — findings
 
 ngspice half of DESIGN.md §9's cable-reach question: maximum segment
 length unamplified, and with a re-driver in the segment. Benches:
@@ -20,7 +20,7 @@ is the datasheet's "unbalanced" (ground-signal-ground) configuration
 
 Model (`phy-cable-segment.cir`): ngspice lossless `T` line (Z0, td)
 with the conductor R split half per end. ngspice 45's LTRA (full RLGC)
-runs but emits a stuck-at-zero output — verified 2026-09-28, hence the
+runs but emits a stuck-at-zero output in practice, hence the
 two-element form. Unmodeled, with reasons: dielectric G (binds at
 100s of MHz·m, far past where the decode contract fails), skin effect
 (second order against the 50–520 Ω source resistance at ≤ 100 MHz edge
@@ -171,7 +171,7 @@ budget — out of scope here.
 
 ## 8. Proposed DESIGN.md §2 text (to land when the reach work ships)
 
-> **Cable reach (2026-09-28 — sim; bench confirmation open):
+> **Cable reach (sim; bench confirmation open):
 > 10 m per segment** on 3M 3365-class 28 AWG ribbon (GND-flanked data
 > wires, Z0 = 102 Ω, 47.5 pF/m) with the §7 470 Ω protection, ≥ 165 ns
 > decode margin including tb_noise-class crosstalk; 12 m on a quiet
@@ -184,8 +184,8 @@ budget — out of scope here.
 > protected reach. Power, not signal, binds segment length under a
 > connector break: ~3–6 m at 10–20 mA nodes on 28 AWG; past that the
 > §2.1 second-tap injection applies. Analysis:
-> `docs/cable-reach-2026-09-28.md` (link it as
-> `[docs/...](docs/cable-reach-2026-09-28.md)` when pasting into
+> `docs/cable-reach.md` (link it as
+> `[docs/...](docs/cable-reach.md)` when pasting into
 > DESIGN.md — plain text here so this file's own link check passes).
 
 Related: the IDEAS.md line-capacitance self-survey (charge-time length

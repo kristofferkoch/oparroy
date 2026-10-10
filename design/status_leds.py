@@ -4,10 +4,10 @@ The node's four status LEDs: passive power (red), working heartbeat
 (yellow), and the per-connector link pair (yellow-green) merged onto
 one antiparallel GPIO behind a shared 470 Ω — pin high lights Du
 (upstream), pin low lights Dd (downstream), Hi-Z dark, a kHz toggle
-lights both at half brightness (§4.1, 2026-09-30). Dd's anode returns
+lights both at half brightness (§4.1). Dd's anode returns
 to 3V3, not GND: the pin-low state sinks rail current through Dd and
 Rs into the pad — anode on GND leaves Dd dark forever (caught in
-pcbnew netlist review 2026-09-30). The shared 470 Ω sets ~2.5 mA at
+pcbnew netlist review). The shared 470 Ω sets ~2.5 mA at
 Vf ≈ 2.1 V, inside the CH32V003's ±8 mA pad drive.
 
 The drive-state truth table is the executable contract:

@@ -8,13 +8,13 @@ iteration, content-derived UUIDs, no dates or paths):
   ``.kicad_pcb`` (KiCad 10 accepts ``(setup (stackup ...))``; paste
   layers must stay bare — thickness/material on a paste layer gets
   mangled into bogus dielectrics by the format upgrader, verified
-  against KiCad 10.0.6 on 2026-10-03).
+  against KiCad 10.0.6).
 - :func:`emit_project` — the project seed: net classes with
   net→class assignments and the board minimums (the DRC "Constraints"
   page) in the ``.kicad_pro`` JSON, where KiCad 10 actually reads
   them (``net_class`` in the board's setup is rejected since KiCad 10;
   per-class clearance and ``board.design_settings.rules`` minimums are
-  DRC-enforced headless, verified the same day).
+  DRC-enforced headless, verified the same way).
 
 The skeleton round-trips through :func:`oparroy.dsl.kicad_pcb.parse_board`,
 the project through :func:`oparroy.dsl.kicad_pro.parse_project`.

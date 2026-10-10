@@ -147,8 +147,8 @@ def capture() -> PinMap:
         button_a="PC5",  # FT
         button_b="PC6",  # FT
     )
-    # The spares: PC1 (FT, freed by the §4.1 antiparallel LED merge,
-    # 2026-09-30) and PC7 (pin 17 — a test pad on the node board).
+    # The spares: PC1 (FT, freed by the §4.1 antiparallel LED merge)
+    # and PC7 (pin 17 — a test pad on the node board).
     return gpio
 
 

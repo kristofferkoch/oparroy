@@ -3,11 +3,11 @@
 The CI board is the node design plus injected controllability and
 observability (DESIGN.md §6: fault-injection muxes, supervisor-override
 muxes, sense taps) — and that makes it *dangerously different* from the
-plain node it is meant to exercise (raised 2026-09-27). Hand-maintaining
+plain node it is meant to exercise. Hand-maintaining
 a second capture guarantees drift; this pass captures the
 instrumentation as an **explicit transformation** of the uninstrumented
-design, settled in ``docs/instrumentation-equivalence-2026-09-29.md``
-and grown to four kinds in ``docs/instrumented-ci-2026-10-05.md`` §7:
+design, settled in ``docs/instrumentation-equivalence.md``
+and grown to four kinds in ``docs/instrumented-ci.md`` §7:
 
 - ``InsertSeries`` — cut a net into ``#a``/``#b`` sides and bridge them
   through a part (the fault-injection break switches, the keep-alive
@@ -29,7 +29,7 @@ is tagged with :class:`Provenance` — the input of the reset-state
 equivalence proof (:mod:`oparroy.dsl.equivalence`), no name-matching
 heuristics.
 
-Application is hierarchical, per-tile (memo Q1, settled 2026-09-29):
+Application is hierarchical, per-tile (memo Q1):
 ``apply_transforms`` runs on the hierarchical board between capture and
 check; a ``PerTile`` declaration keys on the subcircuit identity and
 instruments every instance of it, ``PerInstance`` declarations address
@@ -147,7 +147,7 @@ class AddShunt:
 class AddTap:
     """Export a net to the board as a high-impedance sense point — no cut.
 
-    The boundary node's PIO taps (``docs/instrumented-ci-2026-10-05.md``
+    The boundary node's PIO taps (``docs/instrumented-ci.md``
     §5): the net reaches a board net the capture wires to the
     supervisor. A tile-internal net is exported in place and bound; a
     port net rides its existing binding. The handle key is ``net`` as

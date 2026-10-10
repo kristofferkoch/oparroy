@@ -1,7 +1,7 @@
 # Node board — layout checklist
 
 The order that works for the 2-layer place-and-route, written down
-2026-10-04 after solving it twice. Work top to bottom; each step
+after solving it twice. Work top to bottom; each step
 explains *why* so a capture change can re-derive the item rather than
 blindly follow it.
 
@@ -19,7 +19,7 @@ are deliberately looser than the fab's.
 
 1. **J1 and J2 first** (B.Cu, the only back-side footprints — §7
    contract), on opposite short edges, long axis along the cable run
-   (docs/node-board-2026-09-29.md, items 6/9). They fix the board
+   (docs/node-board.md, items 6/9). They fix the board
    length; everything else fills the front between them.
 1. **Bypass spine**: the dead-node copper is one straight flow —
    J1.5 → Dar → Rar → SW1.B1, SW1.COM → Rat → Dat → J2.5. Lay it out
@@ -55,15 +55,15 @@ are deliberately looser than the fab's.
    MCU's PC7 corner.
 1. **Outline + 2× M2.5 mounting holes last** (item 6: layout proposes
    the minimal rectangle; §7 checker numbers get fixed once drawn).
-   Drawn 2026-10-04: rounded corners, holes, and the GND pours.
+   Drawn: rounded corners, holes, and the GND pours.
 
 ## Routing
 
 1. **Bypass path first, as short as possible**: `RX_A`,
    `PHY1/txa_sw`, `TX_A` — the Bypass class copper (0.4 mm), with
    `opa_p` riding the same spine but in Default class (its 0.3 mm class
-   clearance was unmeetable at the MCU's TSSOP-20 pads, demoted
-   2026-10-04). Top side, zero vias if the spine placement did its
+   clearance was unmeetable at the MCU's TSSOP-20 pads, since
+   demoted). Top side, zero vias if the spine placement did its
    job; every via in this path is copper the ring depends on with the
    node dead.
 1. **Ring B next**: `RX_B` (J2.7 → Dbr → Rbr → PD7), `TX_B` (PC3 →
@@ -76,19 +76,19 @@ are deliberately looser than the fab's.
    `led_seg`, `swio` → TP1, `pc7` → TP4, the VDD/2 node short at PA1.
 1. **GND last, as pours** both sides (poured, not routed): stitch the
    row-2 GND pins of J1/J2 between faces, no islands, no long thin
-   necks. Return-path eyeball while pouring (IDEAS 2026-10-04, rung-1
-   geometric checks): plane continuous under the TX/RX runs, a
+   necks. Return-path eyeball while pouring (IDEAS, rung-1 geometric
+   checks): plane continuous under the TX/RX runs, a
    stitching via near every signal layer change.
 
 ## Before calling it done
 
 - [ ] DRC clean against the seeded classes and minimums, modulo the
-  known-intrinsic set (2026-10-04): the LED light-pipe NPTHs flag
+  known-intrinsic set: the LED light-pipe NPTHs flag
   `copper_edge_clearance` (the 0.3 mm router-bit edge floor also
   judges holes — footprint-fixed 0.175 mm pad-to-hole) and
   `npth_inside_courtyard` under the connectors; both deliberate, both
   pending exclusion or a footprint/quote decision. **LED NPTHs
-  resolved 2026-10-05** — the footprint's slot shrank to 1.5×2.4 mm
+  resolved** — the footprint's slot shrank to 1.5×2.4 mm
   (project-local `Oparroy:` variant, 0.325 mm pad-to-slot nominal),
   clearing the edge floor; the connector `npth_inside_courtyard`
   pair stays as the remaining intrinsic set.
@@ -99,7 +99,7 @@ are deliberately looser than the fab's.
 - [ ] Serial box + board-ID silkscreen on the **back**, clear of pads;
   front silk stays clean (item 10).
 - [ ] Netlist review for the known trap: Dd's anode returns to 3V3,
-  not GND (the 2026-09-30 dark-forever catch — sim-pinned in
+  not GND (the dark-forever catch — sim-pinned in
   `circuits/status-leds/`, but eyeball it in pcbnew anyway).
 - [ ] Back-annotate (`python -m design.node --back-annotate …`) so
   refdes renumbering folds back into the annotation file; confirm

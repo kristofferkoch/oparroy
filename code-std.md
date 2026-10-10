@@ -1,12 +1,13 @@
 # oparroy coding standard
 
-Living document, created 2026-09-26. Evolves by dated edits —
-every substantive change gets a date so archaeology stays easy.
+Living document. It evolves by edit, with git history as the record
+of when each change landed and why.
 
-Split 2026-10-10: the language-specific sections moved into
-per-language documents ([Language standards](#2-language-standards))
-so readers and agents load only the rules for the language they work
-in. This file keeps the language-independent rules.
+The language-specific sections live in
+[code-std-cpp.md](code-std-cpp.md) and
+[code-std-python.md](code-std-python.md) so readers and agents load
+only the rules for the language they work in. This file keeps the
+language-independent rules.
 
 Scope: all oparroy code — firmware, host-testable firmware logic, and
 the DSL.
@@ -39,7 +40,7 @@ needs to earn its place every time it's touched.
   `.clang-tidy` with cherry-picked AUTOSAR/CERT checks, all
   warnings-as-errors. Markdown layout is mdformat's, lint is
   markdownlint-cli2's, link health is lychee's.
-- **The pre-commit hooks own the entry point** (2026-09-26):
+- **The pre-commit hooks own the entry point**:
   `.pre-commit-config.yaml` runs clang-format, clang-tidy, mdformat,
   markdownlint-cli2, and lychee on staged files — cheap checks only,
   under ~3 s warm. Every tool is nix-pinned (flake.nix) and invoked via
@@ -50,7 +51,7 @@ needs to earn its place every time it's touched.
 
 ## 4. Tests
 
-- **Red/green, always** (2026-09-26): a test that was never watched
+- **Red/green, always**: a test that was never watched
   failing proves nothing — it may test nothing. See the test fail
   first, then make it pass. Write the failing test first where
   practical; otherwise break the code deliberately and watch the test

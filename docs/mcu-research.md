@@ -1,4 +1,4 @@
-# MCU research — 2026-09-26
+# MCU research
 
 Input to DESIGN.md §5. Compiled by a research agent;
 sources cited inline. FX: 1 USD ≈ 9.4 NOK, so the 3 NOK target ≈

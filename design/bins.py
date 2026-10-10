@@ -20,7 +20,7 @@ class LedRev1206(Led):
 
     The LED pads stay on the front — the single-sided assembly face —
     while the lens emits through a routed board hole to the connector
-    side (2026-09-29, DESIGN.md §4.1). The per-color XINGLIGHT
+    side (DESIGN.md §4.1). The per-color XINGLIGHT
     XL-3216-FB records live in the parts DB.
     """
 
@@ -31,7 +31,7 @@ class TvsSod323(TvsDiode):
     """The project's SOD-323 ESD-diode bin (§7 terminal protection).
 
     The picked part lives in the parts DB's ``tvs-sod323`` record
-    (Brightking UDD32C03L01, 2026-09-30): VRWM 3.3 V, Cj 0.8 pF typ —
+    (Brightking UDD32C03L01): VRWM 3.3 V, Cj 0.8 pF typ —
     RC ≈ 0.4 ns against the 470 Ω series R, far inside the §2 decode
     margin.
     """

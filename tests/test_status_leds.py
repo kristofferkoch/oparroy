@@ -3,7 +3,7 @@
 The bench at circuits/status-leds/tb_status_leds.cir asserts pin high
 / pin low / Hi-Z against the DSL-emitted DUT via ``scripts/sim-run``
 (skipped without ngspice). This is the executable form of the truth
-table that caught Dd's anode-on-GND in netlist review (2026-09-30).
+table that caught Dd's anode-on-GND in netlist review.
 """
 
 from __future__ import annotations

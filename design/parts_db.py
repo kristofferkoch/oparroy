@@ -1,7 +1,7 @@
 """The oparroy parts table: the assembler-inventory view (DESIGN.md §6).
 
 One record per part the captures and benches use, seeded from the
-pcba-research inventory snapshot (docs/pcba-research-2026-09-26.md) and the
+pcba-research inventory snapshot (docs/pcba-research.md) and the
 datasheet notes. Every stock number is a *snapshot*: it carries its
 as-of date and source, and nothing here is live data — re-query
 JLCPCB before ordering. ``check_stock`` flags what has gone stale or
@@ -30,7 +30,7 @@ from oparroy.dsl import (
 )
 
 #: The pcba-research inventory snapshot date
-#: (docs/pcba-research-2026-09-26.md).
+#: (docs/pcba-research.md).
 _SNAPSHOT = date(2026, 9, 26)
 
 PARTS = PartsDb(
@@ -69,8 +69,8 @@ PARTS = PartsDb(
             area_mm2=3.77,
             datasheet="datasheets/BAT54S",
             note=(
-                "KEXIN C369929, $0.0158 @1 — verified on jlcpcb.com "
-                "2026-10-04, replacing the never-queried TWGMC C727126 "
+                "KEXIN C369929, $0.0158 @1 — verified on jlcpcb.com, "
+                "replacing the never-queried TWGMC C727126 "
                 "listing; same industry-standard series pair (30 V, "
                 "200 mA, SOT-23), so datasheets/BAT54S (the TWGMC doc) "
                 "still stands. Extended tier — the ~$3/line fee (§6) "
@@ -96,7 +96,7 @@ PARTS = PartsDb(
             area_mm2=2.52,
             note=(
                 "Brightking UDD32C03L01, bidirectional SOD-323 — the §7 "
-                "terminal-protection TVS (picked 2026-09-30): VRWM 3.3 V, "
+                "terminal-protection TVS: VRWM 3.3 V, "
                 "VBR 4 V min @ 1 mA, VCL 7 V @ 1 A (15 V @ 5 A), Cj "
                 "0.8 pF typ — RC ≈ 0.4 ns against the 470 Ω series R, "
                 "far inside the §2 decode margin; IR ≤ 5 µA @ 3.3 V; "
@@ -176,7 +176,7 @@ PARTS = PartsDb(
             stock=Stock(
                 9_000,
                 _SNAPSHOT,
-                "docs/pcba-research-2026-09-26.md; unverified at jlcpcb.com",
+                "docs/pcba-research.md; unverified at jlcpcb.com",
             ),
             symbol="MCU_WCH_RiscV:CH32V003FxPx",
             footprint="Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm",
@@ -203,7 +203,7 @@ PARTS = PartsDb(
             area_mm2=113.0,
             note=(
                 "XYECONN IDC2.54-US2S-5A 2x5 2.54 mm SMD box header, "
-                "$0.069 @100 — the §3 segment connector (2026-09-29); "
+                "$0.069 @100 — the §3 segment connector; "
                 "backside, hand-soldered post-PCBA (the front is the "
                 "single-sided assembly face); no stocked SMD box header "
                 "has anchor pegs — the THT C2977596 is the "
@@ -224,7 +224,7 @@ PARTS = PartsDb(
             note=(
                 "XINGLIGHT reverse-mount 1206, red 620 nm / 120 mcd — the "
                 "§4.1 power LED; emits through a routed PCB hole to the "
-                "connector side (2026-09-29)"
+                "connector side"
             ),
         ),
         PartRecord(
@@ -240,7 +240,7 @@ PARTS = PartsDb(
             note=(
                 "XINGLIGHT reverse-mount 1206, yellow-green 570 nm / 120 "
                 "mcd — the §4.1 per-connector link LEDs, one antiparallel "
-                "pair on a single GPIO (2026-09-30); the series' only "
+                "pair on a single GPIO; the series' only "
                 "3.3 V-drivable green — the 525 nm true green of the "
                 "same series (C3646937) has Vf 3.4 V"
             ),
@@ -257,7 +257,7 @@ PARTS = PartsDb(
             area_mm2=5.12,
             note=(
                 "XINGLIGHT reverse-mount 1206, yellow 588 nm / 180 mcd — "
-                "the §4.1 working LED (2026-09-30 color shuffle: red = "
+                "the §4.1 working LED (color shuffle: red = "
                 "power, yellow = working, green = link stay "
                 "distinguishable)"
             ),

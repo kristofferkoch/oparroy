@@ -9,7 +9,7 @@ anything the model does not need (3-D models, render settings, …) is
 skipped, so files from newer KiCad versions keep parsing. KiCad 10's
 native format (20260206) drops the numeric net table and writes net
 names inline on segments, vias, and pads; both forms read (verified
-against 10.0.6 on 2026-10-04).
+against 10.0.6).
 """
 
 from __future__ import annotations
@@ -410,7 +410,7 @@ def _net_name(node: list[Sexp], net_codes: Mapping[int, str], *, numbered: bool)
     if net_codes:
         return net_codes.get(_int(code, "net code"), "")
     # KiCad 10's native format (20260206) drops the net-code table and
-    # writes net names inline — verified against 10.0.6 on 2026-10-04.
+    # writes net names inline — verified against 10.0.6.
     return code
 
 
