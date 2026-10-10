@@ -60,6 +60,7 @@ from oparroy.dsl.ir import (
     Net,
     Part,
     PinType,
+    TileNet,
     hierarchical_waivers,
     natural_key,
 )
@@ -134,15 +135,15 @@ def check_equivalent(
     instrumented: Circuit,
     plan: Sequence[Scope],
     *,
-    reset_levels: Mapping[tuple[tuple[str, ...], str], int],
+    reset_levels: Mapping[TileNet, int],
     budgets: Mapping[str, str],
 ) -> EquivalenceReport:
     """Prove ``instrumented`` in reset state reduces to ``base``, modulo residuals.
 
     The plan must already be applied to ``instrumented`` via
     ``apply_transforms``; both circuits are flattened internally.
-    ``reset_levels`` maps ``(tile_path, control_port)`` — the transform
-    handles' key shape — to the control plane's power-on bit; every
+    ``reset_levels`` maps each control port's :class:`TileNet` — the
+    transform handles' key — to the control plane's power-on bit; every
     declared control must appear at level 0 (the §8 all-zeros reset
     load). ``budgets`` maps residual kind to its budget citation; a
     residual whose kind has no entry is an error, and an entry matching
@@ -174,9 +175,10 @@ def check_equivalent(
     issues.extend(
         Issue(
             Severity.WARNING,
-            f"reset level {'/'.join(path)}/{port} matches no control net — stale",
+            f"reset level {'/'.join(key.path)}/{key.name} matches no "
+            "control net — stale",
         )
-        for path, port in sorted(set(reset_levels) - seen_levels)
+        for key in sorted(set(reset_levels) - seen_levels)
     )
     waivers = tuple(hierarchical_waivers(instrumented))
     return EquivalenceReport(tuple(_apply_waivers(issues, waivers)), tuple(residuals))
@@ -197,15 +199,15 @@ def _tile_transforms(
     return tiles
 
 
-def _base_net_names(circuit: Circuit) -> dict[tuple[tuple[str, ...], str], str]:
-    """Map ``(instance_path, capture_net_name)`` to the flattened base net name.
+def _base_net_names(circuit: Circuit) -> dict[TileNet, str]:
+    """Map each base-capture net's :class:`TileNet` to its flattened name.
 
     Computed from the hierarchical base capture: internal nets gain the
     instance-path prefix, bound ports take the parent net's name — the
     naming flattening produces, so a tagged instrumented net's
     ``Provenance.base`` resolves to the base net's flattened name.
     """
-    out: dict[tuple[tuple[str, ...], str], str] = {}
+    out: dict[TileNet, str] = {}
     _name_base_nets(circuit, (), {}, {}, out)
     return out
 
@@ -215,7 +217,7 @@ def _name_base_nets(
     path: tuple[str, ...],
     connections: Mapping[str, Net],
     named: dict[int, str],
-    out: dict[tuple[tuple[str, ...], str], str],
+    out: dict[TileNet, str],
 ) -> None:
     prefix = "/".join(path)
     for name, net in circuit.nets.items():
@@ -225,11 +227,11 @@ def _name_base_nets(
             # name, so the port itself must be recorded too (flatten
             # keeps bound ports in its nets map for the same reason).
             flat_name = named[id(connections[name])]
-            out[(path, name)] = flat_name
+            out[TileNet(path, name)] = flat_name
             named[id(net)] = flat_name
         else:
             flat_name = f"{prefix}/{name}" if prefix else name
-            out[(path, name)] = flat_name
+            out[TileNet(path, name)] = flat_name
             named[id(net)] = flat_name
     for inst in circuit.instances.values():
         _name_base_nets(inst.circuit, (*path, inst.name), inst.connections, named, out)
@@ -253,9 +255,9 @@ def _escaped_ports(transform: Transform) -> list[tuple[str, str]]:
 def _check_reset_levels(
     flat: Circuit,
     tiles: dict[tuple[str, ...], list[Transform]],
-    reset_levels: Mapping[tuple[tuple[str, ...], str], int],
+    reset_levels: Mapping[TileNet, int],
     issues: list[Issue],
-) -> tuple[set[str], set[tuple[tuple[str, ...], str]]]:
+) -> tuple[set[str], set[TileNet]]:
     """Check control-net power-on levels; return the drop set and seen keys.
 
     The drop set is the escaped control and substitute-source nets: in
@@ -265,7 +267,7 @@ def _check_reset_levels(
     state (``docs/instrumented-ci-2026-10-05.md`` §8), never assumed.
     """
     drop: set[str] = set()
-    seen: set[tuple[tuple[str, ...], str]] = set()
+    seen: set[TileNet] = set()
     for path in sorted(tiles):
         prefix = "/".join(path)
         for transform in tiles[path]:
@@ -283,7 +285,7 @@ def _check_reset_levels(
                         )
                     )
                 elif role == "control":
-                    key = (path, port)
+                    key = TileNet(path, port)
                     seen.add(key)
                     _check_level(name, key, reset_levels, issues)
     return drop, seen
@@ -291,8 +293,8 @@ def _check_reset_levels(
 
 def _check_level(
     name: str,
-    key: tuple[tuple[str, ...], str],
-    reset_levels: Mapping[tuple[tuple[str, ...], str], int],
+    key: TileNet,
+    reset_levels: Mapping[TileNet, int],
     issues: list[Issue],
 ) -> None:
     """Require one control net's declared power-on level: the all-zeros load."""
@@ -319,9 +321,9 @@ def _check_level(
 def _declared_tap_nets(
     board: Circuit,
     tiles: dict[tuple[str, ...], list[Transform]],
-    base_names: dict[tuple[tuple[str, ...], str], str],
+    base_names: dict[TileNet, str],
     issues: list[Issue],
-) -> dict[tuple[tuple[str, ...], str], str]:
+) -> dict[TileNet, str]:
     """Map each declared ``AddTap`` to the flattened base net it legitimates.
 
     The bound net is looked up by the tap's full name first — the sides
@@ -332,7 +334,7 @@ def _declared_tap_nets(
     provenance to the base net's flattened name; an untagged one (a
     tap on a port) is already a base net.
     """
-    taps: dict[tuple[tuple[str, ...], str], str] = {}
+    taps: dict[TileNet, str] = {}
     for path in sorted(tiles):
         inst: Instance = _lookup_instance(board, path)
         for transform in tiles[path]:
@@ -353,9 +355,9 @@ def _declared_tap_nets(
                 )
                 continue
             if bound.provenance is None:
-                taps[(path, transform.net)] = bound.name
+                taps[TileNet(path, transform.net)] = bound.name
                 continue
-            key = (path, bound.provenance.base.split("/")[-1])
+            key = TileNet(path, bound.provenance.base.split("/")[-1])
             name = base_names.get(key)
             if name is None:
                 issues.append(
@@ -368,14 +370,14 @@ def _declared_tap_nets(
                     )
                 )
                 continue
-            taps[(path, transform.net)] = name
+            taps[TileNet(path, transform.net)] = name
     return taps
 
 
 def _residual_net(
     path: tuple[str, ...],
     net: str,
-    base_names: dict[tuple[tuple[str, ...], str], str],
+    base_names: dict[TileNet, str],
 ) -> str:
     """Return the flattened base-net name a residual loads (``Residual.net``).
 
@@ -384,7 +386,7 @@ def _residual_net(
     fallback covers a drifted capture — the bijection reports it.
     """
     local = net.split("#", maxsplit=1)[0]
-    return base_names.get((path, local), f"{'/'.join(path)}/{local}")
+    return base_names.get(TileNet(path, local), f"{'/'.join(path)}/{local}")
 
 
 def _enumerate_residuals(  # noqa: PLR0913 — the enumeration context threaded through
@@ -392,8 +394,8 @@ def _enumerate_residuals(  # noqa: PLR0913 — the enumeration context threaded 
     tiles: dict[tuple[str, ...], list[Transform]],
     budgets: Mapping[str, str],
     *,
-    base_names: dict[tuple[tuple[str, ...], str], str],
-    tap_names: Mapping[tuple[tuple[str, ...], str], str],
+    base_names: dict[TileNet, str],
+    tap_names: Mapping[TileNet, str],
     issues: list[Issue],
 ) -> list[Residual]:
     """Emit the residual set; a residual without a budget citation errors."""
@@ -402,7 +404,7 @@ def _enumerate_residuals(  # noqa: PLR0913 — the enumeration context threaded 
         prefix = "/".join(path)
         for transform in tiles[path]:
             if isinstance(transform, AddTap):
-                tap_net = tap_names.get((path, transform.net))
+                tap_net = tap_names.get(TileNet(path, transform.net))
                 if tap_net is not None:
                     residuals.append(
                         Residual(
@@ -558,7 +560,7 @@ def _check_base_bijection(  # noqa: PLR0913 — the reduction context threaded t
     base_flat: Circuit,
     flat: Circuit,
     *,
-    base_names: dict[tuple[tuple[str, ...], str], str],
+    base_names: dict[TileNet, str],
     drop_nets: set[str],
     tap_nets: set[str],
     issues: list[Issue],
@@ -600,7 +602,7 @@ def _check_base_bijection(  # noqa: PLR0913 — the reduction context threaded t
 
 def _reduced_name(
     net: Net,
-    base_names: dict[tuple[tuple[str, ...], str], str],
+    base_names: dict[TileNet, str],
     lost_nets: set[str],
     issues: list[Issue],
 ) -> str | None:
@@ -613,7 +615,7 @@ def _reduced_name(
     if net.provenance is None:
         return net.name
     *dirs, _local = net.name.split("/")
-    key = (tuple(dirs), net.provenance.base.split("/")[-1])
+    key = TileNet(tuple(dirs), net.provenance.base.split("/")[-1])
     name = base_names.get(key)
     if name is None and net.name not in lost_nets:
         lost_nets.add(net.name)

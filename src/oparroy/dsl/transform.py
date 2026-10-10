@@ -55,7 +55,15 @@ import copy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from oparroy.dsl.ir import Circuit, DefinitionError, Instance, Net, Pin, Provenance
+from oparroy.dsl.ir import (
+    Circuit,
+    DefinitionError,
+    Instance,
+    Net,
+    Pin,
+    Provenance,
+    TileNet,
+)
 from oparroy.dsl.parts import MultiUnitPart, TypedPart
 
 if TYPE_CHECKING:
@@ -65,7 +73,7 @@ if TYPE_CHECKING:
 
 type Transform = InsertSeries | AddShunt | AddTap | Substitute
 type Scope = PerTile | PerInstance
-type Handles = dict[tuple[tuple[str, ...], str], Net]
+type Handles = dict[TileNet, Net]
 
 
 @dataclass(frozen=True)
@@ -200,7 +208,7 @@ def apply_transforms(circuit: Circuit, plan: Sequence[Scope]) -> Handles:
     taps attach after the splits whose ``#b`` aliases they name).
     Returns the board-level nets the transforms escaped — control
     ports, substitute sources, exported taps — keyed by
-    ``(instance_path, name)`` for the capture to wire to the scan
+    :class:`TileNet` for the capture to wire to the scan
     plane.
     """
     applications: list[tuple[tuple[str, ...], Instance, tuple[Transform, ...]]] = []
@@ -366,7 +374,7 @@ class _TileTransforms:
             )
             board_net = self._board_net(t.label, ultimate, base.name)
             self._inst.bind(base.name, board_net)
-        handles[(self._path, t.net)] = board_net
+        handles[TileNet(self._path, t.net)] = board_net
 
     def _cut(
         self,
@@ -455,7 +463,7 @@ class _TileTransforms:
         tile_port.provenance = Provenance(label, base)
         board_net = self._board_net(label, base, port)
         self._inst.bind(port, board_net)
-        handles[(self._path, port)] = board_net
+        handles[TileNet(self._path, port)] = board_net
         return tile_port
 
     def _board_net(self, label: str, base: str, name: str) -> Net:
