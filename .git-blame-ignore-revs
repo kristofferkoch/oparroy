@@ -4,3 +4,6 @@
 
 # 2026-09-26: mdformat normalization of all tracked markdown (no content)
 2fdcd6630b67789fafe3ca5ff3277a7f4338fd2b
+
+# Decision-timestamp removal across docs and comments (no content change)
+66c264c3a9c35cdd3d92b7aab3ce836e71b5f56d
