@@ -101,7 +101,10 @@ infrastructure, by contrast, may cost freely.
   (inventory-driven selection), and a `.kicad_pcb` layout property
   checker audits the physical layout (stackup, trace budgets,
   bypass-path copper independence, mechanical contracts). KiCad is
-  used for layout only. Circuit captures live in `design/` — the full
+  used for layout only. Learn the DSL from
+  [docs/dsl-tutorial.md](docs/dsl-tutorial.md); the API map is
+  [docs/dsl-reference.md](docs/dsl-reference.md). Circuit captures live
+  in `design/` — the full
   node board is captured (CH32V003 + PHY front-end + charge-pump
   watchdog + status LEDs + segment connectors) — with ngspice benches
   in `circuits/` run via `scripts/sim-run`.
@@ -137,31 +140,31 @@ infrastructure, by contrast, may cost freely.
 
 ## Repository layout
 
-| Path                         | Contents                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------ |
-| `AGENTS.md`                  | Doc-split and writing conventions for agents                                               |
-| `IDEAS.md`                   | Not-yet-planned ideas (append-only stash)                                                  |
-| `DESIGN.md`                  | Settled design decisions + open design questions                                           |
-| `KANBAN.md`                  | Single home for planned work (cards, Next/Backlog)                                         |
-| `code-std.md`                | Project-owned coding standard: general rules (living)                                      |
-| `code-std-cpp.md`            | C++ coding standard (living)                                                               |
-| `code-std-python.md`         | Python (DSL) coding standard (living)                                                      |
-| `README.md`                  | This file                                                                                  |
-| `flake.nix` + `flake.lock`   | Pinned dev shell: all non-Python tools ([DESIGN.md §8](DESIGN.md#8-verification-strategy)) |
-| `pyproject.toml` + `uv.lock` | Python side: the DSL package (ruff strict, ty, pytest)                                     |
-| `src/oparroy/`               | Design-capture DSL package (`dsl/`: IR, checks, emitters)                                  |
-| `design/`                    | DSL circuit captures: node board, pin map, parts DB seed                                   |
-| `circuits/`                  | ngspice benches: PHY segment, watchdog, cable reach                                        |
-| `tests/`                     | Python tests (pytest) + golden netlists, `.kicad_pcb` fixtures                             |
-| `meson.build` + `meson/`     | Firmware build: flag set, native/cross toolchain files                                     |
-| `.envrc`                     | direnv hook into the flake shell                                                           |
-| `.pre-commit-config.yaml`    | Hook wiring; tools nix-pinned, `language: system`                                          |
-| `.github/workflows/`         | CI: every gate inside the nix shell                                                        |
-| `firmware/`                  | Node/supervisor firmware: foundation lib, ring protocol                                    |
-| `scripts/`                   | Build, sim/proof/fuzz, coverage + pre-commit scripts (sh)                                  |
-| `docs/`                      | Reference documents (research reports, sub-designs)                                        |
-| `datasheets/`                | Vendor PDFs + extracted markdown sidecars per part                                         |
-| `LICENSE`                    | MIT, copyright 2026 Kristoffer Koch                                                        |
+| Path                         | Contents                                                                                                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                  | Doc-split and writing conventions for agents                                                                                                              |
+| `IDEAS.md`                   | Not-yet-planned ideas (append-only stash)                                                                                                                 |
+| `DESIGN.md`                  | Settled design decisions + open design questions                                                                                                          |
+| `KANBAN.md`                  | Single home for planned work (cards, Next/Backlog)                                                                                                        |
+| `code-std.md`                | Project-owned coding standard: general rules (living)                                                                                                     |
+| `code-std-cpp.md`            | C++ coding standard (living)                                                                                                                              |
+| `code-std-python.md`         | Python (DSL) coding standard (living)                                                                                                                     |
+| `README.md`                  | This file                                                                                                                                                 |
+| `flake.nix` + `flake.lock`   | Pinned dev shell: all non-Python tools ([DESIGN.md §8](DESIGN.md#8-verification-strategy))                                                                |
+| `pyproject.toml` + `uv.lock` | Python side: the DSL package (ruff strict, ty, pytest)                                                                                                    |
+| `src/oparroy/`               | Design-capture DSL package (`dsl/`: IR, checks, emitters)                                                                                                 |
+| `design/`                    | DSL circuit captures: node board, pin map, parts DB seed                                                                                                  |
+| `circuits/`                  | ngspice benches: PHY segment, watchdog, cable reach                                                                                                       |
+| `tests/`                     | Python tests (pytest) + golden netlists, `.kicad_pcb` fixtures                                                                                            |
+| `meson.build` + `meson/`     | Firmware build: flag set, native/cross toolchain files                                                                                                    |
+| `.envrc`                     | direnv hook into the flake shell                                                                                                                          |
+| `.pre-commit-config.yaml`    | Hook wiring; tools nix-pinned, `language: system`                                                                                                         |
+| `.github/workflows/`         | CI: every gate inside the nix shell                                                                                                                       |
+| `firmware/`                  | Node/supervisor firmware: foundation lib, ring protocol                                                                                                   |
+| `scripts/`                   | Build, sim/proof/fuzz, coverage + pre-commit scripts (sh)                                                                                                 |
+| `docs/`                      | Reference documents (research reports, sub-designs); [dsl-tutorial.md](docs/dsl-tutorial.md) + [dsl-reference.md](docs/dsl-reference.md) document the DSL |
+| `datasheets/`                | Vendor PDFs + extracted markdown sidecars per part                                                                                                        |
+| `LICENSE`                    | MIT, copyright 2026 Kristoffer Koch                                                                                                                       |
 
 Doc conventions follow the IDEAS → KANBAN/DESIGN graduation model:
 stray thoughts live in IDEAS.md, planned work in KANBAN.md cards,
