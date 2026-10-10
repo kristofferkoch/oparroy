@@ -1,8 +1,8 @@
 # Prior art: automatic schematic generation
 
-Research date 2026-09-28. Question: what should oparroy's
-design-review views look like beyond the dot dump (DESIGN.md §7),
-and what do we build vs borrow. Sources linked inline.
+Question: what should oparroy's design-review views look like beyond
+the dot dump (DESIGN.md §7), and what do we build vs borrow. Sources
+linked inline.
 
 ## 1. The requirement
 
@@ -162,7 +162,7 @@ Layout-engine candidates, ranked for oparroy:
    [PyPI](https://pypi.org/project/grandalf/)) — pure-Python Sugiyama
    layered layout, uv-installable, no runtime beyond Python,
    deliberately hackable ("simple enough to tweak and hack any
-   part"). Two caveats verified against the 0.8 source (2026-09-28):
+   part"). Two caveats verified against the 0.8 source:
    **no orthogonal router** — the shipped edge routers are
    straight-line, spline, and rounded-corner, so the 90° wiring is the
    piece we'd patch in — and the license is **GPLv2 | EPLv1**: take
@@ -219,4 +219,4 @@ exercises extraction before layout quality matters. Then the detail
 view on grandalf, golden-SVG tests in the house style.
 
 Follow-up: **DSL review views: block +
-detail** (2026-09-28), blocked by DSL connection sugar.
+detail**, blocked by DSL connection sugar.

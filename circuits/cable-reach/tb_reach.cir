@@ -42,7 +42,7 @@
 * until the TVS clamps — a §7 protection input, not a contract item),
 * and end-to-end added delay of the first edge.
 *
-* Results (2026-09-28, ngspice 45):
+* Results (ngspice 45):
 *   rser=470 (BOM): PASS 0.5..12 m — margins flat ~179-183 ns to 10 m,
 *     129.6 ns at 12 m (periods 1198..1308 ns), FAIL from 15 m: the
 *     line stops returning below threshold inside short low periods

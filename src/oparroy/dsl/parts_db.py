@@ -102,7 +102,7 @@ class PartRecord:
     part. ``area_mm2`` is the nominal body rectangle, the currency of
     the area-bound filter knobs. ``residuals`` carries the electrical
     residual magnitudes the reset-state equivalence proof enumerates
-    (``docs/instrumentation-equivalence-2026-09-29.md`` §4 Q3) — the
+    (``docs/instrumentation-equivalence.md`` §4 Q3) — the
     parts DB is the single home for part facts.
     """
 

@@ -33,7 +33,7 @@
 * must decode all 15 cells (a broken stimulus can never read as a
 * short-reach result).
 *
-* Results (2026-09-28, ngspice 45): PASS 2..10 m at all voff (margins
+* Results (ngspice 45): PASS 2..10 m at all voff (margins
 * 165..190 ns, zero spurious pulses — the staircase stays monotonic
 * under +-250 mV-class steps), FAIL at 12 m (one 224-248 ns spurious
 * pulse per stream, past ICxF absorption, plus a lost cell). The 18 pF

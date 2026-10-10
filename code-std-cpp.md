@@ -1,6 +1,6 @@
 # oparroy C++ coding standard
 
-Split out of `code-std.md` 2026-10-10 (sections 2–8 and 10 there).
+Split out of `code-std.md` (sections 2–8 and 10 there).
 Philosophy, enforcement split, and the red/green test rule live in
 [code-std.md](code-std.md) and apply here.
 
@@ -21,7 +21,7 @@ Scope: all oparroy firmware and host-testable firmware logic.
   ([DESIGN.md#8-verification-strategy](DESIGN.md#8-verification-strategy),
   settled): `-ffreestanding -nostdlib -fno-exceptions -fno-rtti`, no
   heap outside explicitly carved arenas.
-- **No `__DATE__`/`__TIME__`/`__TIMESTAMP__`** (2026-09-26): bit-for-bit
+- **No `__DATE__`/`__TIME__`/`__TIMESTAMP__`**: bit-for-bit
   reproducible builds are a hard constraint
   ([DESIGN.md#8-verification-strategy](DESIGN.md#8-verification-strategy));
   version identity comes from git, never from compile-time stamps.
@@ -45,13 +45,13 @@ Scope: all oparroy firmware and host-testable firmware logic.
   integers take a `default`. Fallthrough only with `[[fallthrough]]`.
   GCC doesn't treat an exhaustive enum switch as covering, so the
   function ends with `UNREACHABLE()` (`firmware/lib/verify.hpp`,
-  landed 2026-09-28, replacing bare
-  `__builtin_unreachable()`) — `-Wswitch-enum` still guards the cases.
+  replacing bare `__builtin_unreachable()`) — `-Wswitch-enum` still
+  guards the cases.
 - Loops have bounded trip counts where feasible — friendlier to KLEE
   and to WCET reasoning. Unbounded loops need a stated reason (e.g.
   polling a status register with a timeout).
 - **Integer index loops are spelled `lib::irange`, never classical
-  `for (i = 0; i < n; ++i)`** (2026-09-26): boundary reasoning happens
+  `for (i = 0; i < n; ++i)`**: boundary reasoning happens
   once, in the type (`firmware/lib/range.hpp`) — half-open interval,
   zero-trip on inverted ranges, no increment-past-max on any integer
   width. `zip`/`enumerate` land when a consumer appears.
@@ -75,12 +75,12 @@ Scope: all oparroy firmware and host-testable firmware logic.
   at zero cost — and combined with exhaustive switching
   ([#2-control-flow](#2-control-flow)), adding a state becomes a
   compile error at every site that doesn't handle it.
-- **`bool` arguments and returns are mostly a no-no** (2026-09-26): at
+- **`bool` arguments and returns are mostly a no-no**: at
   the call site `engage(true)` says nothing — use a two-state
   `enum class` (`Bypass::Engaged` reads). Exceptions: predicate
   functions named as questions (`tx_ready()`) may return `bool`, and
   labeled struct/config fields (`supervisor = true`) may hold one.
-- **Make illegal states unrepresentable** (2026-09-26): choose types
+- **Make illegal states unrepresentable**: choose types
   so invalid states cannot be constructed, rather than checking for
   them downstream. Establish invariants in the constructor (RAII,
   [#4-memory-and-ownership](#4-memory-and-ownership)), never a
@@ -98,11 +98,11 @@ Scope: all oparroy firmware and host-testable firmware logic.
 - Static storage or arena-backed, fixed-capacity containers; nothing
   grows without asking
   ([DESIGN.md#8-verification-strategy](DESIGN.md#8-verification-strategy)
-  foundation library). Growth comes in two flavors (2026-09-26,
-  [#5-error-handling](#5-error-handling)): `try_*` for data-driven
+  foundation library). Growth comes in two flavors
+  ([#5-error-handling](#5-error-handling)): `try_*` for data-driven
   fills, VERIFY-contract growth (`push_back`) for sized-by-construction
   ones.
-- **No raw pointers at interfaces** (2026-09-26): a view over a buffer
+- **No raw pointers at interfaces**: a view over a buffer
   is `Span<T>` (`firmware/lib/span.hpp`), never `T*` plus a separate
   length — the bound travels with the pointer or it gets lost. Raw
   `T*` stays inside span/container internals and at the MMIO boundary
@@ -130,7 +130,7 @@ Scope: all oparroy firmware and host-testable firmware logic.
   type. Unchecked errors are compile errors.
 - `TRY(...)` propagation (AK's idiom) is the one blessed control-flow
   macro — it reads like exceptions and compiles to branches.
-- **Offensive, not defensive** (2026-09-26): contract violations — a
+- **Offensive, not defensive**: contract violations — a
   capacity sized by construction, an "impossible" state — trap via
   `VERIFY` (`firmware/lib/verify.hpp`); KLEE proves each trap
   unreachable, and a reachable one is a proof failure with a
@@ -143,7 +143,7 @@ Scope: all oparroy firmware and host-testable firmware logic.
 - `VERIFY(...)` failures route through the project failure hook, which
   ties into the watchdog/bypass policy
   ([DESIGN.md#4-node-watchdog--bypass](DESIGN.md#4-node-watchdog--bypass)):
-  deliberate bypass-engage, not a hung loop. (2026-09-28: the hook is
+  deliberate bypass-engage, not a hung loop. (the hook is
   `lib::verify_failed`, wired by `-DOPARROY_TARGET` in
   `firmware/lib/verify.hpp`; the node firmware provides its own
   definition.)

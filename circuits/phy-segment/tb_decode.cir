@@ -1,5 +1,5 @@
 * tb_decode — decode margins of the PHY segment RX path
-* (DESIGN.md §2, docs/phy-analysis-2026-09-26.md §2): WS2812-style
+* (DESIGN.md §2, docs/phy-analysis.md §2): WS2812-style
 * duty-coded cells through switch + lumped segment + OPA comparator
 * must decode on the correct side of the cell midpoint with >= 100 ns
 * of high-time margin (the §2 budget is ±160 ns; the analog front end
@@ -31,7 +31,7 @@
 * a1/a2 are checked with sign (wrong-side decode fails even when far
 * from the midpoint); each run echoes its worst signed margin in ns.
 *
-* Results (2026-09-26, ngspice 45): all 24 combos PASS. Worst
+* Results (ngspice 45): all 24 combos PASS. Worst
 * high-time margin (already net of the 100 ns contract) per
 * (cseg, path), min over voff, Schmitt / VDD/2 slice:
 *   cseg=47p   bypass 78.5/46.9 ns   inserted 78.2/46.9 ns
@@ -47,7 +47,7 @@
 * after a '0' cell vs 229 ns after a '1' cell). At the Schmitt slice
 * the stretch inflates '1'-cell margin and '0' cells bind (~78 ns);
 * at the VDD/2 slice '1' cells bind (~44 ns). Both are far inside the
-* ±160 ns budget of docs/phy-analysis-2026-09-26.md §2.
+* ±160 ns budget of docs/phy-analysis.md §2.
 
 .include phy-segment.cir
 .param cseg=220p voff=0 psel=0

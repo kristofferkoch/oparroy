@@ -4,7 +4,7 @@ Parts and nets form a bipartite graph — part records on one side, net
 ellipses on the other, edges labeled with pin numbers (and names, when
 the symbol gives one). Deliberately simple; abstraction-level block
 views are future work (prior art:
-docs/prior-art-schematic-gen-2026-09-28.md, DESIGN.md §7 DSL shape).
+docs/prior-art-schematic-gen.md, DESIGN.md §7 DSL shape).
 """
 
 from oparroy.dsl.ir import Circuit, Pin, natural_key

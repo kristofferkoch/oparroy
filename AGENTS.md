@@ -48,9 +48,13 @@ card text while the card is alive.
 ## Voice and format
 
 Tight, active, present tense. Concrete over abstract — name the part,
-the pin, the exact failure mode. Use **absolute dates** ("2026-09-26"),
-never a relative "recently" / "now" that rots. Cite doc sections with
-markdown links to the heading anchor —
+the pin, the exact failure mode. **No timestamps on decisions, changes,
+or status** — never "settled 2026-09-26", "landed 2026-09-28", "raised
+2026-09-29" in docs or comments; git blame and git log are the timeline.
+Write a date only when the date is itself the fact — a price/stock
+snapshot, a datasheet revision, an external event — and then write it
+absolute, never a relative "recently" / "now" that rots. Cite doc
+sections with markdown links to the heading anchor —
 `[code-std.md#4-tests](code-std.md#4-tests)` in markdown, bare
 `code-std.md#4-tests` in code comments — never a bare `§N`. Link
 rather than duplicate; the linked doc stays the single source
@@ -77,7 +81,7 @@ of truth.
   undocumented quirk: record it in `notes/quirks.md`.
 - Silicon quirks, doc-vs-silicon mismatches, SDK-vs-doc mismatches, and
   tribal knowledge (issue trackers, bench findings) go in
-  `notes/quirks.md`, one sourced bullet each, dated.
+  `notes/quirks.md`, one sourced bullet each.
 
 ## Project shape
 

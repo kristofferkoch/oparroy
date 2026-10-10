@@ -36,7 +36,7 @@
 * Echoed per run: contract numbers at both taps, per-tap first-edge
 * delay (the re-driver's added latency, a §2 ring-latency input).
 *
-* Results (2026-09-28, ngspice 45):
+* Results (ngspice 45):
 *   rser=470: spans PASS only to 5 m (10 m total) — WORSE than the
 *     12 m unamplified tb_reach reach. The repeater re-drives the mid
 *     comparator's 7.7 V/us ramp (vs the TX pin's clean 5 ns edges);

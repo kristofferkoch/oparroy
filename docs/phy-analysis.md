@@ -1,9 +1,9 @@
 # PHY analysis — line coding, bit rate, re-timing, addressing
 
-Analysis date 2026-09-26. Decisions are recorded in DESIGN.md
-§2; this file keeps the reasoning. Hardware facts cited from the
-CH32V003 notes (`datasheets/CH32V003/notes/`, abbreviated DS0/RM per
-their conventions).
+Decisions are recorded in DESIGN.md §2; this file keeps the
+reasoning. Hardware facts cited from the CH32V003 notes
+(`datasheets/CH32V003/notes/`, abbreviated DS0/RM per their
+conventions).
 
 ## 1. Line-coding candidates
 
@@ -81,7 +81,7 @@ the same per-hop bound. What actually matters:
    §5) and is the ring's timing reference.
 
 **Forwarding granularity: per-bit cut-through, slot rewrite on the
-fly** (user decision 2026-09-26, superseding this analysis's initial
+fly** (user decision, superseding this analysis's initial
 store-and-forward baseline). Full-frame store-and-forward pays
 N×frame-time of latency for a per-hop validation opportunity the
 protocol doesn't use; WS2812 and EtherCAT both stream instead. A node
@@ -99,7 +99,7 @@ Mechanics on the CH32V003:
   matching CCR pair into the TX buffer ahead of the transmit pointer,
   decrement the bit counter. At the own slot's arrival: read command
   bits / substitute telemetry bits instead of passing through.
-- Buffering and CPU budget (bounded, 2026-09-26): pipeline depth is a
+- Buffering and CPU budget (bounded): pipeline depth is a
   firmware tunable, order 8–16 cells. RAM per cell: RX two 32-bit
   captures = 8 B (4 B at 16-bit packing), TX one 16-bit CCR = 2 B → a
   16-cell pipeline ≈ 160 B total. Ring buffers are statically
@@ -163,16 +163,16 @@ What this changes elsewhere:
 - The OPA has **no documented hysteresis**. Baseline: no analog
   hysteresis; glitch rejection from the TIM2 input digital filter
   (ICxF, RM §11.4.7) plus ratio-decode margins. **Confirmed by
-  simulation (2026-09-26, `circuits/phy-segment/tb_noise.cir`)**: no
-  spurious edges under ringing or ±250 mV-class crosstalk, worst duty
+  simulation (`circuits/phy-segment/tb_noise.cir`)**: no spurious
+  edges under ringing or ±250 mV-class crosstalk, worst duty
   error ~1.2 ns; the feedback-resistor fallback (OPO = PD4, the
   internal TIM2_CH1 route doesn't need the pin) stays unpopulated.
 - OPCM (RM §3.2.2: OPA-high → system reset) is a hardware
   "line active" wake option — noted for the sleep story, not part of
   the PHY baseline.
 
-Why not the plain GPIO digital input as the RX buffer (question raised
-2026-09-26, recorded here with the decision):
+Why not the plain GPIO digital input as the RX buffer (question
+recorded here with the decision):
 
 - **Threshold placement.** Ratio-metric decode slices each cell at
   VDD/2, symmetric on both edges. The Schmitt buffer's guaranteed
@@ -238,8 +238,8 @@ one returned frame. Consequences:
   each slave — same shape here, at per-bit cut-through granularity
   (§3).
 - **The frame gap doubles as a ring-wide latch — WS2812's "global
-  shutter" transferred to inputs *and* outputs** (user direction
-  2026-09-26). On the gap, every node (a) applies the previous frame's
+  shutter" transferred to inputs *and* outputs** (user direction). On
+  the gap, every node (a) applies the previous frame's
   command outputs from a double buffer and (b) samples its inputs for
   the coming frame's slot. All slots in frame k therefore hold values
   from the same instant L_k, and all outputs from frame k take effect

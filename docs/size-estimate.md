@@ -1,4 +1,4 @@
-# Program size estimate — 2026-09-26
+# Program size estimate
 
 Back-of-the-envelope flash/RAM budget for the node firmware, recorded
 before the firmware exists so the future can laugh. Constraint: node =
@@ -47,7 +47,7 @@ Calibration: ch32v003fun-class programs with timer+DMA+ADC land at
 | Stack (shallow calls, 1–2 ISR levels)                | 256–512 B                  |
 | **Total**                                            | **~0.5–0.8 KB — ~30–40 %** |
 
-## Verdict (2026-09-26)
+## Verdict
 
 Both fit with ~2× headroom. RAM is the tighter axis; the §2 hard cap of
 256 B on ring DMA buffers is what keeps it boring. Main risk is not the
@@ -57,6 +57,6 @@ accelerometer paths all ship in every node.
 
 ## Future laughter log
 
-When the real numbers exist, append them here with dates:
+When the real numbers exist, append them here:
 
 - (first linked node image): — KB flash, — KB RAM

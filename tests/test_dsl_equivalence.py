@@ -1,4 +1,4 @@
-"""Reset-state equivalence-proof tests (docs/instrumentation-equivalence-2026-09-29.md).
+"""Reset-state equivalence-proof tests (docs/instrumentation-equivalence.md).
 
 The fixture is the memo §5 slice: a minimal base board (one tile, two
 nets) plus one series insert (``F1`` on the TX port) and one tap

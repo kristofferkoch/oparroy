@@ -10,7 +10,7 @@ net nodes, matching eeschema's own handling.
 Sections eeschema also emits — ``libparts``, ``libraries``, comp
 ``fields``/``libsource``, ``design`` date — are deliberately omitted;
 they are optional for pcbnew's importer (verified against the reader
-source, 2026-09-27 review).
+source).
 """
 
 import uuid

@@ -20,8 +20,8 @@ MCU pins):
 - **Hysteresis fallback** (§2): the OPO→OPP feedback resistor the
   phy-segment noise bench rejected stays on the BOM as DNP — the
   footprint is there if real silicon disagrees with the simulation.
-- **`sel` Schmitt insurance** (§4's accepted 10 ns/V violation, settled
-  2026-09-29): a DNP 74LVC1G17 footprint in the sel path between the
+- **`sel` Schmitt insurance** (§4's accepted 10 ns/V violation): a
+  DNP 74LVC1G17 footprint in the sel path between the
   watchdog and the switch, bridged by a fitted 0 Ω — if the bench
   disagrees the fix is a resistor swap, not a respin.
 
@@ -144,7 +144,7 @@ class PhyFrontEnd(Subcircuit):
         circuit.part("Rat", R0603("470", a=txa_sw, b=tx_a))
         circuit.part("Dat", TvsSod323(a=tx_a, b=gnd))
 
-        # sel Schmitt insurance (§4, 2026-09-29): the watchdog drives the
+        # sel Schmitt insurance (§4): the watchdog drives the
         # switch through a fitted 0 Ω bridge, with a DNP 74LVC1G17 across
         # it — depopulate Rsel, populate BUF1 if the bench disagrees.
         circuit.part("Rsel", R0603("0R", a=sel, b=sel_sw))

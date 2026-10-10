@@ -7,27 +7,27 @@ real work — **move**, don't copy. Reference, don't duplicate.
 ## Protocol
 
 - WS2812-style self-clocked single-wire signaling, closed into a ring —
-  settled 2026-09-26: ratio-metric PWM cells at 800 kbit/s,
-  positional slot addressing via UNIID enumeration, slotted telemetry.
-  See DESIGN.md §2 and docs/phy-analysis-2026-09-26.md. Frame format
+  settled: ratio-metric PWM cells at 800 kbit/s, positional slot
+  addressing via UNIID enumeration, slotted telemetry.
+  See DESIGN.md §2 and docs/phy-analysis.md. Frame format
   detail: the node firmware.
 
 ## Fault tolerance
 
-- Bypass topology — settled 2026-09-26: counter-rotating dual
-  ring with symmetric rebroadcast. See DESIGN.md §3. Intermittent-fault
+- Bypass topology — settled: counter-rotating dual ring with symmetric
+  rebroadcast. See DESIGN.md §3. Intermittent-fault
   policy stays open.
-- Capacitance characterization of data lines (2026-09-26) — a node
-  measures line capacitance (e.g. charge-time / step-response via the
+- Capacitance characterization of data lines — a node measures line
+  capacitance (e.g. charge-time / step-response via the
   comparator) to estimate cable length to its neighbor and to localize
   faults (open, short, water ingress shifts C). Doubles as a ring
   self-survey: each node reports its segment length. Open questions:
   measurement circuit (drive weakly, time the RC with TIM capture?),
   resolution vs. cable-length granularity, interaction with the bypass
   switches' on-capacitance.
-- **Impedance probing as fault detection** (2026-09-26) — during the
-  frame gap (line-low break, §2 vsync — the line is guaranteed idle), a
-  node briefly drives its segment high then low (weak pull, or the TX
+- **Impedance probing as fault detection** — during the frame gap
+  (line-low break, §2 vsync — the line is guaranteed idle), a node
+  briefly drives its segment high then low (weak pull, or the TX
   pin itself) and watches via the comparator whether the line follows.
   Probe source needs no parts: the CH32V003 pads have both weak pull-up
   and pull-down, 35–55 kΩ (datasheets/CH32V003/notes/facts.md,
@@ -47,15 +47,15 @@ real work — **move**, don't copy. Reference, don't duplicate.
 ## Hardware
 
 - Comparators for RX: threshold selection, hysteresis, glitch filtering.
-- **QDM fast mode for CI flash** (parked 2026-09-29, against the §6
-  2026-09-29 flash fan-out): the muxed single-PIO-channel scheme lands
-  ≈1.6 s total flash, wire-bound at 8 nodes. If that ever hurts, the
+- **QDM fast mode for CI flash** (parked, against the §6 flash
+  fan-out): the muxed single-PIO-channel scheme lands ≈1.6 s total
+  flash, wire-bound at 8 nodes. If that ever hurts, the
   QingKeV2 QDM fast mode (debug manual §2.2, extracted in
   `datasheets/CH32V003/notes/sdi-debug.md`) is the reserve — more wire
   bandwidth per PIO channel, no topology change.
-- **Blind-pin connector keying** (raised 2026-09-29, against the §3
-  2026-09-29 connector decision): the 2x5 pinout's five grounds leave
-  one expendable — blind pin 10 (the cable-edge conductor, so the
+- **Blind-pin connector keying** (raised against the §3 connector
+  decision): the 2x5 pinout's five grounds leave one expendable —
+  blind pin 10 (the cable-edge conductor, so the
   floating stub couples least) on the header and press a polarizing
   plug (3M 3433-class) into the matching socket hole, PC-floppy
   style. GND×4 keeps the power budget (~0.16 Ω/m loop). Redundant on
@@ -72,8 +72,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Node peripherals
 
-- **Load cell** as a supported sensor type (2026-09-26). Interesting
-  because it likely wants its own small board: strain-gauge bridge
+- **Load cell** as a supported sensor type. Interesting because it
+  likely wants its own small board: strain-gauge bridge
   excitation + sensitive low-noise analog front end (instrumentation
   amp / 24-bit ADC, HX711-class) that doesn't belong on the ring node
   itself. Node talks to it over I2C/SPI — exercises the §5 I/O
@@ -85,11 +85,10 @@ real work — **move**, don't copy. Reference, don't duplicate.
 ## Firmware library
 
 - `zip` / `enumerate` views over `lib::irange`
-  (`firmware/lib/range.hpp`), deferred 2026-09-26 — add when a consumer
-  appears.
+  (`firmware/lib/range.hpp`), deferred — add when a consumer appears.
 - Narrow size fields (`uint8_t`/`uint16_t` vs `std::size_t`) in
-  datastructures to save RAM, raised 2026-09-26 — as a blanket policy,
-  no: one field per container instance saves only ~tens of bytes, struct
+  datastructures to save RAM — as a blanket policy, no: one field per
+  container instance saves only ~tens of bytes, struct
   padding can eat it, and RV32 needs explicit zero-extension on every
   byte load, which can *grow* flash in size-heavy loops. Keep
   `std::size_t` in the generic library (`StaticVector`, `Span`).
@@ -99,8 +98,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
-- **Content-addressed CI gating** (2026-10-04): path-filter CI ("this
-  change touches no C++, skip the firmware jobs") is fragile because
+- **Content-addressed CI gating**: path-filter CI ("this change
+  touches no C++, skip the firmware jobs") is fragile because
   the filter's idea of a gate's inputs drifts from the build's real
   inputs — a missed path skips a gate that should have run, silently.
   The honest version builds the *worktree* from the declared inputs:
@@ -114,8 +113,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
   ⇒ gate skipped (or replayed green from a previous run). Natural
   companion to the parallel-gate-jobs CI split: each parallel job gets
   its own input hash.
-- **Pin-map scarcity lint / auto-assignment** (2026-09-28, follows the
-  node pin map):
+- **Pin-map scarcity lint / auto-assignment** (follows the node pin
+  map):
   `check_pin_map` verifies a hand-written binding; it does not yet
   *judge* it. A scarcity pass could warn when a pad with rare
   capabilities (the four OPA inputs, ADC channels, FT pins) is burned
@@ -127,14 +126,14 @@ real work — **move**, don't copy. Reference, don't duplicate.
   assignment is a pleasant puzzle by hand and an explicit binding
   reviews better; revisit when the CI board's supervisor (RP2040, 30
   GPIO) or a second node MCU makes the table big enough to drift.
-- **Fanout-driven net-label elision for generated drawings**
-  (2026-09-27): when generating circuit drawings (feeds the
-  docs/prior-art-schematic-gen-2026-09-28.md survey
+- **Fanout-driven net-label elision for generated drawings**: when
+  generating circuit drawings (feeds the
+  docs/prior-art-schematic-gen.md survey
   and whatever renderer follows the dot dump), the highest-fanout nets
   — GND, the power rails — become net labels/symbols instead of drawn
   wires. A pareto cut on fanout keeps the drawing from degenerating
   into a ratsnest around the few nets that touch everything.
-- **Parts-DB stock refresh tooling** (2026-09-28): the parts table
+- **Parts-DB stock refresh tooling**: the parts table
   (`design/parts_db.py`) is as-of-dated snapshots by hand; a script
   that queries JLCPCB/LCSC (their parts API, or the jlcsearch mirror)
   and rewrites the `Stock` entries with fresh counts and as-of dates
@@ -142,15 +141,15 @@ real work — **move**, don't copy. Reference, don't duplicate.
   questions: rate limits and auth on JLCPCB's side, whether the script
   edits `design/parts_db.py` in place (data-as-code stays the source
   of truth) or emits an overlay.
-- **Layout return-path and stitching checks** (2026-10-04): verify, from
-  the routed `.kicad_pcb`, that the return path for each switching
+- **Layout return-path and stitching checks**: verify, from the routed
+  `.kicad_pcb`, that the return path for each switching
   signal (the PHY line drivers' outputs, the watchdog charge pump,
   status LEDs) takes a reasonably direct GND route back to the
   driver's own ground pin — the current loop, not just connectivity.
   Plus a fill-stitching check: GND/other copper fills are adequately
   via-stitched, no large unstitched islands or long thin necks between
   pours. Both are EMI/loop-area concerns DRC doesn't cover.
-  **Method ladder settled 2026-10-04:** rung 1 = geometric/rule-based
+  **Method ladder settled:** rung 1 = geometric/rule-based
   checks in CI, and that's what this idea builds — at our frequencies
   (800 kbit/s, MCU edge rates → spectrum ≤ ~200 MHz on cm-scale
   copper) the board is deep in the quasi-static regime, loop
@@ -172,8 +171,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
   thresholds aren't pure folklore. Rung 5 = bench: DIY near-field
   H/E probes + spectrum analyzer/SDR over a running ring, TDR/NanoVNA
   for discontinuities (§6 HIL philosophy).
-- **Technology mapping onto multi-unit packages** (2026-09-27) — the
-  FPGA-flow analogy: synthesis emits primitive gates, the technology
+- **Technology mapping onto multi-unit packages** — the FPGA-flow
+  analogy: synthesis emits primitive gates, the technology
   mapper packs them onto physical cells. Applied here: a capture
   instantiates *logical* primitives (two diodes whose cathodes share a
   net), and a mapping pass binds them onto a physical multi-unit
@@ -193,8 +192,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
   test board?
 - Analog simulation of the PHY (line drivers, comparators, bypass
   switches) with ngspice or similar.
-- **Emulate the node in QEMU with custom peripheral models**
-  (2026-09-26). Feasibility analysis: the QingKe V2A core is plain
+- **Emulate the node in QEMU with custom peripheral models**.
+  Feasibility analysis: the QingKe V2A core is plain
   RV32EC — no custom ALU instructions (WCH's `XW` extension only
   appears on the bigger V4 cores) — and upstream QEMU's riscv32 target
   supports both E and C, so the CPU side is free; the peripherals are
@@ -215,8 +214,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
     natively (fits the ring topology), CI-oriented. No upstream CH32V003
     support found yet either, but far cheaper per peripheral than QEMU.
     HIL (§6) remains ground truth for anything timing-critical regardless.
-- **`Circuit.renamed()` drops port `source`/`sink` Limits**
-  (2026-10-10, spotted while landing the equivalence proof):
+- **`Circuit.renamed()` drops port `source`/`sink` Limits** (spotted
+  while landing the equivalence proof):
   `ir.py`'s annotation pass copies nets with `_add_net(name, is_port=…)` only — the interval ranges the range-containment check
   consumes vanish from the renamed IR. Harmless today (checks run
   pre-annotation), but any pass running post-annotation — an
@@ -224,7 +223,7 @@ real work — **move**, don't copy. Reference, don't duplicate.
   ranges. Fix is three lines (`source=net.source, sink=net.sink`), plus
   a test.
 - **Transform engine breaks on tiles nested deeper than one level**
-  (2026-10-10, spotted reviewing the equivalence proof):
+  (spotted reviewing the equivalence proof):
   `apply_transforms` binds escaped ports (control, tap) to nets it
   creates in the *top* circuit; for a tile at `("GRP", "T0")` the
   application succeeds but `flatten()` then KeyErrors — the enclosing
@@ -237,8 +236,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Related projects to mine
 
-- **Bela platform** (bela.io) — via Bernt, 2026-09-26. Researched:
-  [docs/bela-lessons-2026-09-26.md](docs/bela-lessons-2026-09-26.md).
+- **Bela platform** (bela.io) — via Bernt. Researched:
+  [docs/bela-lessons.md](docs/bela-lessons.md).
   Key transfers: frozen-blob PHY engine (PRU⇒PIO), smart nodes with
   cooked data, hardware node-ID via solder bridges, single firmware
   image with personality by type ID, pogo-pin test jig as a first-class

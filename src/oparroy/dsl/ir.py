@@ -285,10 +285,10 @@ class Residuals:
     """Electrical residual magnitudes of a part in its pass-through state.
 
     The reset-state equivalence proof's magnitude source
-    (``docs/instrumentation-equivalence-2026-09-29.md`` §4 Q3, settled
-    2026-10-10): a closed analog switch is 7 Ω, not 0 Ω — the proof
+    (``docs/instrumentation-equivalence.md`` §4 Q3): a closed analog
+    switch is 7 Ω, not 0 Ω — the proof
     enumerates these per placed part against the residual register
-    (``docs/instrumented-ci-2026-10-05.md`` §9). Values come from the
+    (``docs/instrumented-ci.md`` §9). Values come from the
     parts DB (``PartRecord.residuals``) via the typed part class; a
     field left None is no data, never zero. Geometry residuals (tap
     stub capacitance) are not expressible here — they are layout

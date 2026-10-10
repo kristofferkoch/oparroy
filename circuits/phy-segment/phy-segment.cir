@@ -1,5 +1,5 @@
 * phy-segment — one ring segment, node k to node k+1 (DESIGN.md
-* §2, docs/phy-analysis-2026-09-26.md §2/§5): node TX pin ->
+* §2, docs/phy-analysis.md §2/§5): node TX pin ->
 * 74LVC1G3157 bypass/insert switch -> lumped segment -> next node's
 * OPA comparator RX. 3.3 V single-ended, 800 kbit/s WS2812-style
 * duty-coded cells: 1.25 us cell, T0H=395 ns, T1H=792 ns (48 MHz

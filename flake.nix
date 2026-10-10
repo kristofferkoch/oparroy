@@ -64,8 +64,8 @@
               pkgs.ngspice
               # KiCad: symbol/footprint libraries — the DSL validates
               # part references against these (DESIGN.md §7 DSL shape) —
-              # plus the application itself for layout (joins
-              # 2026-09-29, DESIGN.md §7). One pkgs.kicad, so pcbnew's
+              # plus the application itself for layout (DESIGN.md §7).
+              # One pkgs.kicad, so pcbnew's
               # version always matches the libraries.
               pkgs.kicad
               pkgs.kicad.libraries.symbols
@@ -94,7 +94,7 @@
               # builds it for Python 3.14, the same 3.14 the project pins —
               # uv finds nix's interpreter on PATH, so exporting pcbnew's
               # site-packages makes `import pcbnew` work in the project venv
-              # (verified against KiCad 10.0.6 on 2026-10-05). The
+              # (verified against KiCad 10.0.6). The
               # python314 pin must track kicad's build.
               export PYTHONPATH=${pkgs.kicad.base}/lib/python${pkgs.python314.pythonVersion}/site-packages''${PYTHONPATH:+:$PYTHONPATH}
               echo "== oparroy dev shell =="

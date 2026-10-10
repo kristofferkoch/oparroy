@@ -1,4 +1,4 @@
-# Instrumented CI design — fault injection, overrides, taps (2026-10-05)
+# Instrumented CI design — fault injection, overrides, taps
 
 Settles the instrumented half of the CI board that DESIGN.md §6 left as
 prose: the fault-injection complement with part selection, the
@@ -6,7 +6,7 @@ supervisor-override design for human I/O, and the boundary node's tap
 set — expressed as the **transform list** against the settled node board
 design (`design/node.py`, `boards/node/`), the artifact the
 instrumentation-transform machinery
-(`docs/instrumentation-equivalence-2026-09-29.md`) encodes and the CI
+(`docs/instrumentation-equivalence.md`) encodes and the CI
 board
 capture consumes.
 
@@ -29,7 +29,7 @@ Every §3 failure mode, and how the CI board reproduces it:
 | Hung MCU                        | keep-alive cut (this doc §4) — watchdog engages, node stays alive and observable                                              | —                                                                                 |
 | Babbling idiot (garbage TX)     | crafted-waveform stimulus on the boundary node's PIO taps (this doc §5); deliberately-broken images via the §6 SWIO flash mux | §2 containment is what gets tested                                                |
 
-**"Clock kill" resolves** (2026-10-05): the literal fault does not
+**"Clock kill" resolves**: the literal fault does not
 exist on this node. The node runs HSI-only — no crystal, no clock net
 anywhere (§5) — and PD7 ships as GPIO with NRST option-byte-disabled
 ([quirks.md](../datasheets/CH32V003/notes/quirks.md) §GPIO), so there is

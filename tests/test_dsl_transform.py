@@ -1,7 +1,7 @@
 """Instrumentation-transform tests: the four kinds, per-tile keying, provenance.
 
 The fixture mirrors the CI board's shape at minimal size
-(docs/instrumented-ci-2026-10-05.md §7): a ``Tile`` subcircuit with a
+(docs/instrumented-ci.md §7): a ``Tile`` subcircuit with a
 PHY inner instance (so transform targets reach across the tile's own
 hierarchy), tiled twice on segment nets, plus a third instance of a
 different subcircuit the per-tile keying must not touch.
