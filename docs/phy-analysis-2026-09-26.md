@@ -1,6 +1,6 @@
-# PHY analysis — line coding, bit rate, re-timing, addressing (T3)
+# PHY analysis — line coding, bit rate, re-timing, addressing
 
-Analysis date 2026-09-26, card T3. Decisions are recorded in DESIGN.md
+Analysis date 2026-09-26. Decisions are recorded in DESIGN.md
 §2; this file keeps the reasoning. Hardware facts cited from the
 CH32V003 notes (`datasheets/CH32V003/notes/`, abbreviated DS0/RM per
 their conventions).
@@ -72,7 +72,7 @@ the same per-hop bound. What actually matters:
    supervisor is the *only* frame originator and drainer; nodes only
    rewrite their own slot. Duplication/loss becomes a protocol-level
    invariant the supervisor can assert (frame it sent ≠ frame it got
-   back ⇒ fault), which feeds T13's intermittent-fault strategy.
+   back ⇒ fault), which feeds the intermittent-fault strategy.
 1. **Circulation-time drift**: total loop time is the sum of per-node
    delays, each ±2.2 % worst case, so frame arrival period at the
    supervisor wanders by a few percent. Ratio-metric decode makes this
@@ -131,11 +131,11 @@ What this changes elsewhere:
   illegal-cell detection (period outside 0.9–1.6 µs ⇒ stop
   regenerating, force the line idle); babbling-idiot containment then
   rests on the hardware bypass (DESIGN.md §4) and supervisor-side
-  CRC/sequence checks — an input to T13.
+  CRC/sequence checks — an input to the intermittent-fault work.
 - **Fallback rung**: if the per-bit loop misses timing on-target,
-  degrade to store-and-forward. T11 brings up store-and-forward first
-  for correctness, then switches the forwarding loop to cut-through
-  and measures.
+  degrade to store-and-forward. The node firmware brings up
+  store-and-forward first for correctness, then switches the
+  forwarding loop to cut-through and measures.
 
 ## 4. Bit rate
 
@@ -149,7 +149,7 @@ What this changes elsewhere:
   AHB — comfortable at 48 MHz.
 - The comparator leaves headroom for 2–4 Mbit/s later; not the
   baseline because nothing in the application traffic needs it and
-  every margin (cable reach, T15; EMI; decode) shrinks with rate.
+  every margin (cable reach; EMI; decode) shrinks with rate.
 
 ## 5. Signaling levels and the RX front-end
 
@@ -162,7 +162,7 @@ What this changes elsewhere:
   (OPP0 = PA2 or OPP1 = PD7).
 - The OPA has **no documented hysteresis**. Baseline: no analog
   hysteresis; glitch rejection from the TIM2 input digital filter
-  (ICxF, RM §11.4.7) plus ratio-decode margins. **Confirmed by T5
+  (ICxF, RM §11.4.7) plus ratio-decode margins. **Confirmed by
   simulation (2026-09-26, `circuits/phy-segment/tb_noise.cir`)**: no
   spurious edges under ringing or ±250 mV-class crosstalk, worst duty
   error ~1.2 ns; the feedback-resistor fallback (OPO = PD4, the
@@ -213,7 +213,7 @@ bridges, no provisioning step.**
   buzzer — §5), and extra per-node parts against the §1 cost driver.
   The bridges solve "which of N identical sensors am I on a bus" — a
   problem the ring topology doesn't have.
-- **Node personality**: one firmware image (T11), type byte from a
+- **Node personality**: one firmware image, type byte from a
   flash config location (option-byte Data0 or a flash data page), with
   auto-detect from populated peripherals where cheap. The type byte
   rides in the ENUM stamp, so the supervisor's auto-detect mirrors
@@ -259,23 +259,23 @@ one returned frame. Consequences:
   the latch event is free. Output latency: one circulation (~0.6 ms)
   from command to effect.
 
-Frame format detail (header fields, CRC, slot sizing per type) is T11
-scope; §2 records only the slotting principle.
+Frame format detail (header fields, CRC, slot sizing per type) is
+node-firmware scope; §2 records only the slotting principle.
 
 ## 8. What this feeds
 
-- **T5 (PHY sim)**: validate no-analog-hysteresis baseline under noise
+- **PHY sim**: validate no-analog-hysteresis baseline under noise
   / ringing / connector-fault cases; comparator threshold tolerance;
   drive strength vs segment capacitance.
-- **T11 (firmware v0)**: PWM-input + DMA RX path, TIM1/DMA TX path,
+- **Firmware v0**: PWM-input + DMA RX path, TIM1/DMA TX path,
   the per-bit cut-through forwarding loop (bring-up order:
   store-and-forward for correctness, then cut-through + measurement),
   frame format, ENUM protocol, type-byte personality.
-- **T16 (verification harness)**: add the slot-boundary bit-count
+- **Verification harness**: add the slot-boundary bit-count
   state machine to the harness targets — it is the piece of
   cut-through with the most invariant surface (off-by-one ⇒ wrong
   node addressed).
-- **T15 (cable reach)**: now has concrete signaling (3.3 V, 800 kbit/s,
+- **Cable reach**: now has concrete signaling (3.3 V, 800 kbit/s,
   push-pull 8 mA) to build RLGC models against.
-- **T13 (intermittent faults)**: supervisor-side frame echo comparison
+- **Intermittent faults**: supervisor-side frame echo comparison
   plus illegal-cell detection are the detection hooks.

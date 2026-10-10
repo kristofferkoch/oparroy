@@ -1,4 +1,4 @@
-"""Parts-DB tests (T7c, DESIGN.md §6: part selection is inventory-driven)."""
+"""Parts-DB tests (DESIGN.md §6: part selection is inventory-driven)."""
 
 from __future__ import annotations
 

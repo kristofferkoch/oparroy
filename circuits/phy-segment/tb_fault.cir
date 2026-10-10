@@ -1,5 +1,5 @@
-* tb_fault — connector-fault behavior at the PHY comparator RX (T5,
-* DESIGN.md §3): on each faulted-segment case rxout must reach a
+* tb_fault — connector-fault behavior at the PHY comparator RX
+* (DESIGN.md §3): on each faulted-segment case rxout must reach a
 * static, chatter-free state and hold it, else the chatter spams timer
 * captures and defeats the "no edges for > 2 frame times => flip RX
 * source" policy. A healthy 800 kbit/s preamble (1.25 us cells,

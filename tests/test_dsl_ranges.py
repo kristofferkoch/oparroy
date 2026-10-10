@@ -1,4 +1,4 @@
-"""Port limit ranges, interval containment, and waivers (T8)."""
+"""Port limit ranges, interval containment, and waivers."""
 
 from __future__ import annotations
 

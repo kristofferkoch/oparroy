@@ -1,7 +1,7 @@
 # SN74LVC1G3157 extracted facts — ring bypass SPDT analog switch
 
 Part: **SN74LVC1G3157DBVR** (SOT-23-6), single SPDT analog switch.
-Extracted 2026-09-26 for card T4 (DESIGN.md §4 watchdog/bypass).
+Extracted 2026-09-26 for the watchdog/bypass work (DESIGN.md §4).
 
 Source (canonical PDF in `datasheets/SN74LVC1G3157/`):
 

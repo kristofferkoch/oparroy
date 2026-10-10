@@ -1,4 +1,4 @@
-"""Pin-map tests: model, budget check, header emitter (T9)."""
+"""Pin-map tests: model, budget check, header emitter."""
 
 from __future__ import annotations
 

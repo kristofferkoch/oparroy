@@ -29,13 +29,14 @@
 //   are identical either way, so the cheaper spelling wins.
 // - Target (-DOPARROY_TARGET, meson/cross/rv32ec.ini, 2026-09-28):
 //   lib::verify_failed, the project failure hook — declared here,
-//   defined once per platform (the node firmware's definition lands
-//   with T11). Contract (code-std.md §6): report over the debug
+//   defined once per platform (the node firmware provides its own).
+//   Contract (code-std.md §6): report over the debug
 //   transport if the platform has one, then stop the §4 keep-alive
 //   strobe so the charge-pump watchdog engages RX→TX bypass within
 //   ~0.5 ms — deliberate bypass-engage, never a hung loop. The hook
 //   must not return; the cross build is compile/archive-only, so the
-//   undefined reference is the wiring point until T11 provides it.
+//   undefined reference is the wiring point until the node firmware
+//   provides it.
 // - Everything else (host): __builtin_trap(). Fuzz builds get a crash
 //   artifact; a constexpr-violated contract is a compile error.
 //

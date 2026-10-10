@@ -3,7 +3,7 @@
 Structural invariants raise during capture (see ir.py); everything here
 is a *semantic* check over the finished IR, reported as a batch of
 issues rather than a first-failure exception. Beyond what the emitters
-and pcbnew need to be true, this pass carries T8's first electrical
+and pcbnew need to be true, this pass carries the first electrical
 rules: interval containment over port limit ranges (a sink's acceptable
 range must cover the connected source's output range), with waivers as
 explicit, path-addressed capture data.
@@ -28,7 +28,7 @@ from oparroy.dsl.kicadlib import LibraryError
 
 _MIN_NET_PINS = 2
 
-#: Check id of the T8 port-range containment check; waivers address it.
+#: Check id of the port-range containment check; waivers address it.
 RANGE_CONTAINMENT = "range-containment"
 
 
@@ -86,7 +86,7 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
     sockets is flattened first, so findings report hierarchical paths
     (``WD1/Rs``, net ``WD1/x``), bound port nets are checked as the
     merged parent net, and sockets are checked as the part they
-    resolve to (standalone default or packed package unit). The T8
+    resolve to (standalone default or packed package unit). The
     port-range containment check runs before flattening, over the
     instance bindings themselves; the capture's waivers
     (``Circuit.waive``) apply last.
@@ -104,7 +104,7 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
 
 
 def _check_port_ranges(circuit: Circuit, prefix: tuple[str, ...]) -> list[Issue]:
-    """Interval containment over the port ranges sharing a net (T8), recursively.
+    """Interval containment over the port ranges sharing a net, recursively.
 
     Every declared sink on a net — a bound port's or the net's own —
     must cover every declared source on that net, per quantity: voltage

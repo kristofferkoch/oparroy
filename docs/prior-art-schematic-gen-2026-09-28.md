@@ -1,7 +1,7 @@
 # Prior art: automatic schematic generation
 
-Research date 2026-09-28, card T21. Question: what should oparroy's
-design-review views look like beyond the T7a dot dump (DESIGN.md §7),
+Research date 2026-09-28. Question: what should oparroy's
+design-review views look like beyond the dot dump (DESIGN.md §7),
 and what do we build vs borrow. Sources linked inline.
 
 ## 1. The requirement
@@ -218,5 +218,5 @@ Sequencing: **block view first** — small graphs, highest review value,
 exercises extraction before layout quality matters. Then the detail
 view on grandalf, golden-SVG tests in the house style.
 
-Follow-up filed as KANBAN card **T26 — DSL review views: block +
-detail** (2026-09-28), blocked by T7bd.
+Follow-up: **DSL review views: block +
+detail** (2026-09-28), blocked by DSL connection sugar.

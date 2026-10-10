@@ -1,4 +1,4 @@
-// Compile proof for the DSL-generated pin map (T9): pins.hpp must build
+// Compile proof for the DSL-generated pin map: pins.hpp must build
 // under the freestanding rule set on every toolchain in the matrix
 // (host clang, rv32ec GCC). The static_asserts pin the load-bearing
 // facts so a garbled regeneration can't pass vacuously — content drift

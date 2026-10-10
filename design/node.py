@@ -5,7 +5,7 @@ charge-pump watchdog (``design/watchdog_chargepump.py``) + status LEDs
 (§4.1) + terminal protection (§7 checklist, inside the PHY block) + the
 two §3 segment connectors (``design/segment.py``). ``Node`` is a
 subcircuit: the node board below captures it directly, and the CI board
-(T10) tiles it eight times — one capture, both boards.
+tiles it eight times — one capture, both boards.
 
 MCU pin budget: pads bind from ``design/node_pins.py`` — the one
 authoritative table (15 function requests + the SWIO reservation =
@@ -78,7 +78,7 @@ class TestPoint(TypedPart):
 
 
 class Node(Subcircuit):
-    """One ring node: the unit the node board captures and T10 tiles."""
+    """One ring node: the unit the node board captures and the CI board tiles."""
 
     def capture(self, circuit: Circuit) -> None:
         """Build the node; the interface is the §3 segment pinout."""

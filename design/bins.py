@@ -4,8 +4,8 @@ Footprints default per part class, overridable per instance: a bin is a
 typed-part subclass carrying the class-default footprint, so captures
 wire parts, not packages. 0603 is the project default for passives —
 hand-reworkable, stocked by every assembler (§6 inventory-driven
-selection). ``R0603``/``C0603`` are bound from the parts DB's records
-(T7c); the LED and TVS bins reference their DB records but stay local
+selection). ``R0603``/``C0603`` are bound from the parts DB's records;
+the LED and TVS bins reference their DB records but stay local
 (the LED bin spans three colors; the TVS bin is a single picked part).
 """
 

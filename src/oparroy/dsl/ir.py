@@ -179,7 +179,7 @@ def _bind_part_class(
 
 @dataclass(frozen=True)
 class Interval:
-    """A closed interval [low, high] — one limit range (T8).
+    """A closed interval [low, high] — one limit range.
 
     Containment is inclusive on both ends, so equal boundaries cover:
 
@@ -209,7 +209,7 @@ class Interval:
 
 @dataclass(frozen=True)
 class Limits:
-    """A port's electrical limit ranges (T8): voltage, optionally current.
+    """A port's electrical limit ranges: voltage, optionally current.
 
     On a ``source`` port the ranges are what the driver puts out; on a
     ``sink`` port what the input accepts. The validation pass checks
@@ -231,7 +231,7 @@ class Limits:
 
 @dataclass(frozen=True)
 class Waiver:
-    """An explicit, path-addressed check waiver: auditable data (T8).
+    """An explicit, path-addressed check waiver: auditable data.
 
     Waivers live in the capture next to the wiring they excuse
     (``board.waive("range-containment", "WD1/ka", reason=...)``) — never
@@ -684,12 +684,12 @@ class Net:
 
     @property
     def source(self) -> Limits | None:
-        """The limit ranges this port drives, or None when undeclared (T8)."""
+        """The limit ranges this port drives, or None when undeclared."""
         return self._source
 
     @property
     def sink(self) -> Limits | None:
-        """The limit ranges this port accepts, or None when undeclared (T8)."""
+        """The limit ranges this port accepts, or None when undeclared."""
         return self._sink
 
     @property
@@ -1094,14 +1094,14 @@ class Circuit:
 
     @property
     def waivers(self) -> tuple[Waiver, ...]:
-        """The capture's check waivers, in declaration order (T8)."""
+        """The capture's check waivers, in declaration order."""
         return tuple(self._waivers)
 
     def waive(self, check: str, path: str, *, reason: str) -> Waiver:
         """Waive one check finding by hierarchical path, with a reason.
 
         Waivers are explicit, path-addressed data in the capture —
-        auditable in review, never comment-style suppression (T8).
+        auditable in review, never comment-style suppression.
         ``check`` is the check id the finding carries (e.g.
         ``"range-containment"``); ``path`` is the '/'-separated
         hierarchical path it reports (``WD1/ka``), relative to this
@@ -1309,8 +1309,8 @@ class Circuit:
         flattening merges port and bound net. Port nets are exempt from
         the dangling-net checks — reaching outside is their job.
 
-        ``source``/``sink`` carry the port's electrical limit ranges
-        (T8): what this port drives out, what it accepts in. The
+        ``source``/``sink`` carry the port's electrical limit ranges:
+        what this port drives out, what it accepts in. The
         validation pass checks interval containment wherever an
         instance binds a declared port to a declared parent net. A
         pass-through port may declare both faces — what it accepts from

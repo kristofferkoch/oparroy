@@ -1,6 +1,6 @@
 # MCU research — 2026-09-26
 
-Input to KANBAN card T1 and DESIGN.md §5. Compiled by a research agent;
+Input to DESIGN.md §5. Compiled by a research agent;
 sources cited inline. FX: 1 USD ≈ 9.4 NOK, so the 3 NOK target ≈
 **$0.32**. Prices are USD unit prices at the stated quantity, LCSC
 unless noted.

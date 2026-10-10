@@ -1,4 +1,4 @@
-# Pre-commit hooks: cheap checks only, <3s warm (T16b).
+# Pre-commit hooks: cheap checks only, <3s warm.
 #
 # Non-Python tools come from the nix dev shell (flake.nix, DESIGN.md §8);
 # Python tools (ruff, ty) come from the uv project (pyproject.toml), with
@@ -54,6 +54,17 @@ repos:
       language: system
       types: [python]
       pass_filenames: false
+
+    # KANBAN card IDs (T##) never leave KANBAN.md (AGENTS.md): cards are
+    # deleted as they ship, orphaning every outside citation. Two digits
+    # minimum — single-digit tokens are tile instance names ("T0"), spice
+    # transmission-line elements, MCU timers, and datasheet tables (T3-16).
+    - id: no-kanban-card-ids
+      name: no KANBAN card IDs outside KANBAN.md
+      entry: '\bT[0-9]{2}[a-z]?\b'
+      language: pygrep
+      types: [text]
+      exclude: '^KANBAN\.md$'
 
     # Markdown pipeline as in falcon-app (PR #11194): mdformat owns GFM
     # layout, markdownlint lints content, lychee checks links/anchors.

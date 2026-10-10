@@ -1,7 +1,7 @@
-"""The oparroy parts table: the assembler-inventory view (T7c, DESIGN.md §6).
+"""The oparroy parts table: the assembler-inventory view (DESIGN.md §6).
 
-One record per part the captures and benches use, seeded from the T17
-inventory snapshot (docs/pcba-research-2026-09-26.md) and the
+One record per part the captures and benches use, seeded from the
+pcba-research inventory snapshot (docs/pcba-research-2026-09-26.md) and the
 datasheet notes. Every stock number is a *snapshot*: it carries its
 as-of date and source, and nothing here is live data — re-query
 JLCPCB before ordering. ``check_stock`` flags what has gone stale or
@@ -28,7 +28,8 @@ from oparroy.dsl import (
     Tier,
 )
 
-#: The T17 inventory snapshot date (docs/pcba-research-2026-09-26.md).
+#: The pcba-research inventory snapshot date
+#: (docs/pcba-research-2026-09-26.md).
 _SNAPSHOT = date(2026, 9, 26)
 
 PARTS = PartsDb(
@@ -40,7 +41,7 @@ PARTS = PartsDb(
             footprint="Resistor_SMD:R_0603_1608Metric",
             tier=Tier.BASIC,
             area_mm2=1.28,
-            note="generic 0603 Basic bin; per-value LCSC resolves at quote time (T23)",
+            note="generic 0603 Basic bin; per-value LCSC resolves at quote time",
         ),
         PartRecord(
             name="c-0603",
@@ -49,7 +50,7 @@ PARTS = PartsDb(
             footprint="Capacitor_SMD:C_0603_1608Metric",
             tier=Tier.BASIC,
             area_mm2=1.28,
-            note="generic 0603 Basic bin; per-value LCSC resolves at quote time (T23)",
+            note="generic 0603 Basic bin; per-value LCSC resolves at quote time",
         ),
         PartRecord(
             name="bat54s",
@@ -74,7 +75,8 @@ PARTS = PartsDb(
                 "still stands. Extended tier — the ~$3/line fee (§6) "
                 "applies; a Basic-tier BAT54S was not found but also "
                 "not hunted. Spice model is inline in "
-                "circuits/watchdog-chargepump/ until T7e"
+                "circuits/watchdog-chargepump/ until the DSL bench "
+                "port retires the hand-written netlists"
             ),
         ),
         PartRecord(
@@ -248,7 +250,7 @@ C0603 = PARTS.bind("c-0603", Capacitor, class_name="C0603")
 
 
 def main() -> None:
-    """Print the stock-freshness report (T7c)."""
+    """Print the stock-freshness report."""
     issues = PARTS.check_stock()
     for issue in issues:
         sys.stderr.write(f"{issue}\n")

@@ -1,5 +1,5 @@
-* tb_decode — decode margins of the PHY segment RX path (card T5,
-* DESIGN.md §2, docs/phy-analysis-2026-09-26.md §2): WS2812-style
+* tb_decode — decode margins of the PHY segment RX path
+* (DESIGN.md §2, docs/phy-analysis-2026-09-26.md §2): WS2812-style
 * duty-coded cells through switch + lumped segment + OPA comparator
 * must decode on the correct side of the cell midpoint with >= 100 ns
 * of high-time margin (the §2 budget is ±160 ns; the analog front end

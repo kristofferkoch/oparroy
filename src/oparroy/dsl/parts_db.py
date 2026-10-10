@@ -1,4 +1,4 @@
-"""The DSL parts DB: the assembler-inventory view over the parts in play (T7c).
+"""The DSL parts DB: the assembler-inventory view over the parts in play.
 
 DESIGN.md §6 settles part selection as **inventory-driven**: prefer
 what the prototype assembler (JLCPCB) stocks, because every unique
@@ -19,7 +19,7 @@ of re-declaring symbol/footprint pairs per capture.
 :meth:`PartsDb.check_stock` is the freshness audit: a snapshot older
 than the budget is stale (re-query the assembler), a never-queried
 part and an unverified tier are flagged, and a stock-out surfaces for
-T8's unsourcable-part check. Stock numbers are snapshots with
+the checker's unsourcable-part check. Stock numbers are snapshots with
 provenance, never live data.
 """
 
@@ -274,9 +274,9 @@ class PartsDb:
         Flags, per assembler-placed record: an unverified tier, a
         never-queried stock, a stale snapshot (older than
         ``max_age_days`` — re-query the assembler), and a stock-out
-        (feeds T8's unsourcable-part check). Tier-NONE parts are not
+        (feeds the checker's unsourcable-part check). Tier-NONE parts are not
         assembler-placed and are skipped. All findings are warnings;
-        the per-capture gate is T8's.
+        the per-capture gate is the check pass's.
         """
         if today is None:
             today = date.today()  # noqa: DTZ011 — stock snapshots are calendar dates

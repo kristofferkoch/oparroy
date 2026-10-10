@@ -1,8 +1,8 @@
 """Charge-pump bypass watchdog, captured in the DSL (DESIGN.md §4, §7).
 
 ``WatchdogChargePump`` is the §7 subcircuit form of
-``circuits/watchdog-chargepump/watchdog-chargepump.cir`` — the T7a
-proving circuit, re-cast as T7ba's reusable unit. The edge-sensitive
+``circuits/watchdog-chargepump/watchdog-chargepump.cir`` — the DSL
+proving circuit, re-cast as a reusable subcircuit. The edge-sensitive
 charge pump: the MCU emits a 20 kHz keep-alive on ``ka``; only
 transitions pump charge into Cs, so a hung MCU lets Rb pull ``sel``
 below VIL and the bypass switch relaxes closed — bypass is the default
@@ -11,13 +11,13 @@ state. D1 is one BAT54S series pair: pin 3 (COM) is the shared middle
 the pump cathode.
 
 Ports (the subcircuit interface): ``ka`` (keep-alive input), ``sel``
-(bypass-select output), ``GND``. The ports carry T8 limit ranges as
+(bypass-select output), ``GND``. The ports carry limit ranges as
 interface contracts: ``ka`` accepts 0..3.6 V (3V3 logic from the MCU),
 ``sel`` drives 0..3.3 V toward the bypass switch's select input — an
 instantiating parent checks interval containment against its own
 declared ranges.
 
-Part bins resolve from the parts DB (``design/parts_db.py``, T7c):
+Part bins resolve from the parts DB (``design/parts_db.py``):
 ``R0603``/``C0603`` are the shared 0603 bins, and the BAT54S's
 symbol/value/footprint pair comes from the ``bat54s`` record rather
 than a per-capture declaration.
@@ -50,13 +50,13 @@ from oparroy.dsl import (
     to_dot,
 )
 
-# Ad-hoc spice model bindings (the parts DB owns the records since
-# T7c, but emitter-side model resolution is T23's): the BAT54S-class
+# Ad-hoc spice model bindings (the parts DB owns the records, but
+# emitter-side model resolution is still open): the BAT54S-class
 # pump diodes, stand-in parameters from
 # circuits/watchdog-chargepump/watchdog-chargepump.cir's dpump model.
 SPICE_MODELS = {"BAT54S": "d(is=200n n=1.0 rs=5 tt=1n bv=30)"}
 
-#: The §4 series pair, bound from the DB's ``bat54s`` record (T7c).
+#: The §4 series pair, bound from the DB's ``bat54s`` record.
 Bat54s = PARTS.bind("bat54s", _Bat54s, class_name="Bat54s")
 
 

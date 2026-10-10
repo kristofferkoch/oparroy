@@ -1,10 +1,10 @@
-# Cable reach — findings (2026-09-28, card T15)
+# Cable reach — findings (2026-09-28)
 
 ngspice half of DESIGN.md §9's cable-reach question: maximum segment
 length unamplified, and with a re-driver in the segment. Benches:
 `circuits/cable-reach/` (`tb_reach`, `tb_redriver`, `tb_reach_noise`,
 run via `scripts/sim-run` or `ninja sim-cable-reach-<tb>`), built on
-the T5 `circuits/phy-segment/` topology with the lumped Lseg/Cseg
+the `circuits/phy-segment/` topology with the lumped Lseg/Cseg
 swapped for a transmission-line span. The long-cable bench measurement
 needs the test board — see §6.
 
@@ -96,7 +96,7 @@ analog repeater is ever used: ~740 ns per re-slice + span at 100 m
 ## 4. Noise at the reach boundary (tb_reach_noise)
 
 tb_reach's passing 470 Ω lengths past ~2 m have µs-class staircase
-edges — outside the 125 ns tb_noise covered, so the card's rerun
+edges — outside the 125 ns tb_noise covered, so the rerun
 condition applied. tb_noise's aggressors (20 kHz + 1.1 MHz, 3.3 V,
 12p + 6p coupling) onto the cable far end, voff swept ±13 mV:
 
@@ -117,7 +117,7 @@ not distributed along the span.
 
 ## 5. Power-loop drop — the §2.1 check
 
-§2.1 deferred its loop-drop check to this card's cable numbers. 28 AWG
+§2.1 deferred its loop-drop check to this doc's cable numbers. 28 AWG
 at 0.214 Ω/m, §3 pinout (one 3V3 conductor, two GND): 0.321 Ω/m of
 segment in the power loop. 8-node ring, uniform per-node current I:
 
@@ -139,9 +139,9 @@ applies, or segments stay ≤ ~5 m for full single-fault power
 integrity at 10 mA nodes. UNREG is a separate, payload-dependent
 budget — out of scope here.
 
-## 6. What remains (bench half of the card)
+## 6. What remains (bench half of the work)
 
-- Long-cable measurement on the test board (needs T10's board):
+- Long-cable measurement on the test board (needs the CI board):
   3365/06 reels at 5/10/15/25 m, per-segment error counting under the
   §6 fault-injection harness, far-end overshoot and edge shapes on
   the §6 instrumented boundary node's PIO taps. Confirms the 10 m
@@ -169,9 +169,9 @@ budget — out of scope here.
 1. Power budget binds first for single-fault integrity: ≤ ~5 m
    segments at 10 mA nodes, or second-tap injection (§2.1).
 
-## 8. Proposed DESIGN.md §2 text (to land when the card ships)
+## 8. Proposed DESIGN.md §2 text (to land when the reach work ships)
 
-> **Cable reach (2026-09-28, card T15 — sim; bench confirmation open):
+> **Cable reach (2026-09-28 — sim; bench confirmation open):
 > 10 m per segment** on 3M 3365-class 28 AWG ribbon (GND-flanked data
 > wires, Z0 = 102 Ω, 47.5 pF/m) with the §7 470 Ω protection, ≥ 165 ns
 > decode margin including tb_noise-class crosstalk; 12 m on a quiet

@@ -1,5 +1,5 @@
-* CH32V003 behavioral models for the PHY segment benches (T5,
-* DESIGN.md §2, docs/phy-analysis-2026-09-26.md §5). Facts from DS0,
+* CH32V003 behavioral models for the PHY segment benches
+* (DESIGN.md §2, docs/phy-analysis-2026-09-26.md §5). Facts from DS0,
 * extracted in datasheets/CH32V003/notes/opa.md and .../facts.md.
 *
 * ------------------------------------------------------------------

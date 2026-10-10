@@ -1,4 +1,4 @@
-"""Node pin-map capture tests (T9) — the CH32V003 pin table end to end.
+"""Node pin-map capture tests — the CH32V003 pin table end to end.
 
 The golden header at tests/golden/node-pins.hpp is the proof artifact,
 byte-identical to the firmware-consumed copy at firmware/node/pins.hpp;

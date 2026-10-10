@@ -3,7 +3,7 @@
 Parts and nets form a bipartite graph — part records on one side, net
 ellipses on the other, edges labeled with pin numbers (and names, when
 the symbol gives one). Deliberately simple; abstraction-level block
-views are card T25 (prior art:
+views are future work (prior art:
 docs/prior-art-schematic-gen-2026-09-28.md, DESIGN.md §7 DSL shape).
 """
 
@@ -15,7 +15,7 @@ def to_dot(circuit: Circuit) -> str:
 
     A hierarchical circuit (one with instances) or one with component
     sockets is flattened first — the flat bipartite view; cluster
-    rendering is T26 territory.
+    rendering is left to the review-views work.
     """
     if circuit.instances or circuit.sockets:
         circuit = circuit.flatten()

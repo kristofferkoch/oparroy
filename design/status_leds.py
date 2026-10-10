@@ -47,7 +47,7 @@ from oparroy.dsl import (
 
 # Stand-in Vf parameters (≈2.0 V at 2.5 mA) for the XL-3216-FB series;
 # the bench windows absorb the per-color spread. Ad hoc like the
-# watchdog's BAT54S binding until the parts DB owns models (T23).
+# watchdog's BAT54S binding until the parts DB owns models.
 SPICE_MODELS = {
     "XL-3216SURC-FB": "d(is=1e-19 n=2.0 rs=10)",
     "XL-3216SYGC-FB": "d(is=1e-19 n=2.0 rs=10)",
