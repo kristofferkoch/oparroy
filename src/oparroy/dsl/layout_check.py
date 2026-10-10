@@ -37,6 +37,7 @@ _COLLINEAR_COSINE = -0.999
 _JUNCTION_LINE_COUNT = 2
 _MIN_POLYGON_POINTS = 3
 _ARC_SAGITTA_MM = 0.01
+_ORIGIN = Point(0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,37 @@ class TerminalProtectionRule:
 
 
 @dataclass(frozen=True)
+class FootprintSetRule:
+    """The footprints on one copper layer, as an exact refdes set (§7).
+
+    ``refs`` names every footprint allowed on ``layer`` — the segment
+    connectors on B.Cu, for the single-sided-SMT contract. Violations
+    cut both ways: a footprint on the layer outside the set, and a set
+    member missing from the layer.
+    """
+
+    name: str
+    layer: str
+    refs: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PartOverHoleRule:
+    r"""Every matching footprint sits over its routed hole (§4.1).
+
+    Reverse-mount LEDs emit through the board: the footprint must carry
+    an unconnected ``np_thru_hole`` pad whose footprint-local ``at``
+    stays within ``tolerance_mm`` of the anchor. The offset is local,
+    so the check needs no footprint rotation (which is not modeled).
+    ``refdes`` full-matches, the :class:`AdjacencyRule` idiom.
+    """
+
+    name: str
+    refdes: str
+    tolerance_mm: float
+
+
+@dataclass(frozen=True)
 class LayoutRules:
     """The layout contract; ``None``/empty fields disable their check."""
 
@@ -107,6 +139,8 @@ class LayoutRules:
     required_footprints: tuple[str, ...] = ()
     bypass: tuple[BypassRule, ...] = ()
     terminal_protection: tuple[TerminalProtectionRule, ...] = ()
+    footprint_sets: tuple[FootprintSetRule, ...] = ()
+    part_over_hole: tuple[PartOverHoleRule, ...] = ()
 
 
 def check_layout(
@@ -129,6 +163,8 @@ def check_layout(
     issues.extend(_check_mounting_holes(board, rules))
     issues.extend(_check_adjacency(board, rules))
     issues.extend(_check_terminal_protection(board, rules))
+    issues.extend(_check_footprint_set(board, rules))
+    issues.extend(_check_part_over_hole(board, rules))
     issues.extend(_check_required_footprints(board, rules))
     issues.extend(_check_bypass(board, rules))
     issues.extend(_check_bypass_copper(board, rules))
@@ -541,6 +577,60 @@ def _check_series_r(board: Board, rule: TerminalProtectionRule) -> list[Issue]:
                     "the µC pin it protects (§7 checklist)"
                 )
             )
+    return issues
+
+
+def _check_footprint_set(board: Board, rules: LayoutRules) -> list[Issue]:
+    issues: list[Issue] = []
+    for rule in rules.footprint_sets:
+        present = sorted(
+            (fp.ref for fp in board.footprints if fp.layer == rule.layer),
+            key=natural_key,
+        )
+        unexpected = [ref for ref in present if ref not in rule.refs]
+        if unexpected:
+            expected = ", ".join(sorted(rule.refs, key=natural_key))
+            issues.extend(
+                _error(
+                    f"{rule.name}: {', '.join(unexpected)} on {rule.layer} "
+                    f"outside the expected footprint set ({expected}) — "
+                    "the back carries only the segment connectors "
+                    "(§7 checklist)"
+                )
+            )
+        missing = sorted(
+            (ref for ref in rule.refs if ref not in present), key=natural_key
+        )
+        if missing:
+            issues.extend(
+                _error(
+                    f"{rule.name}: {', '.join(missing)} missing from "
+                    f"{rule.layer} — the footprint set is exact "
+                    "(§7 checklist)"
+                )
+            )
+    return issues
+
+
+def _check_part_over_hole(board: Board, rules: LayoutRules) -> list[Issue]:
+    issues: list[Issue] = []
+    for rule in rules.part_over_hole:
+        for fp in _ref_matches(board, rule.refdes):
+            over_hole = any(
+                pad.kind == "np_thru_hole"
+                and pad.net is None
+                and pad.at.distance(_ORIGIN) <= rule.tolerance_mm
+                for pad in fp.pads
+            )
+            if not over_hole:
+                issues.extend(
+                    _error(
+                        f"{rule.name}: {fp.ref} has no unconnected "
+                        f"np_thru_hole pad within {rule.tolerance_mm} mm of "
+                        "its anchor — the reverse-mount LED shines through "
+                        "its routed hole (§4.1)"
+                    )
+                )
     return issues
 
 
