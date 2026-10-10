@@ -174,8 +174,8 @@ freestanding-C++ header (`firmware/node/pins.hpp`).
 ## Transforms and equivalence (`transform.py`, `equivalence.py`)
 
 The CI board's instrumentation as data over the plain capture
-(background: [instrumentation-equivalence](instrumentation-equivalence-2026-09-29.md),
-[instrumented-ci](instrumented-ci-2026-10-05.md)):
+(background: [instrumentation-equivalence](instrumentation-equivalence.md),
+[instrumented-ci](instrumented-ci.md)):
 
 - Transform records: `InsertSeries` (cut a net, bridge through a part),
   `AddShunt` (switched branch to a rail, no cut), `AddTap` (export a
@@ -264,7 +264,7 @@ a board (`pcb_emit.py`; `PcbSpecError`). `pcb_merge.py`
 - [dsl-tutorial.md](dsl-tutorial.md) — the guided tour.
 - [DESIGN.md §7](../DESIGN.md#7-design-capture-dsl) — the settled
   decisions behind the DSL's shape.
-- [prior-art-schematic-gen](prior-art-schematic-gen-2026-09-28.md) —
+- [prior-art-schematic-gen](prior-art-schematic-gen.md) —
   why the DSL emits netlists instead of drawing schematics.
 - Module docstrings under `src/oparroy/dsl/` — the per-module source of
   truth, with doctests the suite runs.
