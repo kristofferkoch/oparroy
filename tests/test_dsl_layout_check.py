@@ -4,16 +4,29 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+import pytest
+
+from design.node import capture
 from oparroy.dsl import (
     AdjacencyRule,
+    Annotation,
     Board,
     BypassRule,
+    Circuit,
     LayoutRules,
     Project,
+    TerminalProtectionRule,
+    annotation_from_pcb,
     check_layout,
     parse_board,
+    terminal_protection_rules,
 )
+
+if TYPE_CHECKING:
+    from conftest import StubSymbols
+    from oparroy.dsl import KiCadLibraries
 
 _CORNER_COUNT = 4
 
@@ -395,3 +408,298 @@ def test_node_board_bypass_copper_is_independent() -> None:
         )
     )
     assert check_layout(board, rules) == []
+
+
+_CHAIN_RULE = TerminalProtectionRule(
+    name="NET chain",
+    net="NET",
+    connector="J1",
+    tvs="D1",
+    series_r="R1",
+    max_tvs_connector_mm=6,
+    max_r_protected_mm=15,
+)
+
+
+def _chain_footprint(ref: str, x: float, y: float, *nets: str) -> str:
+    pads = " ".join(
+        f'(pad "{index}" smd rect (at 0 0) (size 1 1) (layers "F.Cu") (net "{net}"))'
+        for index, net in enumerate(nets, start=1)
+    )
+    return (
+        f'(footprint "Lib:{ref}" (layer "F.Cu") (at {x} {y})'
+        f' (property "Reference" "{ref}" (at 0 0) (layer "F.SilkS")) {pads})'
+    )
+
+
+def _chain_board(*footprints: str) -> Board:
+    return parse_board("(kicad_pcb (layers)" + "".join(footprints) + ")")
+
+
+def _pass_chain() -> Board:
+    """J1 on NET, D1 clamping NET at the connector, R1 straddling NET/PROT."""
+    return _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "NET"),
+        _chain_footprint("R1", 8, 0, "NET", "PROT"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+    )
+
+
+def _chain_issues(
+    board: Board, rule: TerminalProtectionRule = _CHAIN_RULE
+) -> list[str]:
+    rules = LayoutRules(terminal_protection=(rule,))
+    return [i.message for i in check_layout(board, rules)]
+
+
+def test_terminal_protection_pass() -> None:
+    assert _chain_issues(_pass_chain()) == []
+
+
+def test_terminal_protection_tvs_too_far_from_connector() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 10, 0, "GND", "NET"),
+        _chain_footprint("R1", 14, 0, "NET", "PROT"),
+        _chain_footprint("U1", 16, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        (
+            "NET chain: TVS D1 is not within 6 mm of its connector — "
+            "the TVS clamps at the board edge (§7 checklist)"
+        )
+    ]
+
+
+def test_terminal_protection_tvs_not_clamping_the_net() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "GND"),
+        _chain_footprint("R1", 8, 0, "NET", "PROT"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        (
+            "NET chain: TVS D1 carries no pad on net 'NET' — "
+            "it must clamp the exposed terminal"
+        )
+    ]
+
+
+def test_terminal_protection_no_connector_on_the_net() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "GND", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "NET"),
+        _chain_footprint("R1", 8, 0, "NET", "PROT"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        (
+            "NET chain: no connector matching 'J1' carries a pad on net "
+            "'NET' — the exposed terminal must enter through its connector"
+        )
+    ]
+
+
+def test_terminal_protection_exposed_net_touches_logic() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "NET"),
+        _chain_footprint("R1", 8, 0, "NET", "PROT"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+        _chain_footprint("U9", 20, 0, "NET", "GND"),
+    )
+    assert _chain_issues(board) == [
+        (
+            "NET chain: exposed net 'NET' touches U9; only its connector, "
+            "TVS, and series R may carry it — the R sits between TVS and "
+            "µC pin (§7 checklist)"
+        )
+    ]
+
+
+def test_terminal_protection_r_off_the_exposed_net() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "NET"),
+        _chain_footprint("R1", 8, 0, "PROT", "GND"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        (
+            "NET chain: series R R1 carries no pad on net 'NET' — "
+            "it must straddle the exposed net (§7 checklist)"
+        )
+    ]
+
+
+def test_terminal_protection_r_short_of_the_exposed_net() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "NET"),
+        _chain_footprint("R1", 8, 0, "NET", "NET"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        (
+            "NET chain: both pads of series R R1 sit on net 'NET' — "
+            "it must straddle the exposed net"
+        )
+    ]
+
+
+def test_terminal_protection_r_too_far_from_protected_logic() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "NET"),
+        _chain_footprint("R1", 8, 0, "NET", "PROT"),
+        _chain_footprint("U1", 30, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        (
+            "NET chain: series R R1 is not within 15 mm of any other "
+            "footprint on the protected net 'PROT' — the R belongs near "
+            "the µC pin it protects (§7 checklist)"
+        )
+    ]
+
+
+def test_terminal_protection_tvs_missing() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("R1", 8, 0, "NET", "PROT"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        "NET chain: no footprint matches the TVS pattern 'D1'"
+    ]
+
+
+def test_terminal_protection_series_r_missing() -> None:
+    board = _chain_board(
+        _chain_footprint("J1", 0, 0, "NET", "GND"),
+        _chain_footprint("D1", 3, 0, "GND", "NET"),
+        _chain_footprint("U1", 14, 0, "PROT", "GND"),
+    )
+    assert _chain_issues(board) == [
+        "NET chain: no footprint matches the series-R pattern 'R1'"
+    ]
+
+
+def _protection_circuit(symbols: StubSymbols) -> Circuit:
+    """One connector → TVS → R chain; the GND rail carries two resistors.
+
+    A rail-to-GND bleed plus a protected-side pull-down keep the TVS's
+    quiet-side net (GND) from looking like a terminal net — an exposed
+    terminal carries exactly one Device:R.
+    """
+    c = Circuit("prot", symbols)
+    tvs = c.part("Dt", symbol="Device:D_TVS", value="TVS", footprint="StubFP:SOD-323")
+    res = c.part("Rs", symbol="Device:R", value="470", footprint="StubFP:R_0603")
+    conn = c.part(
+        "Jc",
+        symbol="Connector:Conn_02x05_Odd_Even",
+        value="conn",
+        footprint="StubFP:CONN_1x06",
+    )
+    rh1 = c.part("Rh1", symbol="Device:R", value="10k", footprint="StubFP:R_0603")
+    rh2 = c.part("Rh2", symbol="Device:R", value="10k", footprint="StubFP:R_0603")
+    exposed = c.net("RX_A")
+    gnd = c.net("GND")
+    prot = c.net("PROT")
+    rail = c.net("3V3")
+    c.connect(exposed, conn[5], tvs[2], res[1])
+    c.connect(gnd, conn[2], tvs[1], rh1[2], rh2[2])
+    c.connect(rail, conn[3], rh1[1])
+    c.connect(prot, res[2], rh2[1])
+    return c
+
+
+def test_terminal_protection_rules_from_capture(symbols: StubSymbols) -> None:
+    circuit = _protection_circuit(symbols)
+    annotation = Annotation({"Dt": "D7", "Rs": "R9", "Jc": "J3"})
+    assert terminal_protection_rules(circuit, annotation) == (
+        TerminalProtectionRule(
+            name="terminal protection RX_A (§7 checklist)",
+            net="RX_A",
+            connector="J3",
+            tvs="D7",
+            series_r="R9",
+            max_tvs_connector_mm=6.0,
+            max_r_protected_mm=15.0,
+        ),
+    )
+
+
+def test_terminal_protection_rules_rejects_tvs_off_a_terminal(
+    symbols: StubSymbols,
+) -> None:
+    c = Circuit("prot", symbols)
+    tvs = c.part("Dt", symbol="Device:D_TVS", value="TVS", footprint="StubFP:SOD-323")
+    c.connect(c.net("A"), tvs[1])
+    c.connect(c.net("B"), tvs[2])
+    with pytest.raises(ValueError, match="Dt: a terminal-protection TVS"):
+        terminal_protection_rules(c, Annotation({}))
+
+
+def test_terminal_protection_rules_requires_placed_parts(
+    symbols: StubSymbols,
+) -> None:
+    circuit = _protection_circuit(symbols)
+    with pytest.raises(ValueError, match="Rs has no refdes in the annotation"):
+        terminal_protection_rules(circuit, Annotation({"Dt": "D7", "Jc": "J3"}))
+
+
+def _node_protection_rules(kicad_libs: KiCadLibraries) -> LayoutRules:
+    """Build the §7 terminal-protection contract the node capture implies."""
+    circuit = capture(kicad_libs)
+    pcb_text = _NODE_BOARD.read_text()
+    return LayoutRules(
+        terminal_protection=terminal_protection_rules(
+            circuit, annotation_from_pcb(circuit, pcb_text)
+        )
+    )
+
+
+def test_node_board_terminal_protection(kicad_libs: KiCadLibraries) -> None:
+    """Calibration: the node board's four chains meet the §7 contract."""
+    board = parse_board(_NODE_BOARD.read_text())
+    assert check_layout(board, _node_protection_rules(kicad_libs)) == []
+
+
+def test_node_board_terminal_protection_is_not_vacuous(
+    kicad_libs: KiCadLibraries,
+) -> None:
+    """A 0.1 mm TVS-to-connector budget flags all four node terminals."""
+    base = _node_protection_rules(kicad_libs)
+    rules = dataclasses.replace(
+        base,
+        terminal_protection=tuple(
+            dataclasses.replace(rule, max_tvs_connector_mm=0.1)
+            for rule in base.terminal_protection
+        ),
+    )
+    issues = check_layout(parse_board(_NODE_BOARD.read_text()), rules)
+    assert [i.message for i in issues] == [
+        (
+            "terminal protection RX_A (§7 checklist): TVS D1 is not within "
+            "0.1 mm of its connector — the TVS clamps at the board edge "
+            "(§7 checklist)"
+        ),
+        (
+            "terminal protection RX_B (§7 checklist): TVS D3 is not within "
+            "0.1 mm of its connector — the TVS clamps at the board edge "
+            "(§7 checklist)"
+        ),
+        (
+            "terminal protection TX_A (§7 checklist): TVS D2 is not within "
+            "0.1 mm of its connector — the TVS clamps at the board edge "
+            "(§7 checklist)"
+        ),
+        (
+            "terminal protection TX_B (§7 checklist): TVS D4 is not within "
+            "0.1 mm of its connector — the TVS clamps at the board edge "
+            "(§7 checklist)"
+        ),
+    ]

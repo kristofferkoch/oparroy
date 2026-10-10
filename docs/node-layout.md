@@ -36,8 +36,9 @@ are deliberately looser than the fab's.
    spanning PD4 → `opa_p` so the hysteresis fallback is a solder
    blob away, not a rework.
 1. **Ring B pair**: Dbr/Rbr toward J2.7, Rbt/Dbt toward J1.7 — TVS at
-   the connector, R between TVS and MCU pin (§7 contract; the checker
-   wants to assert exactly this).
+   the connector, R between TVS and MCU pin (§7 contract; the layout
+   checker's terminal-protection rules assert exactly this, derived
+   from the capture).
 1. **Watchdog cluster together** (WD1: Rs at the ka pin PD3, Cp,
    BAT54S, Cs, Rb). The `sel` node is 47k-pulled and drives both the
    switch select and TIM1_BKIN — keep the cluster's sel-side parts

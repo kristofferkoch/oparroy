@@ -5,9 +5,13 @@ cover project semantics DRC can't know about: bypass-path copper
 independence (§4), placement contracts (§4.1), mechanical contracts
 (corner radius, mounting holes with keepouts), the stackup contract
 (§6/§9), and the §7 board-level checklist (silkscreen ID fields,
-serial-number box, power LED). One :class:`LayoutRules` value is the
-contract; :func:`check_layout` reports every violation as a batch of
-:class:`oparroy.dsl.check.Issue`, like the schematic validation pass.
+serial-number box, power LED, terminal protection: TVS adjacent to its
+connector, series R between TVS and µC pin). One :class:`LayoutRules`
+value is the contract; :func:`check_layout` reports every violation as a
+batch of :class:`oparroy.dsl.check.Issue`, like the schematic validation
+pass. The terminal-protection rules derive from the capture —
+:func:`terminal_protection_rules` — because board refdes move under
+KiCad's geographic annotation while capture paths stay stable.
 """
 
 from __future__ import annotations
@@ -21,8 +25,10 @@ from oparroy.dsl.ir import natural_key
 from oparroy.dsl.kicad_pcb import Board, Edge, EdgeKind, Footprint, Point
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
+    from oparroy.dsl.annotate import Annotation
+    from oparroy.dsl.ir import Circuit, Net, Part
     from oparroy.dsl.kicad_pcb import ArcSegment, NetClass, Segment, Via
     from oparroy.dsl.kicad_pro import Project
 
@@ -63,6 +69,27 @@ class BypassRule:
 
 
 @dataclass(frozen=True)
+class TerminalProtectionRule:
+    """One external terminal's protection chain (§7 checklist).
+
+    The chain is connector → TVS → series R → protected logic: the TVS
+    clamps at the board edge, and the R straddles the exposed net so it
+    limits what the µC's internal clamp diodes absorb. ``net`` names the
+    exposed terminal net; ``connector``, ``tvs``, and ``series_r`` are
+    refdes regexes full-matched against the footprint refdes (the
+    :class:`AdjacencyRule` idiom).
+    """
+
+    name: str
+    net: str
+    connector: str
+    tvs: str
+    series_r: str
+    max_tvs_connector_mm: float
+    max_r_protected_mm: float
+
+
+@dataclass(frozen=True)
 class LayoutRules:
     """The layout contract; ``None``/empty fields disable their check."""
 
@@ -79,6 +106,7 @@ class LayoutRules:
     adjacency: tuple[AdjacencyRule, ...] = ()
     required_footprints: tuple[str, ...] = ()
     bypass: tuple[BypassRule, ...] = ()
+    terminal_protection: tuple[TerminalProtectionRule, ...] = ()
 
 
 def check_layout(
@@ -100,6 +128,7 @@ def check_layout(
     issues.extend(_check_serial_box(board, rules))
     issues.extend(_check_mounting_holes(board, rules))
     issues.extend(_check_adjacency(board, rules))
+    issues.extend(_check_terminal_protection(board, rules))
     issues.extend(_check_required_footprints(board, rules))
     issues.extend(_check_bypass(board, rules))
     issues.extend(_check_bypass_copper(board, rules))
@@ -390,6 +419,216 @@ def _check_adjacency(board: Board, rules: LayoutRules) -> list[Issue]:
                     )
                 )
     return issues
+
+
+def _check_terminal_protection(board: Board, rules: LayoutRules) -> list[Issue]:
+    issues: list[Issue] = []
+    for rule in rules.terminal_protection:
+        issues.extend(_check_terminal_chain(board, rule))
+    return issues
+
+
+def _on_net(footprint: Footprint, net: str) -> bool:
+    return any(pad.net == net for pad in footprint.pads)
+
+
+def _check_terminal_chain(board: Board, rule: TerminalProtectionRule) -> list[Issue]:
+    issues: list[Issue] = []
+    tvs = _ref_matches(board, rule.tvs)
+    if not tvs:
+        issues.extend(
+            _error(f"{rule.name}: no footprint matches the TVS pattern '{rule.tvs}'")
+        )
+    clamping = [fp for fp in tvs if _on_net(fp, rule.net)]
+    for fp in tvs:
+        if not _on_net(fp, rule.net):
+            issues.extend(
+                _error(
+                    f"{rule.name}: TVS {fp.ref} carries no pad on net "
+                    f"{rule.net!r} — it must clamp the exposed terminal"
+                )
+            )
+    connectors = [
+        fp for fp in _ref_matches(board, rule.connector) if _on_net(fp, rule.net)
+    ]
+    if not connectors:
+        issues.extend(
+            _error(
+                f"{rule.name}: no connector matching '{rule.connector}' carries "
+                f"a pad on net {rule.net!r} — the exposed terminal must enter "
+                "through its connector"
+            )
+        )
+    for fp in clamping:
+        if connectors and not any(
+            fp.at.distance(conn.at) <= rule.max_tvs_connector_mm for conn in connectors
+        ):
+            issues.extend(
+                _error(
+                    f"{rule.name}: TVS {fp.ref} is not within "
+                    f"{rule.max_tvs_connector_mm} mm of its connector — "
+                    "the TVS clamps at the board edge (§7 checklist)"
+                )
+            )
+    issues.extend(_check_series_r(board, rule))
+    offenders = sorted(
+        {
+            fp.ref
+            for fp in board.footprints
+            if _on_net(fp, rule.net)
+            and not any(
+                re.fullmatch(pattern, fp.ref)
+                for pattern in (rule.connector, rule.tvs, rule.series_r)
+            )
+        },
+        key=natural_key,
+    )
+    if offenders:
+        issues.extend(
+            _error(
+                f"{rule.name}: exposed net {rule.net!r} touches "
+                f"{', '.join(offenders)}; only its connector, TVS, and series R "
+                "may carry it — the R sits between TVS and µC pin (§7 checklist)"
+            )
+        )
+    return issues
+
+
+def _check_series_r(board: Board, rule: TerminalProtectionRule) -> list[Issue]:
+    """Assert the series R straddles the exposed net and sits by the µC side."""
+    issues: list[Issue] = []
+    resistors = _ref_matches(board, rule.series_r)
+    if not resistors:
+        return _error(
+            f"{rule.name}: no footprint matches the series-R pattern '{rule.series_r}'"
+        )
+    for fp in resistors:
+        exposed = [pad for pad in fp.pads if pad.net == rule.net]
+        if not exposed:
+            issues.extend(
+                _error(
+                    f"{rule.name}: series R {fp.ref} carries no pad on net "
+                    f"{rule.net!r} — it must straddle the exposed net "
+                    "(§7 checklist)"
+                )
+            )
+            continue
+        if len(exposed) > 1:
+            issues.extend(
+                _error(
+                    f"{rule.name}: both pads of series R {fp.ref} sit on net "
+                    f"{rule.net!r} — it must straddle the exposed net"
+                )
+            )
+            continue
+        protected = next(
+            (pad.net for pad in fp.pads if pad.net not in (None, rule.net)), None
+        )
+        if protected is None:
+            continue
+        near = any(
+            other is not fp
+            and _on_net(other, protected)
+            and fp.at.distance(other.at) <= rule.max_r_protected_mm
+            for other in board.footprints
+        )
+        if not near:
+            issues.extend(
+                _error(
+                    f"{rule.name}: series R {fp.ref} is not within "
+                    f"{rule.max_r_protected_mm} mm of any other footprint on "
+                    f"the protected net {protected!r} — the R belongs near "
+                    "the µC pin it protects (§7 checklist)"
+                )
+            )
+    return issues
+
+
+def terminal_protection_rules(
+    circuit: Circuit,
+    annotation: Annotation,
+    *,
+    max_tvs_connector_mm: float = 6.0,
+    max_r_protected_mm: float = 15.0,
+) -> tuple[TerminalProtectionRule, ...]:
+    """Derive the §7 terminal-protection placement contract from a capture.
+
+    Board refdes move under KiCad's geographic annotation, so the
+    contract names parts by capture identity: every ``Device:D_TVS``
+    part anchors one rule — the exposed-terminal net it clamps, the
+    ``Device:R`` straddling that net, and the connector the terminal
+    enters through. ``annotation`` (capture path → placed refdes, e.g.
+    from :func:`oparroy.dsl.annotate.annotation_from_pcb`) supplies the
+    refdes patterns; a chain part missing from it was never placed, a
+    ``ValueError`` either way the capture doesn't fit the chain shape.
+    """
+    if circuit.instances:
+        circuit = circuit.flatten()
+    refs = annotation.refs
+    rules = []
+    for path in sorted(circuit.parts, key=natural_key):
+        part = circuit.parts[path]
+        if part.symbol.ref != "Device:D_TVS":
+            continue
+        pin_nets = {pin.net for pin in part.pins if pin.net is not None}
+        qualified = [
+            (net, chain)
+            for net in sorted(pin_nets, key=lambda n: natural_key(n.name))
+            if (chain := _terminal_chain_parts(net)) is not None
+        ]
+        if len(qualified) != 1:
+            msg = (
+                f"{path}: a terminal-protection TVS must clamp exactly one "
+                "exposed terminal net — a pin net carrying a connector pin "
+                f"and exactly one Device:R pin; {len(qualified)} qualify"
+            )
+            raise ValueError(msg)
+        net, (resistors, connectors) = qualified[0]
+        rules.append(
+            TerminalProtectionRule(
+                name=f"terminal protection {net.name} (§7 checklist)",
+                net=net.name,
+                connector=_placed_pattern(connectors, refs),
+                tvs=_placed_pattern([part], refs),
+                series_r=_placed_pattern(resistors, refs),
+                max_tvs_connector_mm=max_tvs_connector_mm,
+                max_r_protected_mm=max_r_protected_mm,
+            )
+        )
+    return tuple(sorted(rules, key=lambda rule: natural_key(rule.net)))
+
+
+def _terminal_chain_parts(net: Net) -> tuple[list[Part], list[Part]] | None:
+    """Return the (series-R, connector) pair marking an exposed-terminal net.
+
+    A terminal net carries pins of exactly one ``Device:R`` — the
+    series resistor straddling it — and of a connector. Requiring a
+    single R keeps the rail on the TVS's other pin from qualifying:
+    ground carries many resistors.
+    """
+    resistors: list[Part] = []
+    connectors: list[Part] = []
+    for pin in net.pins:
+        part = pin.part
+        if part.symbol.ref == "Device:R" and part not in resistors:
+            resistors.append(part)
+        if part.symbol.lib.startswith("Connector") and part not in connectors:
+            connectors.append(part)
+    if len(resistors) != 1 or not connectors:
+        return None
+    return resistors, connectors
+
+
+def _placed_pattern(parts: Iterable[Part], refs: Mapping[str, str]) -> str:
+    """Build the refdes full-match pattern for chain parts, via the annotation."""
+    patterns = []
+    for part in sorted(parts, key=lambda p: natural_key(p.ref)):
+        refdes = refs.get(part.ref)
+        if refdes is None:
+            msg = f"{part.ref} has no refdes in the annotation — not placed"
+            raise ValueError(msg)
+        patterns.append(re.escape(refdes))
+    return "|".join(patterns)
 
 
 def _check_required_footprints(board: Board, rules: LayoutRules) -> list[Issue]:
