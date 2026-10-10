@@ -223,6 +223,17 @@ real work — **move**, don't copy. Reference, don't duplicate.
   equivalence proof over an annotated board, say — sees a port with no
   ranges. Fix is three lines (`source=net.source, sink=net.sink`), plus
   a test.
+- **Transform engine breaks on tiles nested deeper than one level**
+  (2026-10-10, spotted reviewing the equivalence proof):
+  `apply_transforms` binds escaped ports (control, tap) to nets it
+  creates in the *top* circuit; for a tile at `("GRP", "T0")` the
+  application succeeds but `flatten()` then KeyErrors — the enclosing
+  subcircuit's local nets map doesn't contain the top-level net
+  (`Instance.bind`'s docstring already warns the net's membership is
+  the caller's responsibility). Depth-1 tiles are unaffected. Fix
+  belongs in the transform engine (create the board net in the tile's
+  immediate parent, or teach flatten to resolve upward) when nested
+  tiles arrive.
 
 ## Related projects to mine
 
