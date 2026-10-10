@@ -14,6 +14,7 @@ against 10.0.6).
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass
 from enum import StrEnum
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
 
 class PcbError(Exception):
     """The input is not a ``.kicad_pcb`` board."""
+
+
+_EPSILON_MM2 = 1e-6
 
 
 @dataclass(frozen=True)
@@ -96,6 +100,75 @@ class Segment:
 
 
 @dataclass(frozen=True)
+class ArcSegment:
+    """A copper arc track; ``net`` is the resolved net name.
+
+    KiCad writes board-level ``(arc (start …) (mid …) (end …) (width …)
+    (layer …) (net …))`` tracks: the circle through the three points,
+    swept from ``start`` to ``end`` through ``mid`` (verified against
+    KiCad 10.0.6). Not to be confused with ``gr_arc``, the graphic
+    primitive the outline uses.
+    """
+
+    start: Point
+    mid: Point
+    end: Point
+    width: float
+    layer: str
+    net: str
+
+    @property
+    def length(self) -> float:
+        """Arc length in mm: circumradius times central angle.
+
+        A collinear arc has no circumcircle; its length falls back to
+        the start-mid-end polyline.
+
+        >>> arc = ArcSegment(Point(10, 0), Point(0, 10), Point(-10, 0),
+        ...                  0.4, "F.Cu", "SIG")
+        >>> arc.length
+        31.41592653589793
+        """
+        circle = _circumcircle(self.start, self.mid, self.end)
+        if circle is None:
+            return self.start.distance(self.mid) + self.mid.distance(self.end)
+        _, radius, sweep = circle
+        return radius * abs(sweep)
+
+    def chords(self, sagitta_mm: float) -> tuple[tuple[Point, Point], ...]:
+        """Polygonize into chords deviating by at most ``sagitta_mm``.
+
+        The chord chain keeps the arc's endpoints, so connectivity at
+        the joints is exact.
+
+        >>> arc = ArcSegment(Point(10, 0), Point(0, 10), Point(-10, 0),
+        ...                  0.4, "F.Cu", "SIG")
+        >>> chords = arc.chords(0.1)
+        >>> chords[0][0], chords[-1][1]
+        (Point(x=10, y=0), Point(x=-10, y=0))
+        """
+        circle = _circumcircle(self.start, self.mid, self.end)
+        if circle is None:
+            return ((self.start, self.mid), (self.mid, self.end))
+        center, radius, sweep = circle
+        if radius <= sagitta_mm:
+            return ((self.start, self.end),)
+        # Half the chord angle at sagitta s on radius r: acos(1 - s/r).
+        steps = max(1, math.ceil(abs(sweep) / (2 * math.acos(1 - sagitta_mm / radius))))
+        a0 = math.atan2(self.start.y - center.y, self.start.x - center.x)
+        points = [self.start]
+        points.extend(
+            Point(
+                center.x + radius * math.cos(a0 + sweep * i / steps),
+                center.y + radius * math.sin(a0 + sweep * i / steps),
+            )
+            for i in range(1, steps)
+        )
+        points.append(self.end)
+        return tuple(itertools.pairwise(points))
+
+
+@dataclass(frozen=True)
 class Via:
     """A plated through-via; ``net`` is the resolved net name."""
 
@@ -104,6 +177,30 @@ class Via:
     drill: float
     layers: tuple[str, ...]
     net: str
+
+
+def _circumcircle(a: Point, m: Point, b: Point) -> tuple[Point, float, float] | None:
+    """Circle through three points: center, radius, signed sweep a→b via m.
+
+    The sweep is positive counterclockwise. Collinear points have no
+    circumcircle: ``None``.
+    """
+    double_d = 2 * (a.x * (m.y - b.y) + m.x * (b.y - a.y) + b.x * (a.y - m.y))
+    if abs(double_d) < _EPSILON_MM2:
+        return None
+    a2, m2, b2 = a.x**2 + a.y**2, m.x**2 + m.y**2, b.x**2 + b.y**2
+    center = Point(
+        (a2 * (m.y - b.y) + m2 * (b.y - a.y) + b2 * (a.y - m.y)) / double_d,
+        (a2 * (b.x - m.x) + m2 * (a.x - b.x) + b2 * (m.x - a.x)) / double_d,
+    )
+
+    def angle(p: Point) -> float:
+        return math.atan2(p.y - center.y, p.x - center.x)
+
+    a0 = angle(a)
+    ccw = (angle(b) - a0) % math.tau
+    sweep = ccw if (angle(m) - a0) % math.tau <= ccw else ccw - math.tau
+    return center, center.distance(a), sweep
 
 
 @dataclass(frozen=True)
@@ -188,6 +285,7 @@ class Board:
     net_classes: tuple[NetClass, ...]
     footprints: tuple[Footprint, ...]
     segments: tuple[Segment, ...]
+    arcs: tuple[ArcSegment, ...]
     vias: tuple[Via, ...]
     texts: tuple[Text, ...]
     edges: tuple[Edge, ...]
@@ -235,6 +333,7 @@ def parse_board(text: str) -> Board:
         segments=tuple(
             _parse_segment(node, net_codes) for node in _children(root, "segment")
         ),
+        arcs=tuple(_parse_arc(node, net_codes) for node in _children(root, "arc")),
         vias=tuple(_parse_via(node, net_codes) for node in _children(root, "via")),
         texts=tuple(_parse_text(node) for node in _children(root, "gr_text")),
         edges=tuple(_parse_edges(root)),
@@ -419,6 +518,17 @@ def _parse_segment(node: list[Sexp], net_codes: Mapping[int, str]) -> Segment:
         start=_point(_child(node, "start")),
         end=_point(_child(node, "end")),
         width=_opt_float(_child(node, "width"), "segment width") or 0.0,
+        layer=_atom(_child(node, "layer") or [], 1) or "",
+        net=_net_name(node, net_codes, numbered=True),
+    )
+
+
+def _parse_arc(node: list[Sexp], net_codes: Mapping[int, str]) -> ArcSegment:
+    return ArcSegment(
+        start=_point(_child(node, "start")),
+        mid=_point(_child(node, "mid")),
+        end=_point(_child(node, "end")),
+        width=_opt_float(_child(node, "width"), "arc width") or 0.0,
         layer=_atom(_child(node, "layer") or [], 1) or "",
         net=_net_name(node, net_codes, numbered=True),
     )

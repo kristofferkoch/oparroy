@@ -1225,24 +1225,30 @@ either a layout-checker assertion or a subcircuit):
   the bench. Layout-checkable: a silkscreen box of minimum area, kept
   clear of pads and other silkscreen text.
 
-Landed (first slice): the layout checker in `src/oparroy/dsl/` —
+Landed: the layout checker in `src/oparroy/dsl/` —
 `kicad_pcb.py` (a tolerant `.kicad_pcb` parser on top of `sexpr`:
-stackup, net classes, footprints/pads, copper, board
+stackup, net classes, footprints/pads, copper (segments, arcs, vias),
+board
 outline, silkscreen texts/rects, zones), `layout_check.py`
 (`LayoutRules` as the contract, `check_layout` reporting batched
 `Issue`s like the schematic pass: copper-layer count and thickness,
 net-class width/via compliance, per-net trace-length budgets, min
 corner radius with collinear-junction exemption, required silkscreen
 board-ID fields, serial-box area, mounting-hole count and keepout
-coverage, footprint adjacency and presence, and bypass-net pad
-whitelisting — the §4 independence check), and `pcb_emit.py` (a
+coverage, footprint adjacency and presence, and the §4 bypass-path
+independence check — pad whitelisting plus copper-geometry
+independence: no bypass segment, arc, or via may touch another net's
+copper on a shared layer), and `pcb_emit.py` (a
 byte-identical skeleton emitter pushing constraints into pcbnew
 pre-audit; round-trips through the parser). Proven against
-`tests/fixtures/board_pass.kicad_pcb`. Not yet
-landed: copper-geometry independence beyond pad whitelisting, serial
-box pad/silkscreen clearance, TVS/series-R placement contracts, and
+`tests/fixtures/board_pass.kicad_pcb` and calibrated against
+`boards/node/`, where the bypass chain clears all other copper by the
+class clearance (0.3 mm). Not yet
+landed: serial
+box pad/silkscreen clearance (waits on footprint rotation modeling),
+TVS/series-R placement contracts, and
 the channelization hook (per-instance layout replication over the
-subcircuit sheetpaths) — these wait for the first real board.
+subcircuit sheetpaths — waits for a hierarchical board).
 
 Skeleton emitter, KiCad 10 shape (verified headless against KiCad
 10.0.6 — `kicad-cli pcb upgrade`/`pcb drc`, exercised in

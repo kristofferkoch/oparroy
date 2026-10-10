@@ -55,11 +55,10 @@ ______________________________________________________________________
   budgets, corner radius, silkscreen ID fields, serial-box area,
   mounting holes + keepouts, adjacency/presence, bypass pad
   whitelisting), and the constraint-skeleton emitter (DESIGN.md §7).
+  Also landed: the copper-geometry half of the §4 bypass check,
+  including copper arc-track parsing.
   Remaining, each calibrated against the node board (`boards/node/`):
-  **copper-geometry bypass independence** beyond pad
-  whitelisting (bypass-net segments/vias must not touch node-logic
-  copper between RX and TX, §4 — includes parsing copper arc tracks,
-  which the parser skips today); **serial-box clearance** from pads
+  **serial-box clearance** from pads
   and other silkscreen text (needs board-absolute pad positions —
   footprint rotation is not yet modeled); **TVS/series-R placement
   contracts** (§7 checklist: TVS adjacent to its connector, R between

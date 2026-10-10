@@ -198,12 +198,15 @@ The CI board's instrumentation as data over the plain capture
 ## Layout side
 
 Separate flow around the live board: `parse_board` → `Board`
-(`Footprint`, `Segment`, `Via`, `Zone`, `Text`, `NetClass`, `Edge`,
+(`Footprint`, `Segment`, `ArcSegment`, `Via`, `Zone`, `Text`,
+`NetClass`, `Edge`,
 `Point`, `Rect`, …; `PcbError`) parses `.kicad_pcb` (`kicad_pcb.py`);
 `parse_project` → `Project` parses `.kicad_pro` (`kicad_pro.py`).
 `check_layout(board, rules, project)` audits the board against
-`LayoutRules` (stackup, net-class width/via, `AdjacencyRule`,
-`BypassRule`, keepouts, …) (`layout_check.py`). `PcbSpec`
+`LayoutRules` (stackup, net-class width/via, `AdjacencyRule`, keepouts,
+…; `BypassRule` is the §4 contract: pad whitelisting plus
+copper-geometry independence — no bypass segment/arc/via touches
+another net's copper on a shared layer) (`layout_check.py`). `PcbSpec`
 (`StackupLayer`, `NetClassSpec`, `BoardMinimums`, `Keepout`) feeds
 `emit_pcb` / `emit_project`, the constraint-skeleton emitters that seed
 a board (`pcb_emit.py`; `PcbSpecError`). `pcb_merge.py`
