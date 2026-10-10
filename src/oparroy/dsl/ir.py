@@ -260,6 +260,26 @@ class Provenance:
     base: str
 
 
+@dataclass(frozen=True, order=True)
+class TileNet:
+    """A net local to one tile instance, addressed for a pass's tables.
+
+    The instance path plus the tile-local capture name —
+    ``TileNet(("T0",), "sense")`` — identifies the net unambiguously
+    across the board (it flattens to ``T0/sense``). The key shape of
+    the transform ``Handles`` (:mod:`oparroy.dsl.transform`) and of the
+    equivalence proof's reset-level and base-net tables: a named type
+    because a bare ``tuple[tuple[str, ...], str]`` transposes its two
+    components without a murmur (code-std §12).
+
+    >>> TileNet(("T0",), "sense").name
+    'sense'
+    """
+
+    path: tuple[str, ...]
+    name: str
+
+
 @dataclass(frozen=True)
 class Residuals:
     """Electrical residual magnitudes of a part in its pass-through state.

@@ -218,3 +218,13 @@ section holds the handful of rules we chose ourselves.
   more than it shows is a unit test wearing a costume — move it.
 - **Red/green applies to doctests too** (§11): watch a new doctest
   fail (wrong expected output) before trusting it.
+- **Name composite types — nesting past one parameterization is a
+  smell** (2026-10-10): a signature like
+  `dict[tuple[tuple[str, ...], str], Net]` is a domain concept wearing
+  structural clothing — the reader reverse-engineers "tile path plus
+  local name" at every site, and the components transpose without a
+  murmur. Give it a name: a frozen dataclass when the parts have
+  distinct meanings (`TileNet`, the transform handles' key,
+  `src/oparroy/dsl/ir.py`), a `type` alias when it is pure container
+  shorthand. The same rule covers return tuples past two elements.
+  Neither ruff nor ty can check this; review owns it (§9).

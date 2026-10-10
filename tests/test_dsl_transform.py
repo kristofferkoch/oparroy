@@ -28,6 +28,7 @@ from oparroy.dsl import (
     Resistor,
     Subcircuit,
     Substitute,
+    TileNet,
     Transform,
     TransformPart,
     TypedPart,
@@ -229,7 +230,7 @@ def test_insert_series_on_a_port_net(symbols: StubSymbols) -> None:
     assert sw.pin("2").net is tile.nets["TX_A#a"]
     assert sw.pin("4").net is tile.nets["BRK_A"]
     assert tile.nets["BRK_A"].is_port
-    board_net = handles[(("T0",), "BRK_A")]
+    board_net = handles[TileNet(("T0",), "BRK_A")]
     assert board_net.name == "T0/BRK_A"
     assert board_net is board.nets["T0/BRK_A"]
 
@@ -264,7 +265,7 @@ def test_add_shunt_hangs_a_branch_without_cutting(symbols: StubSymbols) -> None:
     assert net_pins(tile, "F2_leg") == {"FI1/SWAG.2", "FI1/RSG.1"}
     rsg = tile.parts["FI1/RSG"]
     assert rsg.pin("2").net is tile.nets["GND"]
-    assert handles[(("T0",), "SHG_A")].name == "T0/SHG_A"
+    assert handles[TileNet(("T0",), "SHG_A")].name == "T0/SHG_A"
 
 
 def test_add_tap_exports_an_internal_net(symbols: StubSymbols) -> None:
@@ -274,7 +275,7 @@ def test_add_tap_exports_an_internal_net(symbols: StubSymbols) -> None:
     )
     tile = board.instances["T0"].circuit
     assert tile.nets["sense"].is_port
-    tap = handles[(("T0",), "sense")]
+    tap = handles[TileNet(("T0",), "sense")]
     assert tap.name == "T0/sense"
     flat = board.flatten()
     # The tap rides the exported net: the sense pins sit on the board
@@ -294,7 +295,7 @@ def test_add_tap_on_a_split_alias_rides_the_binding(symbols: StubSymbols) -> Non
     )
     # The #b side of a port split is the port itself — already bound to
     # the segment net, so the tap needs no new board net.
-    assert handles[(("T0",), "TX_A#b")] is board.nets["SEG_A"]
+    assert handles[TileNet(("T0",), "TX_A#b")] is board.nets["SEG_A"]
 
 
 def test_substitute_cuts_and_escapes_the_source(symbols: StubSymbols) -> None:
@@ -309,8 +310,8 @@ def test_substitute_cuts_and_escapes_the_source(symbols: StubSymbols) -> None:
     assert swm.pin("2").net is tile.nets["pot#b"]
     assert swm.pin("3").net is tile.nets["SUP_PWM"]
     assert swm.pin("4").net is tile.nets["POT_SEL"]
-    assert handles[(("T1",), "SUP_PWM")].name == "T1/SUP_PWM"
-    assert handles[(("T1",), "POT_SEL")].name == "T1/POT_SEL"
+    assert handles[TileNet(("T1",), "SUP_PWM")].name == "T1/SUP_PWM"
+    assert handles[TileNet(("T1",), "POT_SEL")].name == "T1/POT_SEL"
 
 
 def test_per_tile_keying_instruments_every_instance(symbols: StubSymbols) -> None:
@@ -327,7 +328,7 @@ def test_per_instance_declarations_stack_on_per_tile(symbols: StubSymbols) -> No
         board,
         [PerTile(Tile, per_tile()), PerInstance(("T0",), (AddTap("B1", "sense"),))],
     )
-    assert (("T0",), "sense") in handles
+    assert TileNet(("T0",), "sense") in handles
     assert (("T1",), "sense") not in handles
     assert board.instances["T1"].circuit.nets["sense"].is_port is False
 

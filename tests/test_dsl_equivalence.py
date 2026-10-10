@@ -25,6 +25,7 @@ from oparroy.dsl import (
     Resistor,
     Severity,
     Subcircuit,
+    TileNet,
     TransformPart,
     TypedPart,
     apply_transforms,
@@ -167,14 +168,16 @@ def build_instrumented(
     board.part(
         "SCAN",
         StubSwitch(
-            a=board.net("SCAN_A"), b1=board.net("SCAN_B"), s=handles[(("T0",), "BRK")]
+            a=board.net("SCAN_A"),
+            b1=board.net("SCAN_B"),
+            s=handles[TileNet(("T0",), "BRK")],
         ),
     )
-    board.part("PROBE", StubProbe(sense=handles[(("T0",), "sense")]))
+    board.part("PROBE", StubProbe(sense=handles[TileNet(("T0",), "sense")]))
     return board
 
 
-RESET_LEVELS: dict[tuple[tuple[str, ...], str], int] = {(("T0",), "BRK"): 0}
+RESET_LEVELS: dict[TileNet, int] = {TileNet(("T0",), "BRK"): 0}
 BUDGETS = {
     SERIES_ON_RESISTANCE: "§2 tb_decode swept the inserted-switch path",
     SWITCH_CAPACITANCE: "§2 margins flat across 47 pF-1 nF",
@@ -216,7 +219,9 @@ def test_shunt_reduces_to_absent_branch(symbols: StubSymbols) -> None:
     board.part(
         "SCAN",
         StubSwitch(
-            a=board.net("SCAN_A"), b1=board.net("SCAN_B"), s=handles[(("T0",), "BRK")]
+            a=board.net("SCAN_A"),
+            b1=board.net("SCAN_B"),
+            s=handles[TileNet(("T0",), "BRK")],
         ),
     )
     board.part(
@@ -224,13 +229,13 @@ def test_shunt_reduces_to_absent_branch(symbols: StubSymbols) -> None:
         StubSwitch(
             a=board.net("SCAN2_A"),
             b1=board.net("SCAN2_B"),
-            s=handles[(("T0",), "SHG")],
+            s=handles[TileNet(("T0",), "SHG")],
         ),
     )
-    board.part("PROBE", StubProbe(sense=handles[(("T0",), "sense")]))
-    levels: dict[tuple[tuple[str, ...], str], int] = {
-        (("T0",), "BRK"): 0,
-        (("T0",), "SHG"): 0,
+    board.part("PROBE", StubProbe(sense=handles[TileNet(("T0",), "sense")]))
+    levels: dict[TileNet, int] = {
+        TileNet(("T0",), "BRK"): 0,
+        TileNet(("T0",), "SHG"): 0,
     }
     report = check_equivalent(
         build_base(symbols),
@@ -309,7 +314,7 @@ def test_control_without_reset_level_errors(symbols: StubSymbols) -> None:
 
 
 def test_nonzero_reset_level_errors(symbols: StubSymbols) -> None:
-    levels: dict[tuple[tuple[str, ...], str], int] = {(("T0",), "BRK"): 1}
+    levels: dict[TileNet, int] = {TileNet(("T0",), "BRK"): 1}
     report = check_equivalent(
         build_base(symbols),
         build_instrumented(symbols),
@@ -348,7 +353,7 @@ def test_non_input_tap_pin_errors(symbols: StubSymbols) -> None:
         value="Probe",
         footprint="StubFP:CONN_1x06",
     )
-    board.connect(handles[(("T0",), "sense")], board.parts["PROBE"][1])
+    board.connect(handles[TileNet(("T0",), "sense")], board.parts["PROBE"][1])
     report = check_equivalent(
         build_base(symbols),
         board,
@@ -423,10 +428,12 @@ def test_per_tile_composes_over_instances(symbols: StubSymbols) -> None:
     instrumented = build(symbols)
     handles = apply_transforms(instrumented, plan)
     for tile in ("T0", "T1"):
-        instrumented.part(f"PROBE_{tile}", StubProbe(sense=handles[((tile,), "sense")]))
-    levels: dict[tuple[tuple[str, ...], str], int] = {
-        (("T0",), "BRK"): 0,
-        (("T1",), "BRK"): 0,
+        instrumented.part(
+            f"PROBE_{tile}", StubProbe(sense=handles[TileNet((tile,), "sense")])
+        )
+    levels: dict[TileNet, int] = {
+        TileNet(("T0",), "BRK"): 0,
+        TileNet(("T1",), "BRK"): 0,
     }
     report = check_equivalent(
         base,
@@ -455,10 +462,10 @@ def test_tap_on_split_internal_net_side(symbols: StubSymbols) -> None:
     plan = [PerInstance(("T0",), (f1(), cut, tap))]
     board = build_base(symbols)
     handles = apply_transforms(board, plan)
-    board.part("PROBE", StubProbe(sense=handles[(("T0",), "sense#a")]))
-    levels: dict[tuple[tuple[str, ...], str], int] = {
-        (("T0",), "BRK"): 0,
-        (("T0",), "SCT"): 0,
+    board.part("PROBE", StubProbe(sense=handles[TileNet(("T0",), "sense#a")]))
+    levels: dict[TileNet, int] = {
+        TileNet(("T0",), "BRK"): 0,
+        TileNet(("T0",), "SCT"): 0,
     }
     report = check_equivalent(
         build_base(symbols),
