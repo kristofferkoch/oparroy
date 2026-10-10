@@ -60,10 +60,7 @@ ______________________________________________________________________
   Remaining, each calibrated against the node board (`boards/node/`):
   **serial-box clearance** from pads
   and other silkscreen text (needs board-absolute pad positions —
-  footprint rotation is not yet modeled); **TVS/series-R placement
-  contracts** (§7 checklist: TVS adjacent to its connector, R between
-  TVS and µC pin — needs the node capture (`design/node.py`) to name
-  the parts); **footprint-set equality** (the B.Cu footprint set is
+  footprint rotation is not yet modeled); **footprint-set equality** (the B.Cu footprint set is
   exactly the segment connectors) and **part-over-hole** (each
   reverse-mount status LED over its routed hole) — the §7 contracts;
   **channelization hook** (per-instance layout

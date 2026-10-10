@@ -105,7 +105,9 @@ from oparroy.dsl.layout_check import (
     AdjacencyRule,
     BypassRule,
     LayoutRules,
+    TerminalProtectionRule,
     check_layout,
+    terminal_protection_rules,
 )
 from oparroy.dsl.parts import (
     Bat54adw,
@@ -244,6 +246,7 @@ __all__ = [
     "SymbolPin",
     "SymbolTable",
     "SymbolUnit",
+    "TerminalProtectionRule",
     "Text",
     "Tier",
     "TileNet",
@@ -276,5 +279,6 @@ __all__ = [
     "parse_board",
     "parse_project",
     "raise_on_errors",
+    "terminal_protection_rules",
     "to_dot",
 ]

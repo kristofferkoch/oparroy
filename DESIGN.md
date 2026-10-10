@@ -1235,18 +1235,23 @@ outline, silkscreen texts/rects, zones), `layout_check.py`
 net-class width/via compliance, per-net trace-length budgets, min
 corner radius with collinear-junction exemption, required silkscreen
 board-ID fields, serial-box area, mounting-hole count and keepout
-coverage, footprint adjacency and presence, and the §4 bypass-path
+coverage, footprint adjacency and presence, the §4 bypass-path
 independence check — pad whitelisting plus copper-geometry
 independence: no bypass segment, arc, or via may touch another net's
-copper on a shared layer), and `pcb_emit.py` (a
+copper on a shared layer — and the §7 terminal-protection placement
+contracts (TVS adjacent to its connector, series R straddling the
+exposed net near the protected logic; `terminal_protection_rules`
+derives them from the capture, which names the parts, so the contract
+survives KiCad's geographic renumbering)), and `pcb_emit.py` (a
 byte-identical skeleton emitter pushing constraints into pcbnew
 pre-audit; round-trips through the parser). Proven against
 `tests/fixtures/board_pass.kicad_pcb` and calibrated against
 `boards/node/`, where the bypass chain clears all other copper by the
-class clearance (0.3 mm). Not yet
+class clearance (0.3 mm) and all four terminal chains meet the
+placement contract. Not yet
 landed: serial
-box pad/silkscreen clearance (waits on footprint rotation modeling),
-TVS/series-R placement contracts, and
+box pad/silkscreen clearance (waits on footprint rotation modeling)
+and
 the channelization hook (per-instance layout replication over the
 subcircuit sheetpaths — waits for a hierarchical board).
 

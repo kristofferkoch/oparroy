@@ -115,6 +115,19 @@ class StubSymbols:
                 make_symbol("R", passive, ("R_*",), lib="Device"),
                 make_symbol("C", passive, ("C_*",), lib="Device"),
                 make_symbol(
+                    "D_TVS",
+                    passive,
+                    ("D_*",),
+                    lib="Device",
+                    pin_names={"1": "K", "2": "A"},
+                ),
+                make_symbol(
+                    "Conn_02x05_Odd_Even",
+                    {str(pin): PinType.PASSIVE for pin in range(1, 11)},
+                    ("CONN_*",),
+                    lib="Connector",
+                ),
+                make_symbol(
                     "BAT54S",
                     {"1": PinType.PASSIVE, "2": PinType.PASSIVE, "3": PinType.PASSIVE},
                     ("SOT?23*",),
