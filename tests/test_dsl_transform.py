@@ -1,4 +1,4 @@
-"""Instrumentation-transform tests: the four kinds, per-tile keying, provenance (T24a).
+"""Instrumentation-transform tests: the four kinds, per-tile keying, provenance.
 
 The fixture mirrors the CI board's shape at minimal size
 (docs/instrumented-ci-2026-10-05.md §7): a ``Tile`` subcircuit with a
