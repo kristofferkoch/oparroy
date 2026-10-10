@@ -5,7 +5,9 @@ Single source of truth for schematic capture: a separable IR
 including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.subcircuit`) — a validation pass
 (:mod:`oparroy.dsl.check`), instrumentation transforms with provenance
-tags (:mod:`oparroy.dsl.transform`), the stages between capture and
+tags (:mod:`oparroy.dsl.transform`) and the reset-state equivalence
+proof over them (:mod:`oparroy.dsl.equivalence`), the stages between
+capture and
 pcbnew —
 footprint assignment (:mod:`oparroy.dsl.assign`) and annotation with
 back-annotation (:mod:`oparroy.dsl.annotate`) — and emitters — KiCad
@@ -47,6 +49,12 @@ from oparroy.dsl.check import (
     raise_on_errors,
 )
 from oparroy.dsl.dot import to_dot
+from oparroy.dsl.equivalence import (
+    EQUIVALENCE,
+    EquivalenceReport,
+    Residual,
+    check_equivalent,
+)
 from oparroy.dsl.ir import (
     Bundle,
     Circuit,
@@ -60,6 +68,7 @@ from oparroy.dsl.ir import (
     PinType,
     PortArray,
     Provenance,
+    Residuals,
     SocketSpec,
     Symbol,
     SymbolPin,
@@ -154,6 +163,7 @@ from oparroy.dsl.transform import (
 
 __all__ = [
     "CH32V003F4P6",
+    "EQUIVALENCE",
     "RANGE_CONTAINMENT",
     "AddShunt",
     "AddTap",
@@ -176,6 +186,7 @@ __all__ = [
     "DiodeSocket",
     "Edge",
     "EdgeKind",
+    "EquivalenceReport",
     "Footprint",
     "FootprintTable",
     "InsertSeries",
@@ -214,6 +225,8 @@ __all__ = [
     "ProjectError",
     "Provenance",
     "Rect",
+    "Residual",
+    "Residuals",
     "Resistor",
     "Scope",
     "Segment",
@@ -245,6 +258,7 @@ __all__ = [
     "apply_transforms",
     "assign_footprints",
     "check",
+    "check_equivalent",
     "check_layout",
     "check_pin_map",
     "emit_netlist",

@@ -22,6 +22,7 @@ from oparroy.dsl import (
     Capacitor,
     PartRecord,
     PartsDb,
+    Residuals,
     Resistor,
     SpiceModel,
     Stock,
@@ -127,6 +128,17 @@ PARTS = PartsDb(
             area_mm2=4.64,
             spice=SpiceModel("circuits/lib/sn74lvc1g3157.spi", subckt="sn74lvc1g3157"),
             datasheet="datasheets/SN74LVC1G3157",
+            residuals=Residuals(
+                on_resistance_ohm=25.0,
+                on_capacitance_pf=17.3,
+                off_capacitance_pf=5.2,
+                leakage_ua=1.0,
+            ),
+            note=(
+                "Residuals (SCES424O §5.5): Ron ≤ 25 Ω over the full "
+                "signal range (7 Ω typ / 9 Ω max at 3 V, 25 °C); "
+                "Cio(on) 17.3 pF, Cio(off) 5.2 pF; leakage ±1 µA max."
+            ),
         ),
         PartRecord(
             name="sn74lvc1g3157-umw",
@@ -145,7 +157,16 @@ PARTS = PartsDb(
             area_mm2=4.64,
             spice=SpiceModel("circuits/lib/sn74lvc1g3157.spi", subckt="sn74lvc1g3157"),
             datasheet="datasheets/SN74LVC1G3157",
-            note="UMW clone of the TI part ($0.047 vs $0.072, facts.md)",
+            residuals=Residuals(
+                on_resistance_ohm=25.0,
+                on_capacitance_pf=17.3,
+                off_capacitance_pf=5.2,
+                leakage_ua=1.0,
+            ),
+            note=(
+                "UMW clone of the TI part ($0.047 vs $0.072, facts.md); "
+                "residuals as the TI part (SCES424O §5.5)."
+            ),
         ),
         PartRecord(
             name="ch32v003f4p6",

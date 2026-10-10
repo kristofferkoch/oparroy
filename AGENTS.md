@@ -83,7 +83,8 @@ home-rolled Python DSL (single source of truth) that emits KiCad
 netlists, constraint checks, firmware headers, and simulation netlists —
 KiCad is used for layout only. DSL core (IR, subcircuit composition with ports,
 port arrays and bundles, and a flattening pass, instrumentation
-transforms with provenance tags,
+transforms with provenance tags and the reset-state equivalence proof
+over them,
 validation pass, KiCad netlist emitter, ngspice simulation-netlist
 emitter, KiCad library access, typed
 jellybean parts and connector blocks, the parts DB with

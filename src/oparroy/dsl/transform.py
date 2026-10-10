@@ -25,8 +25,9 @@ capture is the plain node capture plus a declared transform list, so
 the two can never drift, and the plain capture never carries CI-only
 parts — the base board stays fab-able while the CI board is a strict
 superset produced mechanically. Every part and net a transform creates
-is tagged with :class:`Provenance` — the reset-state equivalence
-proof's input, no name-matching heuristics.
+is tagged with :class:`Provenance` — the input of the reset-state
+equivalence proof (:mod:`oparroy.dsl.equivalence`), no name-matching
+heuristics.
 
 Application is hierarchical, per-tile (memo Q1, settled 2026-09-29):
 ``apply_transforms`` runs on the hierarchical board between capture and

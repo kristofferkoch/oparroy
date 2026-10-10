@@ -34,7 +34,6 @@ Critical paths only — every card also carries its own
 ```mermaid
 graph TD
     T19 --> T10
-    T24b[T24b reset-state equivalence proof] --> T10
     T31[T31 scan control/observe plane] --> T10
     T35[T35 CI power: USB-C + 3V3] --> T10
     T30[T30 RP2040 supervisor subcircuit] --> T10
@@ -50,44 +49,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T24b — DSL reset-state equivalence proof.** Split from T24
-  (2026-10-09); the transform machinery it consumes landed 2026-10-10
-  (`src/oparroy/dsl/transform.py`: the four transform kinds, per-tile
-  application, provenance tags through flattening). A checker pass
-  `check_equivalent(base, instrumented)` consumes the transform
-  provenance and proves the instrumented board **in reset state** is
-  equivalent to the plain board: every inserted series element in its
-  default/pass-through state reduces to a wire (net merge), every tap
-  is high-impedance (input-class `PinType` or a declared impedance
-  limit), no base part or net is lost or re-connected (the anti-drift
-  bijection), and residual differences — the series element's
-  on-resistance in the §2 decode-margin budget, tap capacitance on the
-  §6 short-stub contract — are enumerated as data
-  `(net, residual_kind, magnitude)` and each carries a **budget
-  citation**; a residual without a budget is an error. "Almost
-  equivalent" is exactly the enumerated residual set. Reset levels
-  derive from the control plane's silicon power-on state (settled
-  2026-09-29, memo Q2 — the 74HC595-class stage's datasheet behavior
-  and the bit-0-is-plain-board POR invariant,
-  `docs/instrumented-ci-2026-10-05.md` §8), consumed as proof inputs,
-  never assumed. The residual register the proof budgets against is
-  settled (same doc §9). Output shape mirrors `check.py`'s `Issue`
-  list; waivers-as-data cover the exceptional case. Open questions to
-  settle on pickup (memo §4): **Q3** — residual magnitude source:
-  electrical residuals from the parts DB (schema extension) vs
-  transform annotations, with geometry residuals (stub length) emitted
-  as obligations for the §7 layout checker; **Q5** — proof
-  granularity: one pass over the whole CI board vs per-tile proofs
-  composed upward (per-tile follows from the Q1 decision and keeps
-  failure messages local). The proof is not a spice equivalence, not a
-  proof of the injected states (those are *supposed* to differ — the
-  T10/T12 harness's job), and not layout equivalence (copper-level
-  contracts stay with the §7 layout checker). Test fixture: a minimal
-  base circuit + one series insert + one tap passes; a tampered
-  variant (base part deleted) fails the bijection; a residual without
-  a budget errors. Promoted to Next 2026-10-10: the transform
-  machinery has landed.
-  **Blocked by:** — · **Unblocks:** T10
 - **T19 — DSL layout property checker, remaining checks.** First slice
   landed 2026-09-28: `.kicad_pcb` parser, the `LayoutRules` contract
   with the first check set (stackup, net-class width/via, trace
@@ -166,8 +127,8 @@ ______________________________________________________________________
   switches, human-I/O overrides, the boundary node's watchdog-defeat
   bit (§6); and **power-on reset levels** — every control bit's POR
   state must reduce the instrumented board to the plain board, and
-  these levels are what T24b's reset-state equivalence proof derives
-  from. Also the analog-mux hierarchy the chain drives: the
+  these levels are the reset-state equivalence proof's inputs
+  (`src/oparroy/dsl/equivalence.py`, landed 2026-10-10). Also the analog-mux hierarchy the chain drives: the
   fault-injection muxes, the SWIO flash mux
   (§6, 2026-09-29), and the pot-wiper override muxes (§6 dual role).
   The architecture stands alone — 595/165 classes, chain topology,
@@ -362,7 +323,7 @@ ______________________________________________________________________
   rail (T35), RP2040 subcircuit (T30), scan control/observe plane
   (T31), debug-transport decision (T33); the supervisor image itself
   is T32.
-  **Blocked by:** T19, T24b, T30, T31, T33, T35 ·
+  **Blocked by:** T19, T30, T31, T33, T35 ·
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.

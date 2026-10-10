@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from oparroy.dsl.ir import Bundle, DefinitionError, SocketSpec
+from oparroy.dsl.ir import Bundle, DefinitionError, Residuals, SocketSpec
 
 if TYPE_CHECKING:
     from oparroy.dsl.ir import Net
@@ -57,6 +57,9 @@ class TypedPart:
     default_value: ClassVar[str | None] = None
     default_footprint: ClassVar[str | None] = None
     required_pins: ClassVar[frozenset[str] | None] = None
+    #: Electrical residual magnitudes (``PartsDb.bind`` threads the
+    #: record's in); placement copies them onto the placed part.
+    residuals: ClassVar[Residuals | None] = None
 
     def __init__(
         self,
