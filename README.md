@@ -79,9 +79,12 @@ infrastructure, by contrast, may cost freely.
 - The node pin map is captured in the DSL — 17 of 18 CH32V003 GPIO
   assigned with a budget check — and emits `firmware/node/pins.hpp`
   directly ([DESIGN.md §7](DESIGN.md#7-design-capture-dsl)).
-- All of it under the project-owned coding standard in
-  [code-std.md](code-std.md)
-  (borrows from JSF AV / MISRA / AUTOSAR / CERT), statically checked
+- All of it under the project-owned coding standard:
+  [code-std.md](code-std.md) holds the language-independent rules and
+  links the per-language standards
+  ([code-std-cpp.md](code-std-cpp.md),
+  [code-std-python.md](code-std-python.md)) — borrowing from
+  JSF AV / MISRA / AUTOSAR / CERT, statically checked
   from the first commit ([DESIGN.md §8](DESIGN.md#8-verification-strategy)).
 
 ## Tooling
@@ -140,7 +143,9 @@ infrastructure, by contrast, may cost freely.
 | `IDEAS.md`                   | Not-yet-planned ideas (append-only stash)                                                  |
 | `DESIGN.md`                  | Settled design decisions + open design questions                                           |
 | `KANBAN.md`                  | Single home for planned work (cards, Next/Backlog)                                         |
-| `code-std.md`                | Project-owned C++ coding standard (living)                                                 |
+| `code-std.md`                | Project-owned coding standard: general rules (living)                                      |
+| `code-std-cpp.md`            | C++ coding standard (living)                                                               |
+| `code-std-python.md`         | Python (DSL) coding standard (living)                                                      |
 | `README.md`                  | This file                                                                                  |
 | `flake.nix` + `flake.lock`   | Pinned dev shell: all non-Python tools ([DESIGN.md §8](DESIGN.md#8-verification-strategy)) |
 | `pyproject.toml` + `uv.lock` | Python side: the DSL package (ruff strict, ty, pytest)                                     |

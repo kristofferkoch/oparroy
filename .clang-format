@@ -1,5 +1,6 @@
 ---
-# oparroy C++ layout — the law for whitespace (code-std.md §8, §9).
+# oparroy C++ layout — the law for whitespace
+# (code-std-cpp.md#7-naming-and-layout, code-std.md#3-enforcement-split).
 Language: Cpp
 BasedOnStyle: LLVM
 IndentWidth: 4
@@ -7,7 +8,7 @@ ColumnLimit: 100
 AccessModifierOffset: -4
 PointerAlignment: Left
 ReferenceAlignment: Left
-# code-std.md §3: braces on all bodies, so never collapse them away.
+# code-std-cpp.md#2-control-flow: braces on all bodies, so never collapse them away.
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Empty

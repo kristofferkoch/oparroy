@@ -2,7 +2,7 @@
 
 // StaticArena<T, Capacity> + ArenaPtr — ownership over static storage,
 // the freestanding analog of AK's OwnPtr over a heap (DESIGN.md §8,
-// code-std.md §5). The arena is a fixed slot pool carved out at static
+// code-std-cpp.md#4-memory-and-ownership). The arena is a fixed slot pool carved out at static
 // allocation time; try_allocate hands out a slot wrapped in an
 // ArenaPtr whose destruction returns the slot to the pool — RAII for
 // arena slots, no paired alloc/free calls separated by user code.
@@ -31,7 +31,7 @@
 // static or member scope, never pass them by value. An ArenaPtr must
 // not outlive its arena; with arenas at static storage duration that
 // is the natural order, and the discipline is review-owned
-// (code-std.md §9). Dereferencing a null (default-constructed or
+// (code-std.md#3-enforcement-split). Dereferencing a null (default-constructed or
 // moved-from) ArenaPtr is a contract violation — VERIFY, loud on
 // target through the §4 failure hook.
 
@@ -76,7 +76,7 @@ public:
         return m_arena->m_storage[m_slot];
     }
     // operator-> exposes a raw T* by language rule; it stays inside the
-    // ownership-type idiom, not at project interfaces (code-std.md §5).
+    // ownership-type idiom, not at project interfaces (code-std-cpp.md#4-memory-and-ownership).
     [[nodiscard]] constexpr T* operator->() {
         return &**this;
     }

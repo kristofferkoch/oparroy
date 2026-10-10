@@ -47,8 +47,9 @@ struct NodeConfig {
 class Node {
 public:
     // The invariant is established here, not in a later init()
-    // (code-std.md §4, §5): config_valid() is the check; callers and
-    // harnesses VERIFY it at setup.
+    // (code-std-cpp.md#3-types-and-arithmetic,
+    // code-std-cpp.md#4-memory-and-ownership): config_valid() is the
+    // check; callers and harnesses VERIFY it at setup.
     constexpr Node(NodeConfig config, BitSlice telemetry)
         : m_config(config), m_telemetry(telemetry) {}
 

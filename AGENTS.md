@@ -50,7 +50,10 @@ card text while the card is alive.
 Tight, active, present tense. Concrete over abstract — name the part,
 the pin, the exact failure mode. Use **absolute dates** ("2026-09-26"),
 never a relative "recently" / "now" that rots. Cite doc sections with
-`§`. Link rather than duplicate; the linked doc stays the single source
+markdown links to the heading anchor —
+`[code-std.md#4-tests](code-std.md#4-tests)` in markdown, bare
+`code-std.md#4-tests` in code comments — never a bare `§N`. Link
+rather than duplicate; the linked doc stays the single source
 of truth.
 
 ## Datasheets — extraction is mandatory

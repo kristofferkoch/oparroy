@@ -12,7 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// Engine-fixed ABI name (code-std.md §2's extern-C entry points); the
+// Engine-fixed ABI name (code-std-cpp.md#1-language-and-toolchain's extern-C entry points); the
 // snake_case rule yields to the fuzzer's entry-point contract.
 // NOLINTNEXTLINE(readability-identifier-naming)
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {

@@ -270,7 +270,7 @@ class TileNet:
     the transform ``Handles`` (:mod:`oparroy.dsl.transform`) and of the
     equivalence proof's reset-level and base-net tables: a named type
     because a bare ``tuple[tuple[str, ...], str]`` transposes its two
-    components without a murmur (code-std §12).
+    components without a murmur (code-std-python.md#2-composite-types).
 
     >>> TileNet(("T0",), "sense").name
     'sense'

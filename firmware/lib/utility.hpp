@@ -2,7 +2,7 @@
 
 // lib::move — the cast-to-rvalue vocabulary word, AK's spelling
 // (AK/Forward.h). <utility> is outside the freestanding header set
-// (code-std.md §2), so the one-line word lives here instead of a
+// (code-std-cpp.md#1-language-and-toolchain), so the one-line word lives here instead of a
 // hand-rolled static_cast<T&&> at every site. move is the only word
 // grown so far (YAGNI): forward lands the day a perfect-forwarding
 // consumer appears.

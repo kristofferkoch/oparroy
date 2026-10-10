@@ -6,7 +6,7 @@
 //
 // Containment is checked against a shadow model of the input stream
 // (poisoned), not the node's own state() — an assertion that trusts the
-// implementation under test proves nothing (code-std.md §11).
+// implementation under test proves nothing (code-std.md#4-tests).
 
 #include "../../lib/range.hpp"
 #include "../../lib/verify.hpp"

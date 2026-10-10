@@ -64,7 +64,7 @@ ignore = [
 
 [tool.pytest.ini_options]
 # src/ is a testpath so --doctest-modules picks up doctests in package
-# modules (code-std.md §12); tests/ holds the unit/property tests.
+# modules (code-std-python.md#1-doctests); tests/ holds the unit/property tests.
 testpaths = ["src", "tests"]
 addopts = ["-ra", "--strict-config", "--strict-markers", "--doctest-modules"]
 # Repo root on sys.path so tests can import the design/ captures.

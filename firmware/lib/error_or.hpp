@@ -3,7 +3,7 @@
 // Error / ErrorOr<T> / TRY — the fallible-return machinery, the third
 // cell of the foundation library (DESIGN.md §8), modeled on AK's
 // ErrorOr: anything that *can* fail returns, it never traps silently
-// (code-std.md §6). Error returns are for *environmental* failure —
+// (code-std-cpp.md#5-error-handling). Error returns are for *environmental* failure —
 // hostile input, a full arena — where the caller holds a policy
 // decision; contract violations stay VERIFY's (verify.hpp).
 //
@@ -14,7 +14,7 @@
 //
 // ErrorOr stores the value and the error side by side rather than in a
 // union: value storage without std::construct_at (outside the
-// freestanding header set, code-std.md §2) can't switch lifetimes in
+// freestanding header set, code-std-cpp.md#1-language-and-toolchain) can't switch lifetimes in
 // constexpr, and the side-by-side layout needs no placement new, no
 // manual destructor, and admits move-only values (ArenaPtr) next to
 // the trivially copyable value types. The price is sizeof(T) +
@@ -24,7 +24,7 @@
 // field then holds a meaningless code, guarded by m_is_error — the
 // documented trade of the union-less layout.
 //
-// TRY is the one blessed control-flow macro (code-std.md §6): AK's
+// TRY is the one blessed control-flow macro (code-std-cpp.md#5-error-handling): AK's
 // idiom, reads like exceptions, compiles to branches. The statement
 // expression (__extension__, so -Wpedantic stays quiet) is what lets
 // TRY evaluate its operand exactly once and still yield the value;
@@ -92,7 +92,7 @@ private:
 };
 
 // The void specialization: a bare fallible status — try_* growth
-// (code-std.md §5) returns this. Default-constructed is success.
+// (code-std-cpp.md#4-memory-and-ownership) returns this. Default-constructed is success.
 template <> class [[nodiscard]] ErrorOr<void> {
 public:
     constexpr ErrorOr() = default;
