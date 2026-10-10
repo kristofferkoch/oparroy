@@ -1,4 +1,4 @@
-"""Instrumentation transforms (T24a): the CI board as data over the plain capture.
+"""Instrumentation transforms: the CI board as data over the plain capture.
 
 The CI board is the node design plus injected controllability and
 observability (DESIGN.md §6: fault-injection muxes, supervisor-override
@@ -26,7 +26,7 @@ the two can never drift, and the plain capture never carries CI-only
 parts — the base board stays fab-able while the CI board is a strict
 superset produced mechanically. Every part and net a transform creates
 is tagged with :class:`Provenance` — the reset-state equivalence
-proof's (T24b) input, no name-matching heuristics.
+proof's input, no name-matching heuristics.
 
 Application is hierarchical, per-tile (memo Q1, settled 2026-09-29):
 ``apply_transforms`` runs on the hierarchical board between capture and

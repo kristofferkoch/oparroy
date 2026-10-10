@@ -246,13 +246,13 @@ class Waiver:
 
 @dataclass(frozen=True)
 class Provenance:
-    """Base-design origin of a transform-created part or net (T24a).
+    """Base-design origin of a transform-created part or net.
 
     Instrumentation transforms (:mod:`oparroy.dsl.transform`) tag every
     part and net they create: ``transform`` is the transform record's
     label (``"F1"``), ``base`` the capture name of the base net it
     derives from, relative to the tile the transform applied in. The
-    reset-state equivalence proof (T24b) consumes exactly these tags —
+    reset-state equivalence proof consumes exactly these tags —
     no name-matching heuristics. Base-capture elements carry None.
     """
 
@@ -428,7 +428,7 @@ class Placement:
     ``Part.unit`` handles. ``pin_names`` carries the typed pin
     keywords of a plain ``TypedPart`` placement (keyword → pin
     numbers), so passes can address pins by their capture names
-    (``Rat.b``) — the T24a instrumentation transforms' pin addressing.
+    (``Rat.b``) — the instrumentation transforms' pin addressing.
     """
 
     path: tuple[str, ...] = ()
@@ -441,7 +441,7 @@ class Part:
     """One placed component: an explicit reference bound to a symbol.
 
     ``provenance`` is None for base-capture parts; instrumentation
-    transforms tag the parts they create (T24a).
+    transforms tag the parts they create.
     """
 
     def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + identity/placement
@@ -650,7 +650,7 @@ class Net:
     """A named equipotential: the set of pins joined together.
 
     ``provenance`` is None for base-capture nets; instrumentation
-    transforms tag the nets they create (T24a).
+    transforms tag the nets they create.
     """
 
     def __init__(
@@ -940,7 +940,7 @@ class Instance:
     (socket reference → packing decision) that ``Circuit.flatten``
     consumes. The capture callable is kept as the instance's subcircuit
     identity — the sheetpath key the instrumentation transform pass
-    (:mod:`oparroy.dsl.transform`, T24a) scopes per-tile declarations on.
+    (:mod:`oparroy.dsl.transform`) scopes per-tile declarations on.
     """
 
     def __init__(
@@ -991,7 +991,7 @@ class Instance:
     def bind(self, port: str, net: Net) -> None:
         """Bind a port after instantiation: late binding for pass machinery.
 
-        Instrumentation transforms (T24a) add control and tap ports to
+        Instrumentation transforms add control and tap ports to
         an already-placed instance's child; this binds one to its
         parent net. ``port`` must name an unbound port of the child
         circuit; the net's membership in the parent is the caller's
@@ -1009,7 +1009,7 @@ class Instance:
     def flatten_hierarchy(self) -> Circuit:
         """Flatten the captured child's own hierarchy in place.
 
-        Pass machinery (the T24a instrumentation transforms) operates on
+        Pass machinery (the instrumentation transforms) operates on
         the per-tile flat form: the child's internal instances resolve
         (``PHY1/Rat`` refs, in-tile paths), ports keep their names and
         flags, waivers are preserved with their paths prefixed, and
@@ -1489,7 +1489,7 @@ class Circuit:
     def cut_net(self, net: Net | str, pins: Iterable[Pin], *, name: str) -> Net:
         """Move pins off a net onto a fresh net: the split primitive.
 
-        Pass machinery (the T24a instrumentation transforms) cuts a net
+        Pass machinery (the instrumentation transforms) cuts a net
         into sides by moving each side's pins out; every pin must sit
         on ``net``. Moving every pin out is legal — the emptied net is
         ``remove_net``'s to delete. The new net is internal (never a
@@ -1528,7 +1528,7 @@ class Circuit:
     def export_net(self, name: str) -> Net:
         """Promote an internal net to the interface: a port in place.
 
-        Pass machinery (T24a's ``add_tap``) exports a net so the
+        Pass machinery (the ``AddTap`` transform) exports a net so the
         instantiating parent can bind it — the net keeps its name, its
         pins, and its identity; only its port flag changes.
         """
