@@ -358,7 +358,13 @@ class _TileTransforms:
         if board_net is None:
             if not base.is_port:
                 self._tile.export_net(base.name)
-            board_net = self._board_net(t.label, base.name, base.name)
+            # The provenance base is the ultimate base-capture net, not
+            # the immediate one: tapping the side of an earlier cut
+            # (sense#a) still derives from the plain board's sense.
+            ultimate = (
+                base.provenance.base if base.provenance is not None else base.name
+            )
+            board_net = self._board_net(t.label, ultimate, base.name)
             self._inst.bind(base.name, board_net)
         handles[(self._path, t.net)] = board_net
 
