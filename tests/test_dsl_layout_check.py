@@ -15,7 +15,9 @@ from oparroy.dsl import (
     Board,
     BypassRule,
     Circuit,
+    FootprintSetRule,
     LayoutRules,
+    PartOverHoleRule,
     Project,
     TerminalProtectionRule,
     annotation_from_pcb,
@@ -703,3 +705,160 @@ def test_node_board_terminal_protection_is_not_vacuous(
             "(§7 checklist)"
         ),
     ]
+
+
+def _layer_footprint(ref: str, layer: str) -> str:
+    return (
+        f'(footprint "Lib:{ref}" (layer "{layer}") (at 0 0)'
+        f' (property "Reference" "{ref}" (at 0 0) (layer "F.SilkS")))'
+    )
+
+
+_BACK_SET_RULE = FootprintSetRule(
+    name="back-side footprint set",
+    layer="B.Cu",
+    refs=("J1", "J2"),
+)
+
+
+def _set_issues(board: Board, rule: FootprintSetRule = _BACK_SET_RULE) -> list[str]:
+    rules = LayoutRules(footprint_sets=(rule,))
+    return [i.message for i in check_layout(board, rules)]
+
+
+def test_footprint_set_pass() -> None:
+    board = _chain_board(
+        _layer_footprint("J1", "B.Cu"),
+        _layer_footprint("J2", "B.Cu"),
+        _layer_footprint("U1", "F.Cu"),
+    )
+    assert _set_issues(board) == []
+
+
+def test_footprint_set_unexpected_on_the_layer() -> None:
+    board = _chain_board(
+        _layer_footprint("J1", "B.Cu"),
+        _layer_footprint("J2", "B.Cu"),
+        _layer_footprint("U1", "B.Cu"),
+    )
+    assert _set_issues(board) == [
+        (
+            "back-side footprint set: U1 on B.Cu outside the expected "
+            "footprint set (J1, J2) — the back carries only the segment "
+            "connectors (§7 checklist)"
+        )
+    ]
+
+
+def test_footprint_set_member_missing_from_the_layer() -> None:
+    board = _chain_board(
+        _layer_footprint("J1", "B.Cu"),
+        _layer_footprint("J2", "F.Cu"),
+    )
+    assert _set_issues(board) == [
+        (
+            "back-side footprint set: J2 missing from B.Cu — the footprint "
+            "set is exact (§7 checklist)"
+        )
+    ]
+
+
+def test_node_board_back_copper_set_is_connectors_only() -> None:
+    """Calibration: B.Cu carries exactly the two segment connectors."""
+    board = parse_board(_NODE_BOARD.read_text())
+    assert check_layout(board, LayoutRules(footprint_sets=(_BACK_SET_RULE,))) == []
+
+
+def test_node_board_back_copper_set_is_not_vacuous() -> None:
+    """A wrong expected set flags the exact mismatch, both directions."""
+    board = parse_board(_NODE_BOARD.read_text())
+    rule = dataclasses.replace(_BACK_SET_RULE, refs=("J1", "U1"))
+    issues = check_layout(board, LayoutRules(footprint_sets=(rule,)))
+    assert [i.message for i in issues] == [
+        (
+            "back-side footprint set: J2 on B.Cu outside the expected "
+            "footprint set (J1, U1) — the back carries only the segment "
+            "connectors (§7 checklist)"
+        ),
+        (
+            "back-side footprint set: U1 missing from B.Cu — the footprint "
+            "set is exact (§7 checklist)"
+        ),
+    ]
+
+
+def _led_footprint(ref: str, hole: str | None = "0 0") -> str:
+    hole_pad = (
+        f' (pad "" np_thru_hole oval (at {hole}) (size 1.5 2.4)'
+        ' (drill oval 1.5 2.4) (layers "*.Cu" "*.Mask"))'
+        if hole is not None
+        else ""
+    )
+    return (
+        f'(footprint "Lib:{ref}" (layer "F.Cu") (at 10 10)'
+        f' (property "Reference" "{ref}" (at 0 0) (layer "F.SilkS"))'
+        ' (pad "1" smd rect (at -1.55 0) (size 0.95 1.75) (layers "F.Cu")'
+        '  (net "A"))'
+        ' (pad "2" smd rect (at 1.55 0) (size 0.95 1.75) (layers "F.Cu")'
+        '  (net "B"))'
+        f"{hole_pad})"
+    )
+
+
+_LED_RULE = PartOverHoleRule(
+    name="status LED over its routed hole",
+    refdes=r"LED\d+",
+    tolerance_mm=0.2,
+)
+
+
+def _led_issues(board: Board, rule: PartOverHoleRule = _LED_RULE) -> list[str]:
+    rules = LayoutRules(part_over_hole=(rule,))
+    return [i.message for i in check_layout(board, rules)]
+
+
+_LED_HOLE_MESSAGE = (
+    "status LED over its routed hole: {} has no unconnected np_thru_hole "
+    "pad within 0.2 mm of its anchor — the reverse-mount LED shines "
+    "through its routed hole (§4.1)"
+)
+
+
+def test_part_over_hole_pass() -> None:
+    board = _chain_board(_led_footprint("LED1"), _led_footprint("LED2", "0.1 0"))
+    assert _led_issues(board) == []
+
+
+def test_part_over_hole_missing_hole() -> None:
+    board = _chain_board(_led_footprint("LED1", None))
+    assert _led_issues(board) == [_LED_HOLE_MESSAGE.format("LED1")]
+
+
+def test_part_over_hole_hole_off_the_anchor() -> None:
+    board = _chain_board(_led_footprint("LED1", "0.5 0"))
+    assert _led_issues(board) == [_LED_HOLE_MESSAGE.format("LED1")]
+
+
+def test_part_over_hole_connected_hole_does_not_count() -> None:
+    """A plated/netted through-pad is not the routed hole: it must be NPTH."""
+    board = parse_board(
+        '(kicad_pcb (layers) (footprint "Lib:LED1" (layer "F.Cu") (at 0 0)'
+        ' (property "Reference" "LED1" (at 0 0) (layer "F.SilkS"))'
+        ' (pad "" thru_hole circle (at 0 0) (size 1.5 2.4) (drill 1.5)'
+        '  (layers "*.Cu" "*.Mask") (net "GND"))))'
+    )
+    assert _led_issues(board) == [_LED_HOLE_MESSAGE.format("LED1")]
+
+
+def test_node_board_status_leds_sit_over_their_holes() -> None:
+    """Calibration: LED1-LED4 each carry their routed hole at the anchor."""
+    board = parse_board(_NODE_BOARD.read_text())
+    assert check_layout(board, LayoutRules(part_over_hole=(_LED_RULE,))) == []
+
+
+def test_node_board_status_leds_over_holes_is_not_vacuous() -> None:
+    """Widen the pattern to a TVS: it matches, and it flags the hole it lacks."""
+    board = parse_board(_NODE_BOARD.read_text())
+    rule = dataclasses.replace(_LED_RULE, refdes=r"LED\d+|D5")
+    issues = check_layout(board, LayoutRules(part_over_hole=(rule,)))
+    assert [i.message for i in issues] == [_LED_HOLE_MESSAGE.format("D5")]

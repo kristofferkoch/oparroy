@@ -72,6 +72,25 @@ def test_footprints_and_pads(board_pass: Board) -> None:
         ("3", "SIG"),
     ]
     assert by_ref["H1"].pads[0].kind == "np_thru_hole"
+    assert by_ref["H1"].pads[0].size == Point(3.2, 3.2)
+    assert by_ref["H1"].pads[0].drill == Point(3.2, 3.2)
+
+
+def test_pad_oval_drill() -> None:
+    """An oval drill carries both axes; a size-less pad leaves it None."""
+    board = parse_board(
+        '(kicad_pcb (layers) (footprint "Lib:LED" (layer "F.Cu") (at 0 0)'
+        ' (property "Reference" "LED1" (at 0 0) (layer "F.SilkS"))'
+        ' (pad "" np_thru_hole oval (at 0 0) (size 1.5 2.4)'
+        '  (drill oval 1.5 2.4) (layers "*.Cu" "*.Mask"))'
+        ' (pad "1" smd rect (at -1.55 0) (size 0.95 1.75) (layers "F.Cu"))))'
+    )
+    hole, smd = board.footprints[0].pads
+    assert hole.net is None
+    assert hole.size == Point(1.5, 2.4)
+    assert hole.drill == Point(1.5, 2.4)
+    assert smd.size == Point(0.95, 1.75)
+    assert smd.drill is None
 
 
 def test_legacy_fp_text_reference() -> None:
