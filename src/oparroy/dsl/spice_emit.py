@@ -6,10 +6,10 @@ and ``.meas`` assertions stay in external bench decks
 (``circuits/**/tb_*.cir``, run by ``scripts/sim-run``); the DSL emits
 the circuit, benches drive it. A capture whose ports match a
 hand-written DUT's ``.subckt`` interface drops into the same benches
-unmodified, so either capture can drive the run while T7e ports the
-``circuits/`` DUTs over.
+unmodified, so either capture can drive the run while the bench port
+brings the ``circuits/`` DUTs over.
 
-Spice bindings are declared ad hoc until T7c's parts DB owns them: a
+Spice bindings are declared ad hoc until the parts DB owns them: a
 small symbol-keyed table (``_BINDINGS``) maps KiCad symbols to element
 forms, and the caller passes the ``.model`` definitions (``models=``)
 a model-backed part references — the part's value names its model, as
@@ -57,7 +57,7 @@ def emit_spice(
     if undefined:
         msg = (
             f"parts reference spice models {undefined} with no definition — "
-            "pass them via models= (ad hoc until T7c's parts DB owns them)"
+            "pass them via models= (ad hoc until the parts DB owns them)"
         )
         raise DefinitionError(msg)
     lines = [
@@ -88,7 +88,7 @@ def _emit_part(part: Part, referenced: set[str]) -> list[str]:
     if binding is None:
         msg = (
             f"no spice binding for symbol {part.symbol.ref!r} (part {part.ref}) — "
-            "bindings are declared ad hoc until T7c's parts DB owns them"
+            "bindings are declared ad hoc until the parts DB owns them"
         )
         raise DefinitionError(msg)
     return binding(part, referenced)

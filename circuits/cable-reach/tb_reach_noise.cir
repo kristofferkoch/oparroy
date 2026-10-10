@@ -1,7 +1,7 @@
-* tb_reach_noise — crosstalk immunity at reach boundary (card T15):
+* tb_reach_noise — crosstalk immunity at reach boundary:
 * tb_reach passes rser=470 spans out to 12 m, but past ~2 m the
 * far-end edges are us-class reflection staircases — far outside the
-* 125 ns edge rates tb_noise covered. The card's condition applies:
+* 125 ns edge rates tb_noise covered. The reach-work condition applies:
 * rerun the noise case against the distributed line. This bench
 * replays tb_noise's phase-2 aggressors onto the cable far end at the
 * lengths where the staircase dwells near threshold, and applies the

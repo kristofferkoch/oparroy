@@ -1,5 +1,5 @@
-* tb_noise — analog-hysteresis verdict for the PHY RX (card T5,
-* DESIGN.md §2 open item: the OPA has no documented hysteresis; glitch
+* tb_noise — analog-hysteresis verdict for the PHY RX
+* (DESIGN.md §2 open item: the OPA has no documented hysteresis; glitch
 * rejection is meant to come from the TIM2 ICxF digital filter plus
 * ratio-decode margins, not analog feedback. This bench either
 * confirms that or quantifies the failure that forces one feedback

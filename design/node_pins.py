@@ -1,4 +1,4 @@
-"""Ring-node pin map: the authoritative T9 pin table for the CH32V003.
+"""Ring-node pin map: the authoritative pin table for the CH32V003.
 
 Every function a node may carry — the §2/§3 ring PHY, the §4 watchdog
 keep-alive, the §4.1 status LEDs, §6 debug, and the §5/§6 demonstrator
@@ -28,7 +28,7 @@ SOURCE = "design/node_pins.py"
 REGENERATE = "python -m design.node_pins > firmware/node/pins.hpp"
 TITLE = (
     "oparroy ring-node pin map — CH32V003F4P6 (TSSOP-20). Function "
-    "requests, pads bound late as refinement data (T9; DESIGN.md §5)."
+    "requests, pads bound late as refinement data (DESIGN.md §5)."
 )
 
 

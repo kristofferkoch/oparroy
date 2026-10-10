@@ -104,7 +104,7 @@ it; the standalone board fabs second, as the production-form proof.
   conservative filter never admits it. Needs a human on jlcpcb.com.
 - **Back-annotation join validation** — `annotation_from_pcb` is
   tested against synthetic input only; the first real `.kicad_pcb`
-  exercises it (the T7a caveat, §7). Ride-along: the layout checker's
+  exercises it (the known DSL-capture caveat, §7). Ride-along: the layout checker's
   pcbnew skeleton-ingest validation.
 - **Layout-rules instance** — the node board needs its `LayoutRules`
   data: net classes (widths/clearances/vias), trace-length budgets,

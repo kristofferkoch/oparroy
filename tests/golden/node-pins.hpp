@@ -4,7 +4,7 @@
 // Regenerate: python -m design.node_pins > firmware/node/pins.hpp
 //
 // oparroy ring-node pin map — CH32V003F4P6 (TSSOP-20). Function requests, pads bound late as
-// refinement data (T9; DESIGN.md §5).
+// refinement data (DESIGN.md §5).
 // 16 of 18 GPIO assigned; spare: PC1 (pin 11), PC7 (pin 17).
 
 #include <cstdint>

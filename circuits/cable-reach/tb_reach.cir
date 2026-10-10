@@ -1,5 +1,5 @@
-* tb_reach — unamplified cable reach of the PHY segment (card T15,
-* DESIGN.md §9): how long a 3M 3365 ribbon span can get before the
+* tb_reach — unamplified cable reach of the PHY segment
+* (DESIGN.md §9): how long a 3M 3365 ribbon span can get before the
 * WS2812-style cells stop decoding at the far-end comparator, and what
 * sets the limit. Builds on tb_decode's 15-cell stream and decode
 * contract; the lumped Lseg/Cseg is swapped for the transmission-line
@@ -16,7 +16,7 @@
 * runs:
 *   rser=470 (the §7 BOM protection value) at len = 0.5..50 m, fine
 *     grid around the failure boundary
-*   rser=1mohm (unprotected 50 ohm drive, the T5 baseline) at
+*   rser=1mohm (unprotected 50 ohm drive, the phy-segment baseline) at
 *     len = 0.5..200 m, coarse grid finding where it stops passing
 * voff fixed at 0: tb_decode swept +-13 mV across the same comparator
 * and saw < 4 ns of margin movement everywhere.

@@ -275,8 +275,9 @@ def test_port_name_conflicts_with_net(symbols: StubSymbols) -> None:
 def test_eight_watchdogs_flatten_and_check_clean(
     kicad_libs: KiCadLibraries,
 ) -> None:
-    # The T7b proving case at watchdog scale: 8 identical instances of
-    # one subcircuit, sharing the keep-alive and ground nets.
+    # The subcircuit proving case at watchdog scale: 8 identical
+    # instances of one subcircuit, sharing the keep-alive and ground
+    # nets.
     board = Circuit("watchdog-octet", kicad_libs)
     ka = board.net("ka")
     gnd = board.net("GND")

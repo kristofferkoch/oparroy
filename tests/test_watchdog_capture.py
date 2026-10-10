@@ -1,6 +1,6 @@
 """Watchdog-chargepump capture tests (need the nix-provisioned libraries).
 
-The golden netlist at tests/golden/watchdog-chargepump.net is the T7a
+The golden netlist at tests/golden/watchdog-chargepump.net is the DSL
 proof artifact; regenerate it from the dev shell with:
 
     python -m design.watchdog_chargepump > tests/golden/watchdog-chargepump.net
@@ -84,8 +84,9 @@ def test_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_board_covering_port_ranges_checks_clean(kicad_libs: KiCadLibraries) -> None:
-    # T8: the board's 0..3.3 V driver fits the watchdog's ka contract
-    # (0..3.6 V), and sel's 0..3.3 V output fits the board's accept.
+    # Range containment: the board's 0..3.3 V driver fits the
+    # watchdog's ka contract (0..3.6 V), and sel's 0..3.3 V output fits
+    # the board's accept.
     board = board_driving(kicad_libs, Interval(0, 3.3))
     assert check(board, footprints=kicad_libs) == []
 

@@ -39,4 +39,5 @@ Transmission-line figures, per the datasheet's own configurations —
   consistent, so a two-element (Z0, td) + R model reproduces it.
 
 ngspice reach model built on these numbers:
-`circuits/cable-reach/phy-cable-segment.cir` (card T15).
+`circuits/cable-reach/phy-cable-segment.cir` (the cable-reach work,
+docs/cable-reach-2026-09-28.md).

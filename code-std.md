@@ -1,6 +1,6 @@
 # oparroy C++ coding standard
 
-Living document, created 2026-09-26 (T16b). Evolves by dated edits —
+Living document, created 2026-09-26. Evolves by dated edits —
 every substantive change gets a date so archaeology stays easy.
 
 Scope: all oparroy firmware and host-testable firmware logic. The DSL
@@ -38,7 +38,7 @@ needs to earn its place every time it's touched.
   `<limits>`, `<type_traits>`, `<bit>`); anything that drags in hosted
   machinery is not. Project types beat std types where both exist
   (`ErrorOr` over `std::expected`) for consistency with the foundation
-  library (§8, T18).
+  library (§8).
 
 ## 3. Control flow
 
@@ -53,7 +53,7 @@ needs to earn its place every time it's touched.
   integers take a `default`. Fallthrough only with `[[fallthrough]]`.
   GCC doesn't treat an exhaustive enum switch as covering, so the
   function ends with `UNREACHABLE()` (`firmware/lib/verify.hpp`,
-  landed 2026-09-28 with T18, replacing bare
+  landed 2026-09-28, replacing bare
   `__builtin_unreachable()`) — `-Wswitch-enum` still guards the cases.
 - Loops have bounded trip counts where feasible — friendlier to KLEE
   and to WCET reasoning. Unbounded loops need a stated reason (e.g.
@@ -110,7 +110,7 @@ needs to earn its place every time it's touched.
   (the `reinterpret_cast` rule below); function signatures and struct
   fields don't carry one. Bounds are carried, not checked: KLEE's
   out-of-bounds detection and fuzzing own the defect class (§1), with
-  the T18 `VERIFY` hook adding the target-side check.
+  the `VERIFY` hook adding the target-side check.
 - RAII for every resource and lock; no paired acquire/release calls
   separated by user code.
 - MMIO register blocks are `volatile` structs via placement `new` —
@@ -134,13 +134,13 @@ needs to earn its place every time it's touched.
   counterexample, not a hope. Error returns are for *environmental*
   failure only (hostile input, a full arena), where the caller holds a
   policy decision. A `try_*` failure branch no test can reach is dead
-  weight the coverage gate (§8, T16e) flags forever; a VERIFY in the
+  weight the coverage gate (§8) flags forever; a VERIFY in the
   same spot is a proof obligation.
 - `VERIFY(...)` failures route through the project failure hook, which
   ties into the watchdog/bypass policy (§4): deliberate bypass-engage,
   not a hung loop. (2026-09-28: the hook is `lib::verify_failed`,
   wired by `-DOPARROY_TARGET` in `firmware/lib/verify.hpp`; the node
-  firmware's definition lands with T11.)
+  firmware provides its own definition.)
 
 ## 7. Constants and configuration
 
@@ -166,7 +166,7 @@ needs to earn its place every time it's touched.
   `.clang-tidy` with cherry-picked AUTOSAR/CERT checks, all
   warnings-as-errors. Markdown layout is mdformat's, lint is
   markdownlint-cli2's, link health is lychee's.
-- **The pre-commit hooks own the entry point** (2026-09-26, T16b):
+- **The pre-commit hooks own the entry point** (2026-09-26):
   `.pre-commit-config.yaml` runs clang-format, clang-tidy, mdformat,
   markdownlint-cli2, and lychee on staged files — cheap checks only,
   under ~3 s warm. Every tool is nix-pinned (flake.nix) and invoked via

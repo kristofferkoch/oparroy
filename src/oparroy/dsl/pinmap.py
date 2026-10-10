@@ -1,4 +1,4 @@
-"""Firmware pin maps: function requests, late pad binding, one table (T9).
+"""Firmware pin maps: function requests, late pad binding, one table.
 
 A capture requests pins by *function* (``gpio.request("keepalive")``);
 pad numbers bind late, as refinement data (``gpio.bind(keepalive="PD3")``).

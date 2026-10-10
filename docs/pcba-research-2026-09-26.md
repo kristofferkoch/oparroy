@@ -1,6 +1,6 @@
 # PCBA research — 2026-09-26
 
-Input to KANBAN card T17 and DESIGN.md §6; feeds the DSL parts DB's
+Input to DESIGN.md §6; feeds the DSL parts DB's
 assembler-stock field (§7). Compiled by research agents; sources cited
 inline. Prices USD.
 

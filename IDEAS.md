@@ -7,16 +7,16 @@ real work — **move**, don't copy. Reference, don't duplicate.
 ## Protocol
 
 - WS2812-style self-clocked single-wire signaling, closed into a ring —
-  settled 2026-09-26 (card T3): ratio-metric PWM cells at 800 kbit/s,
+  settled 2026-09-26: ratio-metric PWM cells at 800 kbit/s,
   positional slot addressing via UNIID enumeration, slotted telemetry.
   See DESIGN.md §2 and docs/phy-analysis-2026-09-26.md. Frame format
-  detail: card T11.
+  detail: the node firmware.
 
 ## Fault tolerance
 
-- Bypass topology — settled 2026-09-26 (card T2): counter-rotating dual
+- Bypass topology — settled 2026-09-26: counter-rotating dual
   ring with symmetric rebroadcast. See DESIGN.md §3. Intermittent-fault
-  policy stays open as card T13.
+  policy stays open.
 - Capacitance characterization of data lines (2026-09-26) — a node
   measures line capacitance (e.g. charge-time / step-response via the
   comparator) to estimate cable length to its neighbor and to localize
@@ -114,24 +114,27 @@ real work — **move**, don't copy. Reference, don't duplicate.
   ⇒ gate skipped (or replayed green from a previous run). Natural
   companion to the parallel-gate-jobs CI split: each parallel job gets
   its own input hash.
-- **Pin-map scarcity lint / auto-assignment** (2026-09-28, follows T9):
+- **Pin-map scarcity lint / auto-assignment** (2026-09-28, follows the
+  node pin map):
   `check_pin_map` verifies a hand-written binding; it does not yet
   *judge* it. A scarcity pass could warn when a pad with rare
   capabilities (the four OPA inputs, ADC channels, FT pins) is burned
   on a plain GPIO function that any pad could serve — and eventually
   solve the binding itself, PolymorphicBlocks-style (the same steal as
-  T9's late binding): requests declare constraints, the solver picks
+  the pin map's late binding): requests declare constraints, the solver
+  picks
   pads, the human reviews the diff. Deferred: at 18 pads the
   assignment is a pleasant puzzle by hand and an explicit binding
   reviews better; revisit when the CI board's supervisor (RP2040, 30
   GPIO) or a second node MCU makes the table big enough to drift.
 - **Fanout-driven net-label elision for generated drawings**
-  (2026-09-27): when generating circuit drawings (feeds T21's survey
+  (2026-09-27): when generating circuit drawings (feeds the
+  docs/prior-art-schematic-gen-2026-09-28.md survey
   and whatever renderer follows the dot dump), the highest-fanout nets
   — GND, the power rails — become net labels/symbols instead of drawn
   wires. A pareto cut on fanout keeps the drawing from degenerating
   into a ratsnest around the few nets that touch everything.
-- **Parts-DB stock refresh tooling** (2026-09-28): the T7c table
+- **Parts-DB stock refresh tooling** (2026-09-28): the parts table
   (`design/parts_db.py`) is as-of-dated snapshots by hand; a script
   that queries JLCPCB/LCSC (their parts API, or the jlcsearch mirror)
   and rewrites the `Stock` entries with fresh counts and as-of dates
@@ -148,7 +151,7 @@ real work — **move**, don't copy. Reference, don't duplicate.
   via-stitched, no large unstitched islands or long thin necks between
   pours. Both are EMI/loop-area concerns DRC doesn't cover.
   **Method ladder settled 2026-10-04:** rung 1 = geometric/rule-based
-  checks in CI, and that's what this card builds — at our frequencies
+  checks in CI, and that's what this idea builds — at our frequencies
   (800 kbit/s, MCU edge rates → spectrum ≤ ~200 MHz on cm-scale
   copper) the board is deep in the quasi-static regime, loop
   inductance dominates, and the HF return current in a plane flows

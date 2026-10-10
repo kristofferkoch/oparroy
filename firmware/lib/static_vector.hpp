@@ -19,7 +19,7 @@
 // try_push_back is for data-driven fills, where "full" is
 // environmental and the caller holds the policy — it returns
 // ErrorOr<void> (error_or.hpp, subsumed the original GrowthResult
-// 2026-09-28, T18). Bounds are carried, not checked — same doctrine as
+// 2026-09-28). Bounds are carried, not checked — same doctrine as
 // Span (span.hpp).
 
 #include "error_or.hpp"

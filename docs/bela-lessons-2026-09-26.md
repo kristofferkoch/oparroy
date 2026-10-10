@@ -155,10 +155,10 @@ deliverable — aligning with hands-off-HIL from day one (DESIGN.md §6,
 | Smart sensor nodes; cooked data over a standard 4-wire connector                  | **Node I/O**: nodes pre-process (debounce, captouch thresholding, accel FIFO), answer with digested values                                            |
 | Hardware address selection via tri-state solder bridges, documented failure modes | **Node I/O / protocol**: hardware node-ID strategy instead of provisioning; docs teaching the short-circuit-class mistakes                            |
 | Per-type default addresses + one shared register map, auto-detect in host lib     | **Protocol**: fixed node-type IDs in enumeration; supervisor auto-detects type                                                                        |
-| One firmware across a sensor family                                               | **Node firmware**: single MCU image, personality by type ID — one HIL target (card T11)                                                               |
+| One firmware across a sensor family                                               | **Node firmware**: single MCU image, personality by type ID — one HIL target                                                                          |
 | Zero-install browser IDE, examples-as-curriculum, scope built in                  | **Tooling**: ship a runnable ring demo + live visualizer (RP2040 golden reference) before breadth of features                                         |
 | Layered licensing: permissive libs, copyleft core, trademarked name               | **Repo/legal**: permissive node library, copyleft supervisor/tooling, trademark "oparroy" early — only if plain MIT (settled 2026-09-26) is revisited |
-| In-house pogo-pin jig, test post-SMT/pre-through-hole, every unit in operation    | **Test board**: jig as its own deliverable; test at the cheapest rework stage (card T10)                                                              |
+| In-house pogo-pin jig, test post-SMT/pre-through-hole, every unit in operation    | **Test board**: jig as its own deliverable; test at the cheapest rework stage                                                                         |
 
 **Could not verify:** (a) any Bela hardware-in-the-loop CI — appears
 not public; (b) whether Bela Gem reuses the original PRU assembly

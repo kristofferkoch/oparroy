@@ -17,9 +17,9 @@ MCU pins):
 - **Terminal protection** (§7 checklist): 470 Ω series R plus a TVS
   footprint per ring terminal, wired connector → TVS → R → µC so the R
   limits what the MCU clamp diodes absorb after the TVS clamps.
-- **Hysteresis fallback** (§2): the OPO→OPP feedback resistor the T5
-  noise bench rejected stays on the BOM as DNP — the footprint is there
-  if real silicon disagrees with the simulation.
+- **Hysteresis fallback** (§2): the OPO→OPP feedback resistor the
+  phy-segment noise bench rejected stays on the BOM as DNP — the
+  footprint is there if real silicon disagrees with the simulation.
 - **`sel` Schmitt insurance** (§4's accepted 10 ns/V violation, settled
   2026-09-29): a DNP 74LVC1G17 footprint in the sel path between the
   watchdog and the switch, bridged by a fitted 0 Ω — if the bench
@@ -158,7 +158,8 @@ class PhyFrontEnd(Subcircuit):
         circuit.part("Rbt", R0603("470", a=mcu_tx_b, b=tx_b))
         circuit.part("Dbt", TvsSod323(a=tx_b, b=gnd))
 
-        # RX threshold: VDD/2 from the 10k bin (§2; T5's bench values).
+        # RX threshold: VDD/2 from the 10k bin (§2; the phy-segment
+        # bench values).
         circuit.part("Rth1", R0603("10k", a=v3v3, b=mcu_vdd2))
         circuit.part("Rth2", R0603("10k", a=mcu_vdd2, b=gnd))
 

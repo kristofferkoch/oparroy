@@ -1,11 +1,11 @@
 * phy-cable-segment — one ring segment over a real cable, node k to
-* node k+1 (T15, DESIGN.md §9 cable reach): node TX pin -> 470 ohm
+* node k+1 (DESIGN.md §9 cable reach): node TX pin -> 470 ohm
 * series protection R (§7 I/O terminal checklist) -> 74LVC1G3157
 * bypass/insert switch -> 3M 3365 ribbon span -> far-end protection
 * (TVS capacitance, 470 ohm series R) -> next node's OPA comparator
 * RX. Replaces phy-segment.cir's lumped Lseg/Cseg with a
-* transmission-line span; everything else mirrors the T5 topology so
-* the decode-margin contract (tb_decode) carries over.
+* transmission-line span; everything else mirrors the phy-segment
+* topology so the decode-margin contract (tb_decode) carries over.
 *
 * Subcircuits:
 *   ribbon28 a ga b gb        — the cable span itself (params: len)
@@ -36,7 +36,7 @@
 * so cpin carries the pin.
 *
 * rser=470 is the §7 BOM value; benches sweep it (1m = unprotected
-* 50 ohm drive, the T5 baseline) because it turns out to set the
+* 50 ohm drive, the phy-segment baseline) because it turns out to set the
 * reflection behavior of the whole segment.
 *
 * Include note: mirrors phy-segment.cir — benches include this file

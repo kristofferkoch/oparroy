@@ -1,5 +1,5 @@
-* tb_redriver — cable reach with a re-driver mid-segment (card T15,
-* DESIGN.md §9): two ribbon spans joined by an analog repeater
+* tb_redriver — cable reach with a re-driver mid-segment
+* (DESIGN.md §9): two ribbon spans joined by an analog repeater
 * (far-end protection + OPA comparator + TX pin + series R — exactly
 * the receive/transmit analog chain of any ring node, minus protocol
 * re-timing). The question: does reach double, and what does the

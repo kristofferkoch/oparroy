@@ -1,7 +1,7 @@
 """ngspice emitter tests: golden output, bindings, bench compatibility.
 
 The bench test (``test_existing_benches_pass_against_dsl_emitted_dut``)
-is the T7d acceptance proof: the hand-written bench decks of
+is the spice-emitter acceptance proof: the hand-written bench decks of
 ``circuits/watchdog-chargepump/`` run unmodified — stimulus and
 ``.meas`` assertions stay in the benches — against the DSL-emitted DUT
 netlist, via ``scripts/sim-run`` exactly as the hand-written capture is
