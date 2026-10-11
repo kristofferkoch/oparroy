@@ -10,6 +10,12 @@ annotation renumbers the board refdes between passes, the nets and the
 `/PHY1/`, `/WD1/`, `/SL1/` sheet paths don't. Current-pass refdes
 appear in parens where the mapping isn't obvious.
 
+Each footprint also carries its capture `note=` as a `Comment`
+property (pcbnew's netlist import copies comp fields onto footprints):
+"power LED", "decoupling cap for U3" — the `{ref}` placeholders the
+capture writes resolve to the current refdes at emission
+([dsl-reference.md](dsl-reference.md), `Circuit.part`).
+
 Constraints are seeded, not hand-set: `design/node_board.py` writes the
 stackup, the Default/Bypass/Power net classes, and the board minimums
 (`boards/node/` pair). If DRC complains, fix the layout — the minimums

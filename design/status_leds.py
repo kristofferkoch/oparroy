@@ -67,16 +67,36 @@ class StatusLeds(Subcircuit):
         pwr_led = circuit.net("pwr_led")
         ledw_a = circuit.net("ledw_a")
         led_x = circuit.net("led_x")
-        circuit.part("Rp", R0603("1k", a=v3v3, b=pwr_led))
         circuit.part(
-            "Dp", LedRev1206(anode=pwr_led, cathode=gnd, value="XL-3216SURC-FB")
+            "Rp", R0603("1k", a=v3v3, b=pwr_led), note="current limit for {Dp}"
         )
-        circuit.part("Rw", R0603("1k", a=led_work, b=ledw_a))
-        circuit.part("Dw", LedRev1206(anode=ledw_a, cathode=gnd, value="XL-3216UYC-FB"))
-        circuit.part("Rs", R0603("470", a=led_seg, b=led_x))
-        circuit.part("Du", LedRev1206(anode=led_x, cathode=gnd, value="XL-3216SYGC-FB"))
         circuit.part(
-            "Dd", LedRev1206(anode=v3v3, cathode=led_x, value="XL-3216SYGC-FB")
+            "Dp",
+            LedRev1206(anode=pwr_led, cathode=gnd, value="XL-3216SURC-FB"),
+            note="power LED",
+        )
+        circuit.part(
+            "Rw", R0603("1k", a=led_work, b=ledw_a), note="current limit for {Dw}"
+        )
+        circuit.part(
+            "Dw",
+            LedRev1206(anode=ledw_a, cathode=gnd, value="XL-3216UYC-FB"),
+            note="working heartbeat LED",
+        )
+        circuit.part(
+            "Rs",
+            R0603("470", a=led_seg, b=led_x),
+            note="shared current limit for the {Du}/{Dd} link pair",
+        )
+        circuit.part(
+            "Du",
+            LedRev1206(anode=led_x, cathode=gnd, value="XL-3216SYGC-FB"),
+            note="upstream link LED, antiparallel with {Dd}",
+        )
+        circuit.part(
+            "Dd",
+            LedRev1206(anode=v3v3, cathode=led_x, value="XL-3216SYGC-FB"),
+            note="downstream link LED, antiparallel with {Du}",
         )
 
 
