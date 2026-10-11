@@ -171,6 +171,19 @@ real work — **move**, don't copy. Reference, don't duplicate.
   thresholds aren't pure folklore. Rung 5 = bench: DIY near-field
   H/E probes + spectrum analyzer/SDR over a running ring, TDR/NanoVNA
   for discontinuities (§6 HIL philosophy).
+- **Link-LED↔connector pairing check** (raised reviewing the §7
+  placement contracts): nothing verifies that each link-status LED
+  sits next to *its* connector — the
+  [§4.1 antiparallel pair](DESIGN.md#41-fault-detection-and-serviceability)
+  lights upstream on pin high and downstream on pin low, so a swapped
+  placement makes the node lie about which link is up, and neither the
+  part-over-hole contract nor KiCad DRC can see that. `AdjacencyRule`
+  could pin LED↔J by refdes, but refdeses die under KiCad's geographic
+  renumbering; the robust form derives the pairing from the capture,
+  the `terminal_protection_rules` pattern — which needs the capture to
+  name the association (Du ↔ the upstream connector) in the first
+  place. Same family as the terminal-protection chains: placement
+  contracts derived from named parts, not board geography.
 - **Technology mapping onto multi-unit packages** — the FPGA-flow
   analogy: synthesis emits primitive gates, the technology
   mapper packs them onto physical cells. Applied here: a capture
