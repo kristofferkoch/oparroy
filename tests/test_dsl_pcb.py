@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
+from pathlib import Path
 
 import pytest
 
 from oparroy.dsl import Board, EdgeKind, PcbError, Point, parse_board
 from oparroy.dsl.sexpr import SexpError
+
+_NODE_BOARD = (
+    Path(__file__).parent.parent / "boards" / "node" / "oparroy-node.kicad_pcb"
+)
 
 _THICKNESS_MM = 1.6
 _DEFAULT_CLEARANCE_MM = 0.2
@@ -309,3 +315,23 @@ def test_footprint_texts_skip_hidden_reference() -> None:
         ' (fp_text user "X1" (at 0 0 0) (layer "F.SilkS") hide)))'
     )
     assert board.footprints[0].texts == ()
+
+
+def test_footprint_sheetname() -> None:
+    board = parse_board(
+        '(kicad_pcb (layers) (footprint "Lib:R" (layer "F.Cu") (at 0 0)'
+        ' (property "Reference" "R1" (at 0 0) (layer "F.SilkS"))'
+        ' (sheetname "/WD1/"))'
+        ' (footprint "MountingHole:H" (layer "F.Cu") (at 10 10)'
+        ' (property "Reference" "H1" (at 0 0) (layer "F.SilkS"))))'
+    )
+    r1, h1 = board.footprints
+    assert r1.sheetname == "/WD1/"
+    assert h1.sheetname == ""
+
+
+def test_node_board_sheetname_partition() -> None:
+    """The board's sheets match the golden netlist's comp partition."""
+    board = parse_board(_NODE_BOARD.read_text())
+    counts = Counter(fp.sheetname for fp in board.footprints)
+    assert counts == Counter({"/": 9, "/PHY1/": 14, "/SL1/": 7, "/WD1/": 5, "": 2})
