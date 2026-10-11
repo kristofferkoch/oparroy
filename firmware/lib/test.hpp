@@ -25,6 +25,7 @@
 // process exit code that names the failing check even when output is
 // swallowed.
 
+#include "source_location.hpp"
 #include "string_view.hpp"
 
 namespace lib::test {
@@ -72,8 +73,7 @@ struct Report {
 // transposition at every call site (code-std-cpp.md#3-types-and-arithmetic).
 struct Failure {
     StringView condition;
-    StringView file;
-    int line = 0;
+    SourceLocation location;
 };
 
 // The report hook — the wiring point described in the header comment.
@@ -139,5 +139,6 @@ inline Report run_all_cases() {
     if (condition) {                                                                               \
     } else {                                                                                       \
         ::lib::test::current_case_failed = true;                                                   \
-        ::lib::test::case_failed(::lib::test::Failure{#condition, __FILE__, __LINE__});            \
+        ::lib::test::case_failed(                                                                  \
+            ::lib::test::Failure{#condition, ::lib::SourceLocation::current()});                   \
     }

@@ -36,9 +36,9 @@ void case_failed(const Failure& failure) {
     message.append(": ");
     message.append(failure.condition);
     message.append(" (");
-    message.append(failure.file);
+    message.append(failure.location.file_name());
     message.append(":");
-    message.append(static_cast<unsigned long>(failure.line));
+    message.append(static_cast<unsigned long>(failure.location.line()));
     message.append(")\n");
     print(message);
 }
