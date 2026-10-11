@@ -33,7 +33,6 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T19 --> T10
     T31[T31 scan control/observe plane] --> T10
     T35[T35 CI power: USB-C + 3V3] --> T10
     T30[T30 RP2040 supervisor subcircuit] --> T10
@@ -49,31 +48,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T19 — DSL layout property checker, remaining checks.** First slice
-  landed: `.kicad_pcb` parser, the `LayoutRules` contract with the
-  first check set (stackup, net-class width/via, trace
-  budgets, corner radius, silkscreen ID fields, serial-box area,
-  mounting holes + keepouts, adjacency/presence, bypass pad
-  whitelisting), and the constraint-skeleton emitter (DESIGN.md §7).
-  Also landed: the copper-geometry half of the §4 bypass check,
-  including copper arc-track parsing; and the §7 placement contracts
-  **footprint-set equality** (the B.Cu footprint set is exactly the
-  segment connectors) and **part-over-hole** (each reverse-mount status
-  LED over its routed hole); and **serial-box clearance** from
-  same-side pads and other silkscreen text, over rotation-aware
-  board-absolute pad geometry (footprint rotation now modeled,
-  pcbnew-verified); and **pcbnew ingest validation** of the emitted
-  skeleton — a real KiCad load/save round trip with pcbnew itself as
-  ground truth (`tests/test_dsl_pcb_ingest.py`).
-  Remaining: the **channelization hook** (per-instance layout
-  replication keyed on T7ba sheetpath metadata, meaningless until a
-  hierarchical board exists), to be calibrated against the node board
-  (`boards/node/`) — a draft layout with known DRC violations (over a
-  hundred, including NPTH-in-courtyard at the status-LED holes) that
-  the checker cannot yet see, so calibration asserts design-intent
-  invariants only (DESIGN.md §7). Promoted to Next: the calibration
-  board exists.
-  **Blocked by:** — · **Unblocks:** T10
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
   in PR #17 review): `TEST_CASE`/`EXPECT` macros over a tiny report
   hook — failure index as exit code freestanding,
@@ -323,7 +297,7 @@ ______________________________________________________________________
   RP2040 subcircuit (T30), scan control/observe plane
   (T31), debug-transport decision (T33); the supervisor image itself
   is T32.
-  **Blocked by:** T19, T30, T31, T33, T35 ·
+  **Blocked by:** T30, T31, T33, T35 ·
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
