@@ -84,15 +84,28 @@ are deliberately looser than the fab's.
 ## Before calling it done
 
 - [ ] DRC clean against the seeded classes and minimums, modulo the
-  known-intrinsic set: the LED light-pipe NPTHs flag
-  `copper_edge_clearance` (the 0.3 mm router-bit edge floor also
-  judges holes — footprint-fixed 0.175 mm pad-to-hole) and
-  `npth_inside_courtyard` under the connectors; both deliberate, both
-  pending exclusion or a footprint/quote decision. **LED NPTHs
-  resolved** — the footprint's slot shrank to 1.5×2.4 mm
-  (project-local `Oparroy:` variant, 0.325 mm pad-to-slot nominal),
-  clearing the edge floor; the connector `npth_inside_courtyard`
-  pair stays as the remaining intrinsic set.
+  known-intrinsic set: the LED light-pipe NPTHs under the connectors
+  flag `npth_inside_courtyard` (LED3→J1, LED1→J2). The decision is to
+  exclude per marker, never per rule: the overlap is courtyard margin
+  only — the slot edges hold 1.35 mm to the nearest connector pad, the
+  pads themselves are untouched, and the producibility classes
+  (copper-to-hole, hole-to-edge, mask) stay fully on, so the waiver
+  loses no fab protection. The layout checker guards the premise:
+  `HolePadClearanceRule` (1.3 mm floor, calibrated in
+  `tests/test_dsl_layout_check.py`) fails the suite if a slot drifts
+  toward a pad. How to exclude: DRC dialog → right-click each marker →
+  "Exclude this violation with comment…", the comment carrying the
+  evidence (1.35 mm pad clearance, connector body clear of the slot in
+  the 3D model). Exclusions live in the `.kicad_pro`
+  (`board.design_settings.defaults.drc_exclusions`), are marker-backed
+  (a moved footprint re-raises the violation), survive constraint
+  merges (`src/oparroy/dsl/pcb_merge.py` rebuilds them from the live
+  markers), and count as clean in `kicad-cli pcb drc`. Save *and
+  close* KiCad before committing — exclusions flush to the `.kicad_pro`
+  only on close. The sibling `copper_edge_clearance` flags on the same
+  slots cleared when the footprint's slot shrank to 1.5×2.4 mm
+  (project-local `Oparroy:` variant, 0.325 mm pad-to-slot nominal) —
+  keep that variant or they return.
 - [ ] B.Cu footprint set is exactly J1 + J2.
 - [ ] Each reverse-mount LED over its hole; TVS adjacent to its
   connector with the R between TVS and µC.
