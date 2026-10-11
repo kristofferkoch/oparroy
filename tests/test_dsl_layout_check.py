@@ -14,6 +14,8 @@ from oparroy.dsl import (
     Annotation,
     Board,
     BypassRule,
+    ChannelInstance,
+    ChannelizationRule,
     Circuit,
     FootprintSetRule,
     HolePadClearanceRule,
@@ -24,6 +26,7 @@ from oparroy.dsl import (
     Subcircuit,
     TerminalProtectionRule,
     annotation_from_pcb,
+    channelization_rules,
     check_layout,
     parse_board,
     sheet_parts_rules,
@@ -933,6 +936,179 @@ def test_node_board_sheet_partition_is_not_vacuous(
             "the sheet's footprint set is exact (§7)"
         )
     ]
+
+
+def _chan_footprint(
+    ref: str, sheet: str, x: float, y: float, rotation: float = 0
+) -> str:
+    return (
+        f'(footprint "Lib:{ref}" (layer "F.Cu") (at {x} {y} {rotation})'
+        f' (property "Reference" "{ref}" (at 0 0) (layer "F.SilkS"))'
+        f' (sheetname "{sheet}"))'
+    )
+
+
+_CHAN_RULE = ChannelizationRule(
+    name="Rc channel",
+    instances=(
+        ChannelInstance(sheet="/T0/", refdes=("R1", "C1")),
+        ChannelInstance(sheet="/T1/", refdes=("R2", "C2")),
+    ),
+    tolerance_mm=0.02,
+)
+
+
+def _chan_issues(board: Board, rule: ChannelizationRule = _CHAN_RULE) -> list[str]:
+    rules = LayoutRules(channelization=(rule,))
+    return [i.message for i in check_layout(board, rules)]
+
+
+def test_channelization_pass_translation() -> None:
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20),
+        _chan_footprint("C2", "/T1/", 52, 20),
+    )
+    assert _chan_issues(board) == []
+
+
+def test_channelization_pass_right_angle_rotation() -> None:
+    """A 90°-rotated replica: each part's rotation shifts with the tile's."""
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20, rotation=270),
+        _chan_footprint("C2", "/T1/", 50, 22, rotation=270),
+    )
+    assert _chan_issues(board) == []
+
+
+def test_channelization_reads_nested_sheets() -> None:
+    """A part of a tile's own sub-instance sits under a nested sheet."""
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/PHY1/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20),
+        _chan_footprint("C2", "/T1/PHY1/", 52, 20),
+    )
+    assert _chan_issues(board) == []
+
+
+def test_channelization_flags_a_moved_part() -> None:
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20),
+        _chan_footprint("C2", "/T1/", 52, 21),
+    )
+    assert _chan_issues(board) == [
+        (
+            "Rc channel: /T1/ does not replicate /T0/: R2, C2 off the "
+            "best-fit 0° transform by up to 0.50 mm, past the 0.02 mm "
+            "tolerance — replicated tiles are congruent (§7)"
+        )
+    ]
+
+
+def test_channelization_flags_a_rotated_part() -> None:
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20),
+        _chan_footprint("C2", "/T1/", 52, 20, rotation=90),
+    )
+    assert _chan_issues(board) == [
+        (
+            "Rc channel: C2 in /T1/ is rotated 90°, not the 0° the tile's "
+            "0° transform implies — replicated tiles are congruent (§7)"
+        )
+    ]
+
+
+def test_channelization_flags_a_mirrored_replica() -> None:
+    mirrored_c2 = _chan_footprint("C2", "/T1/", 48, 20).replace(
+        '(layer "F.Cu")', '(layer "B.Cu")', 1
+    )
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20),
+        mirrored_c2,
+    )
+    assert _chan_issues(board) == [
+        (
+            "Rc channel: C2 in /T1/ is on B.Cu, not F.Cu as in /T0/ — a "
+            "mirrored tile is not a replication (§7)"
+        )
+    ]
+
+
+def test_channelization_flags_a_missing_replica_part() -> None:
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20),
+    )
+    assert _chan_issues(board) == [
+        (
+            "Rc channel: C2 missing from sheet /T1/ — every instance of a "
+            "channel carries the same parts (§7)"
+        )
+    ]
+
+
+def test_channelization_flags_an_unexpected_replica_part() -> None:
+    board = _chain_board(
+        _chan_footprint("R1", "/T0/", 10, 10),
+        _chan_footprint("C1", "/T0/", 12, 10),
+        _chan_footprint("R2", "/T1/", 50, 20),
+        _chan_footprint("C2", "/T1/", 52, 20),
+        _chan_footprint("U2", "/T1/", 55, 20),
+    )
+    assert _chan_issues(board) == [
+        (
+            "Rc channel: U2 filed under sheet /T1/ outside the channel "
+            "instance's parts — every instance of a channel carries the "
+            "same parts (§7)"
+        )
+    ]
+
+
+def test_channelization_rules_from_capture(symbols: StubSymbols) -> None:
+    board = _two_rc_board(symbols)
+    annotation = Annotation({"RF": "R1", "LP0/R1": "R2", "LP1/R1": "R3"})
+    assert channelization_rules(board, annotation) == (
+        ChannelizationRule(
+            name="_Rc channel",
+            instances=(
+                ChannelInstance(sheet="/LP0/", refdes=("R2",)),
+                ChannelInstance(sheet="/LP1/", refdes=("R3",)),
+            ),
+            tolerance_mm=0.02,
+        ),
+    )
+
+
+def test_channelization_rules_requires_placed_parts(symbols: StubSymbols) -> None:
+    board = _two_rc_board(symbols)
+    with pytest.raises(ValueError, match="LP1/R1 has no refdes in the annotation"):
+        channelization_rules(board, Annotation({"RF": "R1", "LP0/R1": "R2"}))
+
+
+def test_channelization_rules_skip_singletons(symbols: StubSymbols) -> None:
+    board = Circuit("board", symbols)
+    inp = board.net("in")
+    gnd = board.net("gnd")
+    board.instance("LP0", _Rc(), **{"in": inp, "gnd": gnd})
+    assert channelization_rules(board, Annotation({"LP0/R1": "R2"})) == ()
+
+
+def test_node_board_has_no_channels(kicad_libs: KiCadLibraries) -> None:
+    """One instance per subcircuit: vacuous until a board repeats one."""
+    circuit = capture(kicad_libs)
+    annotation = annotation_from_pcb(circuit, _NODE_BOARD.read_text())
+    assert channelization_rules(circuit, annotation) == ()
 
 
 def _led_footprint(ref: str, hole: str | None = "0 0") -> str:
