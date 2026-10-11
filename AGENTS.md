@@ -18,6 +18,10 @@
   CI job goes green, Mergify queues it and merges it against the
   latest `main` (`.mergify.yml`) — no session needs to stay open
   waiting for CI.
+- **One commit per concept when feasible.** A PR is typically a single
+  commit, but when it carries separable changes — a parser feature,
+  a rule built on it, a doc note — split it into one commit per
+  concept so review, cherry-pick, and revert stay cheap.
 
 ## Documentation — the IDEAS / KANBAN / DESIGN split
 
