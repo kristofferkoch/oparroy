@@ -99,8 +99,12 @@ class Node(Subcircuit):
         swio = circuit.net("swio")
         pc7 = circuit.net("pc7")
 
-        circuit.part("J1", SegmentConnector(upstream))
-        circuit.part("J2", SegmentConnector(downstream))
+        circuit.part(
+            "J1", SegmentConnector(upstream), note="upstream segment connector"
+        )
+        circuit.part(
+            "J2", SegmentConnector(downstream), note="downstream segment connector"
+        )
 
         circuit.instance(
             "PHY1",
@@ -153,11 +157,14 @@ class Node(Subcircuit):
                     pads[f].name.lower(): net for f, net in mcu_nets.items()
                 },
             ),
+            note="node MCU",
         )
 
         # Decoupling: 100n at the VDD pin, 10u bulk for the node.
-        circuit.part("C1", C0603("100n", a=v3v3, b=gnd))
-        circuit.part("C2", C0603("10u", a=v3v3, b=gnd))
+        circuit.part("C1", C0603("100n", a=v3v3, b=gnd), note="decoupling cap for {U1}")
+        circuit.part(
+            "C2", C0603("10u", a=v3v3, b=gnd), note="bulk decoupling, one node"
+        )
 
         # §4.1 status LEDs: the StatusLeds subcircuit (power, working,
         # antiparallel link pair on led_seg) — its drive-state contract
