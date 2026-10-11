@@ -8,6 +8,7 @@
 #include "arena.hpp"
 #include "error_or.hpp"
 #include "range.hpp"
+#include "source_location.hpp"
 #include "span.hpp"
 #include "static_string.hpp"
 #include "static_vector.hpp"
@@ -163,6 +164,20 @@ namespace {
         return StringView{zero} == "0" && StringView{boundary} == "109";
     }
 
+    constexpr bool source_location_captures_the_call_site() {
+        // The builtin-backed defaults evaluate at the call expression,
+        // so current() on the next line must report exactly it.
+        constexpr int expected_line = __LINE__ + 1;
+        constexpr SourceLocation here = SourceLocation::current();
+        if (here.line() != expected_line) {
+            return false;
+        }
+        // The file and function names arrive as measured views.
+        const StringView file = here.file_name();
+        const StringView function = here.function_name();
+        return !file.is_empty() && function == "source_location_captures_the_call_site";
+    }
+
 } // namespace
 
 static_assert(error_or_value_path());
@@ -174,5 +189,6 @@ static_assert(move_transfers_the_handle());
 static_assert(arena_handle_arrow_access());
 static_assert(string_view_measures_and_compares());
 static_assert(static_string_assembles_messages());
+static_assert(source_location_captures_the_call_site());
 
 } // namespace lib
