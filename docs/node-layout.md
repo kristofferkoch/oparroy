@@ -8,7 +8,10 @@ blindly follow it.
 Anchor on **net names and design-part names** (Dar, Rar, SW1, …) —
 annotation renumbers the board refdes between passes, the nets and the
 `/PHY1/`, `/WD1/`, `/SL1/` sheet paths don't. Current-pass refdes
-appear in parens where the mapping isn't obvious.
+appear in parens where the mapping isn't obvious. The layout checker
+holds the sheet metadata honest: the sheet-partition contract asserts
+each sheet's footprints are exactly the capture's parts for it
+(`sheet_parts_rules`), calibrated against this board.
 
 Each footprint also carries its capture `note=` as a `Comment`
 property (pcbnew's netlist import copies comp fields onto footprints):

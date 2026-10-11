@@ -1228,7 +1228,9 @@ either a layout-checker assertion or a subcircuit):
 Landed: the layout checker in `src/oparroy/dsl/` —
 `kicad_pcb.py` (a tolerant `.kicad_pcb` parser on top of `sexpr`:
 stackup, net classes, footprints/pads (rotation modeled —
-board-absolute pad and text anchors verified against pcbnew 10.0.6),
+board-absolute pad and text anchors verified against pcbnew 10.0.6;
+footprint `sheetname` — the layout-side half of the sheetpath
+metadata),
 copper (segments, arcs, vias), board
 outline, silkscreen texts/rects, zones), `layout_check.py`
 (`LayoutRules` as the contract, `check_layout` reporting batched
@@ -1251,7 +1253,17 @@ exactly a refdes set — B.Cu carries only the segment connectors) and
 part-over-hole (a matching footprint carries an unconnected
 `np_thru_hole` pad within tolerance of its anchor — each reverse-mount
 status LED over its routed hole, rotation-free since the pad offset is
-footprint-local)), and `pcb_emit.py` (a
+footprint-local), and the channelization contracts: sheet-partition
+equality (a hierarchical sheet's footprints are exactly the capture's
+parts for that sheet — `sheet_parts_rules` derives the sets from the
+capture plus the back-annotation) and per-instance layout congruence
+(replicated instances of one subcircuit — grouped by `Subcircuit`
+type, or by identity for a plain capture callable, the transform
+pass's per-tile key — must place their footprints under one rigid
+transform: a translation plus a right-angle rotation, each part's
+rotation shifting with the tile's; a mirrored replica is not a
+replication; `channelization_rules` derives the channels, singleton
+groups yielding none)), and `pcb_emit.py` (a
 byte-identical skeleton emitter pushing constraints into pcbnew
 pre-audit; round-trips through the parser and through real pcbnew
 ingest — `tests/test_dsl_pcb_ingest.py`). Proven against
@@ -1259,8 +1271,11 @@ ingest — `tests/test_dsl_pcb_ingest.py`). Proven against
 `boards/node/`, where the bypass chain clears all other copper by the
 class clearance (0.3 mm), all four terminal chains meet the
 placement contract, B.Cu carries exactly J1/J2, all four status
-LEDs sit over their holes, and the serial box keeps 1.5 mm clear of
-the neighboring mounting holes (a 2 mm contract flags them). The node board is a draft layout, not a
+LEDs sit over their holes, the serial box keeps 1.5 mm clear of
+the neighboring mounting holes (a 2 mm contract flags them), and the
+four sheets partition the board's placed parts exactly as the capture
+declares (the hand-placed mounting holes carry no sheetname and join
+no sheet). The node board is a draft layout, not a
 golden reference: `kicad-cli pcb drc` reports over a hundred
 violations on it — clearance errors down to 0.15 mm against the 0.3 mm
 Power class, and NPTH-in-courtyard errors where LED1's and LED3's
@@ -1269,10 +1284,10 @@ checker can see, since courtyards and general inter-pad clearance are
 not modeled. Calibration asserts design-intent invariants only; the board
 is where the checks are meant to find bugs, so a check able to see a
 known board violation is calibrated to flag it, never to pass it.
-Not yet
-landed:
-the channelization hook (per-instance layout replication over the
-subcircuit sheetpaths — waits for a hierarchical board).
+The congruence contract is vacuous on the node board — one instance
+per subcircuit — and waits for the tiled CI board to bite; copper
+carries no sheet metadata, so congruence covers placement, and routing
+replication waits for the replication workflow.
 
 Skeleton emitter, KiCad 10 shape (verified headless against KiCad
 10.0.6 — `kicad-cli pcb upgrade`/`pcb drc`, exercised in

@@ -218,7 +218,12 @@ by `terminal_protection_rules`), `FootprintSetRule` (one copper layer's
 footprints are exactly a refdes set — the B.Cu-connectors-only rule),
 `PartOverHoleRule` (a matching footprint carries an unconnected
 `np_thru_hole` pad within tolerance of its anchor — the reverse-mount
-LED over its routed hole) (`layout_check.py`). `PcbSpec`
+LED over its routed hole). Channelization: `SheetPartsRule` (a
+hierarchical sheet's footprints are exactly the capture's parts for
+that sheet, derived by `sheet_parts_rules`) and `ChannelizationRule`
+(`ChannelInstance`; replicated instances of one subcircuit place their
+footprints congruently — one translation plus a right-angle rotation —
+derived by `channelization_rules`) (`layout_check.py`). `PcbSpec`
 (`StackupLayer`, `NetClassSpec`, `BoardMinimums`, `Keepout`) feeds
 `emit_pcb` / `emit_project`, the constraint-skeleton emitters that seed
 a board (`pcb_emit.py`; `PcbSpecError`). `pcb_merge.py`

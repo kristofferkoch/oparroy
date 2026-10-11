@@ -133,6 +133,17 @@ real work — **move**, don't copy. Reference, don't duplicate.
   — GND, the power rails — become net labels/symbols instead of drawn
   wires. A pareto cut on fanout keeps the drawing from degenerating
   into a ratsnest around the few nets that touch everything.
+- **Layout replication generator** (the producing half of
+  channelization; the checker half — sheet-partition and congruence
+  contracts over footprint sheetnames — is landed): a pcbnew-side tool
+  that takes one laid-out tile and replicates placement (and ideally
+  routing) onto the other instances, keyed on the sheetpath metadata.
+  Without it the tiled CI board means laying out eight node tiles by
+  hand and letting the congruence check catch the drift; with it the
+  tiles are congruent by construction and the check audits the tool.
+  Routing replication would also unlock a copper congruence check —
+  copper carries no sheet metadata, so attribution would go through the
+  tile's nets.
 - **Parts-DB stock refresh tooling**: the parts table
   (`design/parts_db.py`) is as-of-dated snapshots by hand; a script
   that queries JLCPCB/LCSC (their parts API, or the jlcsearch mirror)
