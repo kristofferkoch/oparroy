@@ -48,27 +48,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
-  in PR #17 review): `TEST_CASE`/`EXPECT` macros over a tiny report
-  hook — failure index as exit code freestanding,
-  `write(2)` + manual itoa on host, so no hosted header enters the
-  tree ([code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain)) and tests keep compiling against the shipped
-  freestanding configuration (T16e's test-what-ships doctrine).
-  Packaged frameworks fail that bar: gtest/Catch2/doctest need
-  exceptions, RTTI, or a hosted runtime, and a per-target flag fork
-  for tests is exactly the test-build-vs-shipped-build split the
-  doctrine rejects; snitch is the packaged fallback if the harness
-  outgrows maintenance-in-house. First consumer: port
-  `firmware/lib/test_foundation.cpp`'s hand-rolled exit-code checks
-  into named cases that read as usage examples — the examples-first
-  doctrine of
-  [code-std-python.md#1-doctests](code-std-python.md#1-doctests),
-  C++ side. The report hook takes the same
-  wiring-point shape as `lib::verify_failed`: target-side reporting
-  over the debug transport lands with T11/T12. Lands before T11 so
-  firmware v0 is written as named cases from day one, not ported
-  later. **Blocked by:** — ·
-  **Unblocks:** —
 - **T11 — Node firmware v0.** Receive-and-forward ring node on the
   CH32V003; the minimal slice that makes a multi-node ring pass bits.
   Per-bit cut-through forwarding with on-the-fly slot rewrite
