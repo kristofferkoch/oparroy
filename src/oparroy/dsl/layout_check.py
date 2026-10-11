@@ -16,13 +16,15 @@ KiCad's geographic annotation while capture paths stay stable.
 
 from __future__ import annotations
 
+import itertools
+import math
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from oparroy.dsl.check import Issue, Severity
 from oparroy.dsl.ir import natural_key
-from oparroy.dsl.kicad_pcb import Board, Edge, EdgeKind, Footprint, Point
+from oparroy.dsl.kicad_pcb import Board, Edge, EdgeKind, Footprint, Pad, Point, Rect
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -112,7 +114,7 @@ class PartOverHoleRule:
     Reverse-mount LEDs emit through the board: the footprint must carry
     an unconnected ``np_thru_hole`` pad whose footprint-local ``at``
     stays within ``tolerance_mm`` of the anchor. The offset is local,
-    so the check needs no footprint rotation (which is not modeled).
+    so the check needs no footprint rotation.
     ``refdes`` full-matches, the :class:`AdjacencyRule` idiom.
     """
 
@@ -130,6 +132,7 @@ class LayoutRules:
     thickness_tolerance_mm: float = 0.1
     required_silkscreen: tuple[str, ...] = ()
     min_serial_box_mm2: float | None = None
+    serial_box_clearance_mm: float | None = None
     min_corner_radius_mm: float | None = None
     corner_tolerance_mm: float = 0.05
     trace_budgets_mm: Mapping[str, float] = field(default_factory=dict)
@@ -160,6 +163,7 @@ def check_layout(
     issues.extend(_check_corner_radius(board, rules))
     issues.extend(_check_silkscreen(board, rules))
     issues.extend(_check_serial_box(board, rules))
+    issues.extend(_check_serial_box_clearance(board, rules))
     issues.extend(_check_mounting_holes(board, rules))
     issues.extend(_check_adjacency(board, rules))
     issues.extend(_check_terminal_protection(board, rules))
@@ -383,12 +387,178 @@ def _check_silkscreen(board: Board, rules: LayoutRules) -> list[Issue]:
 def _check_serial_box(board: Board, rules: LayoutRules) -> list[Issue]:
     if rules.min_serial_box_mm2 is None:
         return []
-    boxes = [rect for rect in board.rects if rect.layer in board.silkscreen_layers]
-    if any(box.area >= rules.min_serial_box_mm2 for box in boxes):
+    if _serial_boxes(board, rules):
         return []
     return _error(
         f"no silkscreen rectangle of at least {rules.min_serial_box_mm2} mm² "
         "for the handwritten serial-number field (§7 checklist)"
+    )
+
+
+def _serial_boxes(board: Board, rules: LayoutRules) -> list[Rect]:
+    """Collect the serial-number boxes: silkscreen rects meeting the area minimum."""
+    if rules.min_serial_box_mm2 is None:
+        return []
+    return [
+        rect
+        for rect in board.rects
+        if rect.layer in board.silkscreen_layers
+        and rect.area >= rules.min_serial_box_mm2
+    ]
+
+
+def _check_serial_box_clearance(board: Board, rules: LayoutRules) -> list[Issue]:
+    """Keep the serial box clear of pads and other silkscreen text (§7).
+
+    Pads count only on the box's side — silkscreen ink never meets the
+    opposite face's copper. Circle pads are discs; every other shape is
+    its bounding rectangle, rotated with footprint and pad rotation.
+    Text is checked by anchor — font extent and justification are not
+    modeled.
+    """
+    if rules.serial_box_clearance_mm is None:
+        return []
+    if rules.min_serial_box_mm2 is None:
+        return _error(
+            "serial_box_clearance_mm needs min_serial_box_mm2 to identify "
+            "the serial-number box (§7 checklist)"
+        )
+    clearance = rules.serial_box_clearance_mm
+    issues: list[Issue] = []
+    for box in _serial_boxes(board, rules):
+        copper = "F.Cu" if box.layer.startswith("F.") else "B.Cu"
+        for footprint in board.footprints:
+            for pad in footprint.pads:
+                if not _pad_on_side(pad, copper):
+                    continue
+                gap = _pad_rect_gap(footprint, pad, box)
+                if gap < clearance - _EPSILON_MM:
+                    center = footprint.board_position(pad.at)
+                    what = (
+                        f"{footprint.ref} pad {pad.number}"
+                        if pad.number
+                        else footprint.ref
+                    )
+                    issues.extend(
+                        _error(
+                            f"serial box comes within {gap:.2f} mm of {what} "
+                            f"at ({center.x:.2f}, {center.y:.2f}), under the "
+                            f"{clearance} mm clearance — keep the handwritten "
+                            "serial field clear of pads (§7 checklist)"
+                        )
+                    )
+        for text, at in _silkscreen_anchors(board, box.layer):
+            gap = _point_rect_gap(at, box)
+            if gap < clearance - _EPSILON_MM:
+                issues.extend(
+                    _error(
+                        f"silkscreen text {text!r} comes within {gap:.2f} mm "
+                        f"of the serial box, under the {clearance} mm "
+                        "clearance (§7 checklist)"
+                    )
+                )
+    return issues
+
+
+def _pad_on_side(pad: Pad, copper: str) -> bool:
+    """Return whether the pad has copper on the given face.
+
+    A pad without a parsed layers list counts as both sides — real files
+    always carry it, and a conservative default beats a silent miss.
+    """
+    return not pad.layers or "*.Cu" in pad.layers or copper in pad.layers
+
+
+def _silkscreen_anchors(board: Board, layer: str) -> list[tuple[str, Point]]:
+    """Every visible silkscreen text anchor on ``layer``, board-absolute."""
+    anchors = [(text.text, text.at) for text in board.texts if text.layer == layer]
+    for footprint in board.footprints:
+        anchors.extend(
+            (text.text, footprint.board_position(text.at))
+            for text in footprint.texts
+            if text.layer == layer
+        )
+    return anchors
+
+
+def _pad_rect_gap(footprint: Footprint, pad: Pad, rect: Rect) -> float:
+    """Gap between a pad's shape and the rectangle, in mm (0 on overlap)."""
+    center = footprint.board_position(pad.at)
+    if pad.size is None:
+        return _point_rect_gap(center, rect)
+    if pad.shape == "circle":
+        return max(0.0, _point_rect_gap(center, rect) - pad.size.x / 2)
+    corners = _pad_corners(center, pad.size, footprint.rotation_deg + pad.rotation_deg)
+    return _polygon_rect_gap(corners, rect)
+
+
+def _pad_corners(center: Point, size: Point, rotation_deg: float) -> tuple[Point, ...]:
+    """Return the pad's bounding-rectangle corners, board-absolute.
+
+    Pad and footprint rotations compose in KiCad's y-down frame; in the
+    mathematical convention of :meth:`Point.rotated` that is the negated
+    sum. Oval and roundrect pads use their bounding rectangle.
+    """
+    hx, hy = size.x / 2, size.y / 2
+    return tuple(
+        Point(center.x + corner.x, center.y + corner.y)
+        for corner in (
+            Point(-hx, -hy).rotated(-rotation_deg),
+            Point(hx, -hy).rotated(-rotation_deg),
+            Point(hx, hy).rotated(-rotation_deg),
+            Point(-hx, hy).rotated(-rotation_deg),
+        )
+    )
+
+
+def _rect_bounds(rect: Rect) -> tuple[float, float, float, float]:
+    """Return the rectangle as (xmin, ymin, xmax, ymax), normalized."""
+    xmin, xmax = sorted((rect.start.x, rect.end.x))
+    ymin, ymax = sorted((rect.start.y, rect.end.y))
+    return xmin, ymin, xmax, ymax
+
+
+def _point_rect_gap(point: Point, rect: Rect) -> float:
+    """Distance from a point to the rectangle (0 when inside)."""
+    xmin, ymin, xmax, ymax = _rect_bounds(rect)
+    dx = max(xmin - point.x, 0.0, point.x - xmax)
+    dy = max(ymin - point.y, 0.0, point.y - ymax)
+    return math.hypot(dx, dy)
+
+
+def _polygon_rect_gap(corners: tuple[Point, ...], rect: Rect) -> float:
+    """Gap between a convex polygon and the rectangle (0 on overlap)."""
+    xmin, ymin, xmax, ymax = _rect_bounds(rect)
+    rect_corners = (
+        Point(xmin, ymin),
+        Point(xmax, ymin),
+        Point(xmax, ymax),
+        Point(xmin, ymax),
+    )
+    poly_edges = list(itertools.pairwise(corners + corners[:1]))
+    rect_edges = list(itertools.pairwise(rect_corners + rect_corners[:1]))
+    crossed = any(
+        _segment_intersection_point(a, b, c, d) is not None
+        for a, b in poly_edges
+        for c, d in rect_edges
+    )
+    contained = _point_rect_gap(corners[0], rect) == 0.0 or any(
+        _point_in_polygon(corner, corners) for corner in rect_corners
+    )
+    if crossed or contained:
+        return 0.0
+    return min(_segments_gap(a, b, c, d) for a, b in poly_edges for c, d in rect_edges)
+
+
+def _segments_gap(a: Point, b: Point, c: Point, d: Point) -> float:
+    """Distance between two segments (0 when they cross)."""
+    if _segment_intersection_point(a, b, c, d) is not None:
+        return 0.0
+    return min(
+        _closest_on_segment(a, c, d).distance(a),
+        _closest_on_segment(b, c, d).distance(b),
+        _closest_on_segment(c, a, b).distance(c),
+        _closest_on_segment(d, a, b).distance(d),
     )
 
 
@@ -783,8 +953,8 @@ def _check_bypass_copper(board: Board, rules: LayoutRules) -> list[Issue]:
     different-net overlap or exact touch on a shared layer flags.
     Zones and pads stay out of scope: a zone's parsed polygon is its
     outline, not the poured copper with clearance cutouts (checking it
-    would flag every poured board), and pads lack board-absolute
-    positions because footprint rotation is not modeled.
+    would flag every poured board), and pads belong to the placement
+    side of the contract, not the copper-geometry half.
     """
     if not rules.bypass:
         return []

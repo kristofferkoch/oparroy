@@ -59,15 +59,15 @@ ______________________________________________________________________
   including copper arc-track parsing; and the §7 placement contracts
   **footprint-set equality** (the B.Cu footprint set is exactly the
   segment connectors) and **part-over-hole** (each reverse-mount status
-  LED over its routed hole).
+  LED over its routed hole); and **serial-box clearance** from
+  same-side pads and other silkscreen text, over rotation-aware
+  board-absolute pad geometry (footprint rotation now modeled,
+  pcbnew-verified).
   Remaining, each calibrated against the node board (`boards/node/`)
   — a draft layout with known DRC violations (over a hundred,
   including NPTH-in-courtyard at the status-LED holes) that the
   checker cannot yet see, so calibration asserts design-intent
   invariants only (DESIGN.md §7):
-  **serial-box clearance** from pads
-  and other silkscreen text (needs board-absolute pad positions —
-  footprint rotation is not yet modeled);
   **channelization hook** (per-instance layout
   replication keyed on T7ba sheetpath metadata, meaningless until a
   hierarchical board exists); **pcbnew ingest validation** of the

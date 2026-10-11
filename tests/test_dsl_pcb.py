@@ -16,6 +16,8 @@ _BYPASS_WIDTH_MM = 0.5
 _ARC_WIDTH_MM = 0.4
 _VIA_SIZE_MM = 0.8
 _MOUNTING_HOLES = 4
+_FOOTPRINT_ROT_DEG = -90
+_PAD_ROT_DEG = 270
 
 
 def test_rejects_non_board_document() -> None:
@@ -244,3 +246,66 @@ def test_board_without_setup_or_general() -> None:
     assert board.thickness_mm is None
     assert board.net_classes == ()
     assert board.net_class_of("GND") is None
+
+
+def test_footprint_rotation_and_pad_metadata() -> None:
+    board = parse_board(
+        '(kicad_pcb (layers) (footprint "Lib:R" (layer "F.Cu") (at 10 10 -90)'
+        ' (property "Reference" "R1" (at 0 -2 90) (layer "F.SilkS"))'
+        ' (pad "1" smd roundrect (at -0.825 0 270) (size 0.8 0.95)'
+        '  (layers "F.Cu" "F.Mask" "F.Paste"))))'
+    )
+    footprint = board.footprints[0]
+    assert footprint.rotation_deg == _FOOTPRINT_ROT_DEG
+    pad = footprint.pads[0]
+    assert pad.shape == "roundrect"
+    assert pad.rotation_deg == _PAD_ROT_DEG
+    assert pad.layers == ("F.Cu", "F.Mask", "F.Paste")
+
+
+def test_board_position_applies_the_y_down_rotation() -> None:
+    """A stored -90° takes footprint-local +x to board -y (pcbnew-verified)."""
+    board = parse_board(
+        "(kicad_pcb (layers)"
+        ' (footprint "Lib:R" (layer "F.Cu") (at 121.92 80.01 -90)'
+        '  (property "Reference" "R7" (at -2.54 -0.635 90) (layer "F.SilkS"))'
+        '  (pad "1" smd rect (at -0.825 0 270) (size 0.8 0.95)'
+        '   (layers "F.Cu")))'
+        ' (footprint "Lib:J" (layer "B.Cu") (at 107.41 81.16 0)'
+        '  (property "Reference" "J1" (at 0 0 0) (layer "B.SilkS"))'
+        '  (pad "1" thru_hole circle (at -3.8 5.08) (size 1.7 1.7)'
+        '   (drill 1.0) (layers "*.Cu" "*.Mask"))))'
+    )
+    r7, j1 = board.footprints
+    assert r7.board_position(r7.pads[0].at) == pytest.approx(
+        Point(121.92, 79.185), abs=1e-9
+    )
+    # Back-side footprints store pad coordinates pre-mirrored: one transform.
+    assert j1.board_position(j1.pads[0].at) == pytest.approx(
+        Point(103.61, 86.24), abs=1e-9
+    )
+
+
+def test_footprint_texts_skip_hidden() -> None:
+    board = parse_board(
+        '(kicad_pcb (layers) (footprint "Lib:R" (layer "F.Cu") (at 10 10 0)'
+        ' (property "Reference" "R1" (at 0 -2 0) (layer "F.SilkS"))'
+        ' (property "Value" "10k" (at 0 2 0) (layer "F.Fab"))'
+        ' (property "Datasheet" "" (at 0 0 0) (layer "F.Fab") (hide yes))'
+        ' (fp_text user "${REFERENCE}" (at 0 0 0) (layer "F.Fab"))))'
+    )
+    texts = board.footprints[0].texts
+    assert [(t.text, t.layer, t.at) for t in texts] == [
+        ("R1", "F.SilkS", Point(0, -2)),
+        ("10k", "F.Fab", Point(0, 2)),
+        ("${REFERENCE}", "F.Fab", Point(0, 0)),
+    ]
+
+
+def test_footprint_texts_skip_hidden_reference() -> None:
+    board = parse_board(
+        '(kicad_pcb (layers) (footprint "Lib:R" (layer "F.Cu") (at 10 10 0)'
+        ' (property "Reference" "R1" (at 0 0 0) (layer "F.SilkS") (hide yes))'
+        ' (fp_text user "X1" (at 0 0 0) (layer "F.SilkS") hide)))'
+    )
+    assert board.footprints[0].texts == ()

@@ -31,6 +31,7 @@ class PcbError(Exception):
 
 
 _EPSILON_MM2 = 1e-6
+_ROTATION_INDEX = 3  # third atom of an (at x y rot) node
 
 
 @dataclass(frozen=True)
@@ -48,16 +49,30 @@ class Point:
         """
         return math.hypot(self.x - other.x, self.y - other.y)
 
+    def rotated(self, angle_deg: float) -> Point:
+        """Rotate by ``angle_deg`` (degrees, counterclockwise) about the origin.
+
+        >>> p = Point(3, 4).rotated(180)
+        >>> round(p.x, 9), round(p.y, 9)
+        (-3.0, -4.0)
+        """
+        theta = math.radians(angle_deg)
+        cos, sin = math.cos(theta), math.sin(theta)
+        return Point(self.x * cos - self.y * sin, self.x * sin + self.y * cos)
+
 
 @dataclass(frozen=True)
 class Pad:
-    """One footprint pad: number, shape kind, position, attached net.
+    """One footprint pad: number, kind, shape, position, layers, net.
 
-    ``at`` is footprint-local (the pad's ``at`` inside its footprint);
-    footprint rotation is not modeled, so board-absolute pad positions
-    are not yet recoverable. ``size`` and ``drill`` read the pad's
-    ``(size x y)`` and ``(drill [oval] x [y])`` nodes — a round drill
-    repeats its diameter; ``None`` when the node is absent.
+    ``at`` and ``rotation_deg`` are footprint-local (the pad's ``at``
+    inside its footprint); :meth:`Footprint.board_position` resolves
+    the board-absolute position. ``shape`` is the pad's shape atom
+    (``circle``/``rect``/``oval``/``roundrect``/…), ``layers`` its
+    ``(layers …)`` list (``*.Cu`` spans both faces). ``size`` and
+    ``drill`` read the pad's ``(size x y)`` and ``(drill [oval] x [y])``
+    nodes — a round drill repeats its diameter; ``None`` when the node
+    is absent.
     """
 
     number: str
@@ -66,14 +81,18 @@ class Pad:
     net: str | None
     size: Point | None = None
     drill: Point | None = None
+    shape: str = ""
+    rotation_deg: float = 0.0
+    layers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class Footprint:
-    """A placed footprint: library reference, refdes, position, pads.
+    """A placed footprint: library reference, refdes, placement, pads.
 
-    ``at`` is the board-absolute anchor; the rotation component of the
-    footprint's ``at`` is not modeled.
+    ``at`` and ``rotation_deg`` read the footprint's ``at`` node;
+    ``texts`` carries the visible reference/value/user texts with
+    footprint-local ``at``.
     """
 
     lib: str
@@ -81,6 +100,25 @@ class Footprint:
     at: Point
     layer: str
     pads: tuple[Pad, ...]
+    rotation_deg: float = 0.0
+    texts: tuple[Text, ...] = ()
+
+    def board_position(self, local: Point) -> Point:
+        """Resolve a footprint-local point to board-absolute coordinates.
+
+        KiCad's coordinate frame is y-down, so the stored rotation
+        applies with the sign flipped against the mathematical
+        convention. The file stores pad and text coordinates of
+        back-side footprints pre-mirrored, so the transform is the same
+        on both faces (verified against pcbnew 10.0.6: every pad and
+        reference anchor of ``boards/node``).
+
+        >>> fp = Footprint("Lib:X", "X1", Point(10, 10), "B.Cu", (), -90)
+        >>> fp.board_position(Point(1, 0))
+        Point(x=10.0, y=11.0)
+        """
+        rotated = local.rotated(-self.rotation_deg)
+        return Point(self.at.x + rotated.x, self.at.y + rotated.y)
 
 
 @dataclass(frozen=True)
@@ -406,6 +444,17 @@ def _point(node: list[Sexp] | None) -> Point:
     return Point(_float(node[1], "x"), _float(node[2], "y"))
 
 
+def _point_rot(node: list[Sexp] | None) -> tuple[Point, float]:
+    """Read an ``(at x y [rot])`` node as a Point plus rotation (degrees)."""
+    if node is None:
+        msg = "missing coordinate node"
+        raise PcbError(msg)
+    rotation = 0.0
+    if len(node) > _ROTATION_INDEX and isinstance(node[_ROTATION_INDEX], str):
+        rotation = _float(node[_ROTATION_INDEX], "rotation")
+    return Point(_float(node[1], "x"), _float(node[2], "y")), rotation
+
+
 def _parse_nets(root: list[Sexp]) -> dict[int, str]:
     codes: dict[int, str] = {}
     for node in _children(root, "net"):
@@ -463,13 +512,43 @@ def _parse_net_classes(root: list[Sexp]) -> Iterator[NetClass]:
 
 
 def _parse_footprint(node: list[Sexp]) -> Footprint:
+    at, rotation = _point_rot(_child(node, "at"))
     return Footprint(
         lib=_atom(node, 1) or "",
         ref=_footprint_ref(node),
-        at=_point(_child(node, "at")),
+        at=at,
         layer=_atom(_child(node, "layer") or [], 1) or "",
         pads=tuple(_parse_pad(pad) for pad in _children(node, "pad")),
+        rotation_deg=rotation,
+        texts=tuple(_parse_footprint_texts(node)),
     )
+
+
+def _parse_footprint_texts(node: list[Sexp]) -> Iterator[Text]:
+    """Yield the footprint's visible texts (footprint-local ``at``).
+
+    KiCad ≥ 8 writes reference/value as ``property`` nodes, ≤ 7 as
+    ``fp_text``; hidden texts print nothing, so they are skipped.
+    """
+    for prop in _children(node, "property"):
+        if _atom(prop, 1) in ("Reference", "Value") and not _hidden(prop):
+            yield _silk_text(prop, _atom(prop, 2) or "")
+    for text in _children(node, "fp_text"):
+        if _atom(text, 1) == "user" and not _hidden(text):
+            yield _silk_text(text, _atom(text, 2) or "")
+
+
+def _hidden(node: list[Sexp]) -> bool:
+    hide = _child(node, "hide")
+    if hide is not None:
+        return _atom(hide, 1) == "yes"
+    return "hide" in (item for item in node if isinstance(item, str))
+
+
+def _silk_text(node: list[Sexp], value: str) -> Text:
+    layer = _atom(_child(node, "layer") or [], 1) or ""
+    at, _ = _point_rot(_child(node, "at"))
+    return Text(text=value, layer=layer, at=at)
 
 
 def _footprint_ref(node: list[Sexp]) -> str:
@@ -485,13 +564,20 @@ def _footprint_ref(node: list[Sexp]) -> str:
 
 def _parse_pad(node: list[Sexp]) -> Pad:
     net_node = _child(node, "net")
+    at, rotation = _point_rot(_child(node, "at"))
+    layers = _child(node, "layers")
     return Pad(
         number=_atom(node, 1) or "",
         kind=_atom(node, 2) or "",
-        at=_point(_child(node, "at")),
+        at=at,
         net=_pad_net(net_node),
         size=_size_point(_child(node, "size")),
         drill=_drill_point(_child(node, "drill")),
+        shape=_atom(node, 3) or "",
+        rotation_deg=rotation,
+        layers=tuple(item for item in layers[1:] if isinstance(item, str))
+        if layers is not None
+        else (),
     )
 
 
