@@ -7,6 +7,10 @@ static_library('foundation', 'lib.cpp')
 
 if not meson.is_cross_build()
   # TRY can't be constexpr-proved (statement expressions aren't constant
-  # expressions), so its paths run as a host test instead.
-  test('foundation', executable('foundation-test', 'test_foundation.cpp'))
+  # expressions), so its paths run as a host test instead — named cases
+  # over the TEST harness (test.hpp), with test_main.cpp supplying the
+  # report hook and main.
+  test('foundation', executable('foundation-test',
+    ['test_foundation.cpp', 'test_main.cpp'],
+  ), suite: 'firmware')
 endif

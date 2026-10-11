@@ -1,14 +1,15 @@
 // Host runtime tests for TRY — the one foundation-library cell that
 // can't be constexpr-proved (a statement expression is not a constant
 // expression, so lib.cpp's static_asserts can't reach it). Runs under
-// meson's test runner on the host build only; each check returns its
-// own index on failure, so the exit code names the failing check — no
-// hosted I/O in a freestanding test.
+// meson's test runner on the host build only, as named TEST_CASEs over
+// the TEST harness (test.hpp) — the harness's first consumer, written
+// to read as usage examples.
 
 #include "arena.hpp"
 #include "error_or.hpp"
 #include "span.hpp"
 #include "static_vector.hpp"
+#include "test.hpp"
 
 #include <cstdint>
 
@@ -37,52 +38,66 @@ lib::ErrorOr<lib::ArenaPtr<uint32_t, 2>> take_slot(lib::StaticArena<uint32_t, 2>
 
 } // namespace
 
-extern "C" int main() {
+TEST_CASE(try_hands_the_value_up) {
     const lib::ErrorOr<uint32_t> ok = doubled(uint32_t{21});
-    if (ok.is_error() || ok.value() != 42) {
-        return 1;
-    }
+    EXPECT(!ok.is_error());
+    EXPECT(ok.value() == 42);
+}
+
+TEST_CASE(try_propagates_the_error) {
     const lib::ErrorOr<uint32_t> bad = doubled(lib::Error::OutOfCapacity);
-    if (!bad.is_error() || bad.error() != lib::Error::OutOfCapacity) {
-        return 2;
-    }
+    EXPECT(bad.is_error());
+    EXPECT(bad.error() == lib::Error::OutOfCapacity);
+}
 
+TEST_CASE(try_stops_at_the_first_refusal) {
     lib::StaticVector<uint8_t, 3> vec;
-    const uint8_t two[2] = {1, 2};
-    if (append_all(vec, lib::Span<const uint8_t>{two}).is_error() || vec.size() != 2) {
-        return 3;
-    }
-    const uint8_t four[4] = {3, 4, 5, 6};
-    const lib::ErrorOr<void> filled = append_all(vec, lib::Span<const uint8_t>{four});
+    lib::StaticVector<uint8_t, 2> two;
+    two.push_back(1);
+    two.push_back(2);
+    EXPECT(!append_all(vec, two).is_error());
+    EXPECT(vec.size() == 2);
+
+    lib::StaticVector<uint8_t, 4> four;
+    four.push_back(3);
+    four.push_back(4);
+    four.push_back(5);
+    four.push_back(6);
+    const lib::ErrorOr<void> filled = append_all(vec, four);
     // One slot was free: 3 landed, the 4 refused, propagation stopped.
-    if (!filled.is_error() || filled.error() != lib::Error::OutOfCapacity || vec.size() != 3 ||
-        vec[2] != 3) {
-        return 4;
-    }
+    EXPECT(filled.is_error());
+    EXPECT(filled.error() == lib::Error::OutOfCapacity);
+    EXPECT(vec.size() == 3);
+    EXPECT(vec[2] == 3);
+}
 
-    // A StaticVector passes implicitly where a Span is taken — the
-    // std::vector → std::span conversion's analog.
+TEST_CASE(static_vector_passes_where_a_span_is_taken) {
+    // The std::vector → std::span conversion's analog.
+    lib::StaticVector<uint8_t, 3> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.push_back(3);
+
     lib::StaticVector<uint8_t, 3> copied;
-    if (append_all(copied, vec).is_error() || copied.size() != 3 || copied[2] != 3) {
-        return 9;
-    }
+    EXPECT(!append_all(copied, vec).is_error());
+    EXPECT(copied.size() == 3);
+    EXPECT(copied[2] == 3);
+}
 
+TEST_CASE(try_moves_owning_handles) {
     lib::StaticArena<uint32_t, 2> arena;
     lib::ErrorOr<lib::ArenaPtr<uint32_t, 2>> first = take_slot(arena);
-    if (first.is_error()) {
-        return 5;
-    }
+    EXPECT(!first.is_error());
     *first.value() = 7;
+
     const lib::ErrorOr<lib::ArenaPtr<uint32_t, 2>> second = take_slot(arena);
-    if (second.is_error() || arena.free_count() != 0) {
-        return 6;
-    }
+    EXPECT(!second.is_error());
+    EXPECT(arena.free_count() == 0);
+
     const lib::ErrorOr<lib::ArenaPtr<uint32_t, 2>> third = take_slot(arena);
-    if (!third.is_error() || third.error() != lib::Error::OutOfCapacity) {
-        return 7;
-    }
-    if (*first.value() != 7) {
-        return 8;
-    }
-    return 0;
+    EXPECT(third.is_error());
+    EXPECT(third.error() == lib::Error::OutOfCapacity);
+
+    // The moved-out handles still own their slots.
+    EXPECT(*first.value() == 7);
 }
