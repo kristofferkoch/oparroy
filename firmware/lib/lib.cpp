@@ -9,7 +9,9 @@
 #include "error_or.hpp"
 #include "range.hpp"
 #include "span.hpp"
+#include "static_string.hpp"
 #include "static_vector.hpp"
+#include "string_view.hpp"
 #include "utility.hpp"
 #include "verify.hpp"
 
@@ -130,6 +132,37 @@ namespace {
         return slot.value()->period_ticks == 60 && (*slot.value()).high_ticks == 20;
     }
 
+    constexpr bool string_view_measures_and_compares() {
+        // Literal adoption strips the NUL; the c_str ctor measures.
+        constexpr StringView literal = "hello";
+        if (literal.size() != 5 || literal[1] != 'e') {
+            return false;
+        }
+        const char* c_text = "world"; // a pointer, so the c_str ctor measures
+        const StringView measured{c_text};
+        if (measured.size() != 5) {
+            return false;
+        }
+        // An explicit length cuts a prefix view of the same literal.
+        return literal == "hello" && !(literal == measured) && !(literal == StringView{"hello", 4});
+    }
+
+    constexpr bool static_string_assembles_messages() {
+        StaticString<32> text;
+        text.append("cases: ");
+        text.append(static_cast<unsigned long>(42));
+        text.append('.');
+        if (!(StringView{text} == "cases: 42.")) {
+            return false;
+        }
+        // Zero and the digit-walk boundary format exactly.
+        StaticString<20> zero;
+        zero.append(static_cast<unsigned long>(0));
+        StaticString<20> boundary;
+        boundary.append(static_cast<unsigned long>(109));
+        return StringView{zero} == "0" && StringView{boundary} == "109";
+    }
+
 } // namespace
 
 static_assert(error_or_value_path());
@@ -139,5 +172,7 @@ static_assert(arena_allocates_moves_and_reclaims());
 static_assert(vector_collects_range());
 static_assert(move_transfers_the_handle());
 static_assert(arena_handle_arrow_access());
+static_assert(string_view_measures_and_compares());
+static_assert(static_string_assembles_messages());
 
 } // namespace lib
