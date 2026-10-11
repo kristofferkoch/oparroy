@@ -7,12 +7,15 @@ independence (§4), placement contracts (§4.1), mechanical contracts
 clearance), the stackup contract
 (§6/§9), and the §7 board-level checklist (silkscreen ID fields,
 serial-number box, power LED, terminal protection: TVS adjacent to its
-connector, series R between TVS and µC pin). One :class:`LayoutRules`
-value is the contract; :func:`check_layout` reports every violation as a
-batch of :class:`oparroy.dsl.check.Issue`, like the schematic validation
-pass. The terminal-protection rules derive from the capture —
-:func:`terminal_protection_rules` — because board refdes move under
-KiCad's geographic annotation while capture paths stay stable.
+connector, series R between TVS and µC pin), and the sheet-partition
+contract (each hierarchical sheet's footprints are exactly the capture's
+parts for that sheet — the metadata channelization keys on). One
+:class:`LayoutRules` value is the contract; :func:`check_layout` reports
+every violation as a batch of :class:`oparroy.dsl.check.Issue`, like the
+schematic validation pass. The terminal-protection and sheet-partition
+rules derive from the capture — :func:`terminal_protection_rules`,
+:func:`sheet_parts_rules` — because board refdes move under KiCad's
+geographic annotation while capture paths stay stable.
 """
 
 from __future__ import annotations
@@ -109,6 +112,24 @@ class FootprintSetRule:
 
 
 @dataclass(frozen=True)
+class SheetPartsRule:
+    """The footprints filed under one sheet, as an exact refdes set (§7).
+
+    The footprint ``sheetname`` is the layout-side half of the sheetpath
+    metadata channelization keys on: the footprints whose ``sheetname``
+    equals ``sheet`` (``"/"`` for the root, ``"/PHY1/"`` for an
+    instance's sheet) must be exactly ``refs``. Violations cut both
+    ways: a footprint filed under the wrong sheet, and a declared part
+    missing from the sheet. Hand-placed footprints carry no sheetname
+    and join no sheet.
+    """
+
+    name: str
+    sheet: str
+    refs: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PartOverHoleRule:
     r"""Every matching footprint sits over its routed hole (§4.1).
 
@@ -165,6 +186,7 @@ class LayoutRules:
     bypass: tuple[BypassRule, ...] = ()
     terminal_protection: tuple[TerminalProtectionRule, ...] = ()
     footprint_sets: tuple[FootprintSetRule, ...] = ()
+    sheet_parts: tuple[SheetPartsRule, ...] = ()
     part_over_hole: tuple[PartOverHoleRule, ...] = ()
     hole_pad_clearance: tuple[HolePadClearanceRule, ...] = ()
 
@@ -191,6 +213,7 @@ def check_layout(
     issues.extend(_check_adjacency(board, rules))
     issues.extend(_check_terminal_protection(board, rules))
     issues.extend(_check_footprint_set(board, rules))
+    issues.extend(_check_sheet_parts(board, rules))
     issues.extend(_check_part_over_hole(board, rules))
     issues.extend(_check_hole_pad_clearance(board, rules))
     issues.extend(_check_required_footprints(board, rules))
@@ -806,6 +829,35 @@ def _check_footprint_set(board: Board, rules: LayoutRules) -> list[Issue]:
     return issues
 
 
+def _check_sheet_parts(board: Board, rules: LayoutRules) -> list[Issue]:
+    issues: list[Issue] = []
+    for rule in rules.sheet_parts:
+        present = sorted(
+            (fp.ref for fp in board.footprints if fp.sheetname == rule.sheet),
+            key=natural_key,
+        )
+        unexpected = [ref for ref in present if ref not in rule.refs]
+        if unexpected:
+            issues.extend(
+                _error(
+                    f"{rule.name}: {', '.join(unexpected)} filed under sheet "
+                    f"{rule.sheet} outside the sheet's part set — the layout's "
+                    "hierarchy metadata must match the capture (§7)"
+                )
+            )
+        missing = sorted(
+            (ref for ref in rule.refs if ref not in present), key=natural_key
+        )
+        if missing:
+            issues.extend(
+                _error(
+                    f"{rule.name}: {', '.join(missing)} missing from sheet "
+                    f"{rule.sheet} — the sheet's footprint set is exact (§7)"
+                )
+            )
+    return issues
+
+
 def _check_part_over_hole(board: Board, rules: LayoutRules) -> list[Issue]:
     issues: list[Issue] = []
     for rule in rules.part_over_hole:
@@ -943,6 +995,44 @@ def terminal_protection_rules(
             )
         )
     return tuple(sorted(rules, key=lambda rule: natural_key(rule.net)))
+
+
+def sheet_parts_rules(
+    circuit: Circuit, annotation: Annotation
+) -> tuple[SheetPartsRule, ...]:
+    """Derive the per-sheet footprint-set contract from a capture.
+
+    One :class:`SheetPartsRule` per sheet the capture implies: the root
+    sheet ``"/"`` plus one per instance path (``"/PHY1/"``, …) — the
+    names the netlist emitter writes as each comp's sheetpath. Refdes
+    come from ``annotation`` (capture path → placed refdes, e.g. from
+    :func:`oparroy.dsl.annotate.annotation_from_pcb`), so the contract
+    survives KiCad's geographic renumbering; a part missing from it was
+    never placed, a ``ValueError``. Power symbols are schematic-only net
+    markers and never reach the board.
+    """
+    if circuit.instances:
+        circuit = circuit.flatten()
+    refs = annotation.refs
+    sheets: dict[str, list[str]] = {}
+    for path in sorted(circuit.parts, key=natural_key):
+        part = circuit.parts[path]
+        if part.symbol.is_power:
+            continue
+        refdes = refs.get(path)
+        if refdes is None:
+            msg = f"{path} has no refdes in the annotation — not placed"
+            raise ValueError(msg)
+        sheet = f"/{'/'.join(part.path)}/" if part.path else "/"
+        sheets.setdefault(sheet, []).append(refdes)
+    return tuple(
+        SheetPartsRule(
+            name=f"sheet {sheet} footprint set",
+            sheet=sheet,
+            refs=tuple(sorted(refdes, key=natural_key)),
+        )
+        for sheet, refdes in sorted(sheets.items())
+    )
 
 
 def _terminal_chain_parts(net: Net) -> tuple[list[Part], list[Part]] | None:

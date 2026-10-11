@@ -108,8 +108,10 @@ from oparroy.dsl.layout_check import (
     HolePadClearanceRule,
     LayoutRules,
     PartOverHoleRule,
+    SheetPartsRule,
     TerminalProtectionRule,
     check_layout,
+    sheet_parts_rules,
     terminal_protection_rules,
 )
 from oparroy.dsl.parts import (
@@ -242,6 +244,7 @@ __all__ = [
     "Scope",
     "Segment",
     "Severity",
+    "SheetPartsRule",
     "SocketSpec",
     "SpiceModel",
     "StackupLayer",
@@ -285,6 +288,7 @@ __all__ = [
     "parse_board",
     "parse_project",
     "raise_on_errors",
+    "sheet_parts_rules",
     "terminal_protection_rules",
     "to_dot",
 ]
