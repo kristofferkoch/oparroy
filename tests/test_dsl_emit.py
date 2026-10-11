@@ -5,7 +5,16 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from oparroy.dsl import Circuit, emit_netlist
+import pytest
+
+from oparroy.dsl import (
+    Capacitor,
+    Circuit,
+    DefinitionError,
+    annotate,
+    apply_annotation,
+    emit_netlist,
+)
 
 if TYPE_CHECKING:
     from conftest import StubSymbols
@@ -121,3 +130,86 @@ def test_power_symbols_excluded_from_netlist(symbols: StubSymbols) -> None:
     assert '(comp (ref "P1")' not in rendered
     assert '(node (ref "P1")' not in rendered
     assert '(node (ref "R1") (pin "1") (pintype "passive"))' in rendered
+
+
+def test_note_emits_as_comment_field(symbols: StubSymbols) -> None:
+    c = Circuit("emit", symbols)
+    r1 = c.part(
+        "R1",
+        symbol="Stub:R",
+        value="1k",
+        footprint="StubFP:R_0603",
+        note="power LED current limit",
+    )
+    n = c.net("a")
+    c.connect(n, r1[1], r1[2])
+    rendered = emit_netlist(c)
+    assert '(field (name "Comment") "power LED current limit")' in rendered
+
+
+def test_note_on_typed_part(symbols: StubSymbols) -> None:
+    c = Circuit("emit", symbols)
+    c.net("a")
+    c.net("b")
+    c.part("C1", Capacitor("100n", a="a", b="b"), note="bulk decoupling")
+    rendered = emit_netlist(c)
+    assert '(field (name "Comment") "bulk decoupling")' in rendered
+
+
+def test_note_ref_resolves_to_annotated_refdes(symbols: StubSymbols) -> None:
+    # The note names the capture identity; emission resolves it to
+    # whatever refdes annotation assigned — the text is annotation-proof.
+    c = Circuit("emit", symbols)
+    u1 = c.part("U1", symbol="Stub:R", value="1k", footprint="StubFP:R_0603")
+    cb = c.part(
+        "CBYP",
+        symbol="Stub:C",
+        value="100n",
+        footprint="StubFP:C_0603",
+        note="decoupling cap for {U1}",
+    )
+    n = c.net("a")
+    c.connect(n, u1[1], cb[1])
+    rules = (("Stub:R", "R"), ("Stub:C", "C"))
+    annotation = annotate(c, rules=rules)
+    rendered = emit_netlist(apply_annotation(c, annotation))
+    assert '(comp (ref "R1")' in rendered
+    assert '(field (name "Comment") "decoupling cap for R1")' in rendered
+
+
+def test_note_ref_prefixes_through_flatten(symbols: StubSymbols) -> None:
+    # A note captured inside a subcircuit names the sibling next to it;
+    # flattening prefixes the placeholder with the instance path.
+    def child(c: Circuit) -> None:
+        u1 = c.part("u1", symbol="Stub:R", value="1k", footprint="StubFP:R_0603")
+        cb = c.part(
+            "cb",
+            symbol="Stub:C",
+            value="100n",
+            footprint="StubFP:C_0603",
+            note="decoupling cap for {u1}",
+        )
+        n = c.net("x")
+        c.connect(n, u1[1], cb[1])
+
+    board = Circuit("emit", symbols)
+    board.instance("PHY1", child)
+    flat = board.flatten()
+    assert flat.parts["PHY1/cb"].note == "decoupling cap for {PHY1/u1}"
+    rendered = emit_netlist(board)
+    assert '(field (name "Comment") "decoupling cap for PHY1/u1")' in rendered
+
+
+def test_note_unknown_ref_raises(symbols: StubSymbols) -> None:
+    c = Circuit("emit", symbols)
+    r1 = c.part(
+        "R1",
+        symbol="Stub:R",
+        value="1k",
+        footprint="StubFP:R_0603",
+        note="decoupling cap for {U9}",
+    )
+    n = c.net("a")
+    c.connect(n, r1[1], r1[2])
+    with pytest.raises(DefinitionError, match="U9"):
+        emit_netlist(c)

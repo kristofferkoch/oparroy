@@ -30,9 +30,13 @@ are part of the suite (`--doctest-modules`).
 `Circuit(name, symbols)` — one captured circuit; `symbols` is a
 `SymbolTable` (a `lookup(ref: str) -> Symbol` protocol). Methods:
 
-- `part(ref, spec=None, *, symbol=None, value=None, footprint=None)` —
-  place from a typed spec (places *and* wires) or a `"Lib:Name"` symbol
-  string (places unwired; wire with `connect`).
+- `part(ref, spec=None, *, symbol=None, value=None, footprint=None, note=None)` — place from a typed spec (places *and* wires) or a
+  `"Lib:Name"` symbol string (places unwired; wire with `connect`).
+  `note` is a short human note for the layout author, emitted as the
+  netlist comp's Comment field (pcbnew lands it as a footprint
+  property); `{ref}` placeholders name sibling parts by capture name
+  (`"decoupling cap for {U1}"`) and resolve to the annotated refdes at
+  emission.
 - `net(name)` — declare an internal net.
 - `port(name, *, source=Limits|None, sink=Limits|None)` — declare an
   interface net; exempt from dangling-net checks; ranges feed the
@@ -66,7 +70,7 @@ Data types:
   `number`, `name`, `type`, `net`), `PinType` (KiCad electrical types).
 - `Part` — `ref` (current name; the refdes after annotation),
   `identity` (capture name, what tstamps key on), `path` (instance
-  path), `symbol`, `value`, `footprint`, `pins`; `pin(number)`,
+  path), `symbol`, `value`, `footprint`, `note`, `pins`; `pin(number)`,
   `unit(n)`, integer indexing (`part[1]`).
 - `Interval(low, high)` — closed interval, inclusive containment.
   `Limits(voltage, current=None)` — a port's electrical ranges;
@@ -148,7 +152,9 @@ geographic renumbering back via the content-derived tstamps.
 ## Emitters
 
 - `emit_netlist(circuit)` (`kicad_emit.py`) — the KiCad `.net`; power
-  symbols excluded; hierarchy survives as each comp's `sheetpath`.
+  symbols excluded; hierarchy survives as each comp's `sheetpath`; a
+  part's `note` emits as the comp's Comment field with `{ref}`
+  placeholders resolved to refdes (an unknown placeholder raises).
 - `emit_spice(circuit, *, name=None, models=None)` (`spice_emit.py`) —
   the ngspice DUT `.subckt`; only symbols with a declared binding emit
   (R, C, LED, BAT54S); the caller passes `.model` bodies and a part's
