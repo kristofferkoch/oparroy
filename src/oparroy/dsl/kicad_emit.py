@@ -8,14 +8,18 @@ schematic-only net markers: they are excluded from the components and
 net nodes, matching eeschema's own handling.
 
 Sections eeschema also emits — ``libparts``, ``libraries``, comp
-``fields``/``libsource``, ``design`` date — are deliberately omitted;
-they are optional for pcbnew's importer (verified against the reader
-source).
+``libsource``, ``design`` date — are deliberately omitted; they are
+optional for pcbnew's importer (verified against the reader source).
+Comp ``fields`` are emitted only for a part's ``note`` (the Comment
+field): pcbnew's netlist updater lands comp fields as footprint
+properties, which is how the note reaches the layout author. A note's
+``{ref}`` placeholders (``Circuit.part``'s ``note=``) resolve here
+against capture identities, so the emitted text carries board refdes.
 """
 
 import uuid
 
-from oparroy.dsl.ir import Circuit, Part, natural_key
+from oparroy.dsl.ir import Circuit, Part, natural_key, resolve_note_refs
 
 _TOOL = "oparroy-dsl"
 _TSTAMP_NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://oparroy.koch.no/dsl/tstamp")
@@ -40,6 +44,7 @@ def emit_netlist(circuit: Circuit) -> str:
     """
     if circuit.instances or circuit.sockets:
         circuit = circuit.flatten()
+    identities = {part.identity: part.ref for part in circuit.parts.values()}
     lines = [
         '(export (version "E")',
         "  (design",
@@ -51,7 +56,7 @@ def emit_netlist(circuit: Circuit) -> str:
         part = circuit.parts[ref]
         if part.symbol.is_power:
             continue
-        lines.extend(_emit_part(circuit, part))
+        lines.extend(_emit_part(circuit, part, identities))
     lines.append("  )")
     lines.append("  (nets")
     nets = [circuit.nets[name] for name in sorted(circuit.nets, key=natural_key)]
@@ -75,12 +80,16 @@ def emit_netlist(circuit: Circuit) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _emit_part(circuit: Circuit, part: Part) -> list[str]:
+def _emit_part(circuit: Circuit, part: Part, identities: dict[str, str]) -> list[str]:
     lines = [f'    (comp (ref "{_quote(part.ref)}")']
     if part.value is not None:
         lines.append(f'      (value "{_quote(part.value)}")')
     if part.footprint is not None:
         lines.append(f'      (footprint "{_quote(part.footprint)}")')
+    if part.note is not None:
+        note = resolve_note_refs(part.note, identities)
+        lines.append("      (fields")
+        lines.append(f'        (field (name "Comment") "{_quote(note)}"))')
     stamp = part_tstamp(circuit.name, part.identity)
     lines.append(_emit_sheetpath(circuit, part))
     lines.append(f'      (tstamps "{stamp}"))')

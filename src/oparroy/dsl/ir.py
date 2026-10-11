@@ -107,6 +107,47 @@ class UnknownSymbolError(DefinitionError):
     """A part referenced a symbol the symbol table does not know."""
 
 
+_NOTE_REF = re.compile(r"\{([^{}]+)\}")
+
+
+def _prefix_note_refs(
+    note: str | None, parts: Mapping[str, Part], prefix: str
+) -> str | None:
+    """Prefix a note's ``{ref}`` placeholders naming local parts.
+
+    Flattening's companion: ``{u1}`` captured inside a subcircuit names
+    the sibling placed next to it, so the flat copy reads
+    ``{PHY1/u1}``. A placeholder matching no local ref passes through
+    untouched — it may address a flattened path directly; emission
+    resolves it or rejects it.
+    """
+    if note is None:
+        return None
+    return _NOTE_REF.sub(
+        lambda match: (
+            f"{{{prefix}{match.group(1)}}}"
+            if match.group(1) in parts
+            else match.group(0)
+        ),
+        note,
+    )
+
+
+def resolve_note_refs(note: str, identities: Mapping[str, str]) -> str:
+    """Resolve a note's ``{ref}`` placeholders against identity → refdes.
+
+    The emitter's resolution point: ``identities`` keys on the flat
+    circuit's capture names (``Part.identity``), stable across
+    annotation, so ``{U1}`` reads as the board refdes whatever the
+    annotation did. An unknown placeholder raises.
+    """
+    unknown = sorted(set(_NOTE_REF.findall(note)) - set(identities), key=natural_key)
+    if unknown:
+        msg = f"note {note!r} references {unknown}, not part capture names"
+        raise DefinitionError(msg)
+    return _NOTE_REF.sub(lambda match: identities[match.group(1)], note)
+
+
 _SOCKET_LIB = "socket"
 
 
@@ -501,7 +542,11 @@ class Part:
     transforms tag the parts they create. ``residuals`` carries the
     part's electrical residual magnitudes (:class:`Residuals`) when it
     was placed from a typed part whose class declares them (the parts
-    DB's ``bind`` threads them through); None means no data.
+    DB's ``bind`` threads them through); None means no data. ``note``
+    is an optional human note for the layout author (``Circuit.part``'s
+    ``note=``), emitted as the netlist comp's Comment field; ``{ref}``
+    placeholders naming sibling parts resolve to the annotated refdes
+    at emission.
     """
 
     def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + identity/placement
@@ -520,6 +565,7 @@ class Part:
         self.footprint = footprint
         self.provenance: Provenance | None = None
         self.residuals: Residuals | None = None
+        self.note: str | None = None
         self._identity = ref if identity is None else identity
         base = Placement() if placement is None else placement
         units = base.units
@@ -1192,7 +1238,7 @@ class Circuit:
         """Component sockets by reference — the part interface (insertion order)."""
         return dict(self._sockets)
 
-    def part(
+    def part(  # noqa: PLR0913 — ref/spec + symbol/value/footprint/note
         self,
         ref: str,
         spec: TypedPart | None = None,
@@ -1200,6 +1246,7 @@ class Circuit:
         symbol: str | None = None,
         value: str | None = None,
         footprint: str | None = None,
+        note: str | None = None,
     ) -> Part:
         """Place a part, from a typed spec or a ``Lib:Name`` symbol.
 
@@ -1211,6 +1258,13 @@ class Circuit:
         ``connect``'s job. ``footprint`` overrides the spec's default.
         A multi-unit package's placed unit subset is declared by its
         typed part class (``oparroy.dsl.parts.MultiUnitPart``).
+
+        ``note`` is a short human note for the layout author ("power
+        LED"), emitted as the netlist comp's Comment field — pcbnew's
+        netlist import lands it as a footprint property. ``{ref}``
+        placeholders name sibling parts by capture name
+        (``"decoupling cap for {U1}"``) and resolve to the annotated
+        refdes at emission, so the note survives re-annotation.
         """
         _reject_separator("part reference", ref)
         if isinstance(spec, str):
@@ -1223,11 +1277,14 @@ class Circuit:
             if value is not None:
                 msg = "value goes to the typed part class, not part()"
                 raise DefinitionError(msg)
-            return self._place_typed(ref, spec, footprint)
-        if symbol is None:
-            msg = "part() needs a typed part or symbol="
-            raise DefinitionError(msg)
-        return self._place(ref, self._symbols.lookup(symbol), value, footprint)
+            placed = self._place_typed(ref, spec, footprint)
+        else:
+            if symbol is None:
+                msg = "part() needs a typed part or symbol="
+                raise DefinitionError(msg)
+            placed = self._place(ref, self._symbols.lookup(symbol), value, footprint)
+        placed.note = note
+        return placed
 
     def _place_typed(
         self,
@@ -1850,6 +1907,7 @@ class Circuit:
             )
             placed.provenance = part.provenance
             placed.residuals = part.residuals
+            placed.note = _prefix_note_refs(part.note, self._parts, prefix)
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
@@ -1932,6 +1990,7 @@ class Circuit:
             )
             placed.provenance = part.provenance
             placed.residuals = part.residuals
+            placed.note = part.note
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001
