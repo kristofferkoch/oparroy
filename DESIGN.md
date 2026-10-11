@@ -1227,14 +1227,17 @@ either a layout-checker assertion or a subcircuit):
 
 Landed: the layout checker in `src/oparroy/dsl/` —
 `kicad_pcb.py` (a tolerant `.kicad_pcb` parser on top of `sexpr`:
-stackup, net classes, footprints/pads, copper (segments, arcs, vias),
-board
+stackup, net classes, footprints/pads (rotation modeled —
+board-absolute pad and text anchors verified against pcbnew 10.0.6),
+copper (segments, arcs, vias), board
 outline, silkscreen texts/rects, zones), `layout_check.py`
 (`LayoutRules` as the contract, `check_layout` reporting batched
 `Issue`s like the schematic pass: copper-layer count and thickness,
 net-class width/via compliance, per-net trace-length budgets, min
 corner radius with collinear-junction exemption, required silkscreen
-board-ID fields, serial-box area, mounting-hole count and keepout
+board-ID fields, serial-box area and its clearance from same-side pads
+(circle pads as discs, other shapes as rotated bounding rectangles)
+and other silkscreen text anchors, mounting-hole count and keepout
 coverage, footprint adjacency and presence, the §4 bypass-path
 independence check — pad whitelisting plus copper-geometry
 independence: no bypass segment, arc, or via may touch another net's
@@ -1254,20 +1257,19 @@ pre-audit; round-trips through the parser). Proven against
 `tests/fixtures/board_pass.kicad_pcb` and calibrated against
 `boards/node/`, where the bypass chain clears all other copper by the
 class clearance (0.3 mm), all four terminal chains meet the
-placement contract, B.Cu carries exactly J1/J2, and all four status
-LEDs sit over their holes. The node board is a draft layout, not a
+placement contract, B.Cu carries exactly J1/J2, all four status
+LEDs sit over their holes, and the serial box keeps 1.5 mm clear of
+the neighboring mounting holes (a 2 mm contract flags them). The node board is a draft layout, not a
 golden reference: `kicad-cli pcb drc` reports over a hundred
 violations on it — clearance errors down to 0.15 mm against the 0.3 mm
 Power class, and NPTH-in-courtyard errors where LED1's and LED3's
 routed holes sit inside the J2/J1 courtyards — none of which the
-checker can see, since footprint rotation and courtyards are not
-modeled. Calibration asserts design-intent invariants only; the board
+checker can see, since courtyards and general inter-pad clearance are
+not modeled. Calibration asserts design-intent invariants only; the board
 is where the checks are meant to find bugs, so a check able to see a
 known board violation is calibrated to flag it, never to pass it.
 Not yet
-landed: serial
-box pad/silkscreen clearance (waits on footprint rotation modeling)
-and
+landed:
 the channelization hook (per-instance layout replication over the
 subcircuit sheetpaths — waits for a hierarchical board).
 

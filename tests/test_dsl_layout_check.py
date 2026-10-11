@@ -46,6 +46,7 @@ def full_rules() -> LayoutRules:
             r"v\d+\.\d+\.\d+",
         ),
         min_serial_box_mm2=80,
+        serial_box_clearance_mm=0.5,
         min_corner_radius_mm=3,
         trace_budgets_mm={"BYPASS": 30, "SIG": 10, "GND": 10},
         min_mounting_holes=4,
@@ -862,3 +863,158 @@ def test_node_board_status_leds_over_holes_is_not_vacuous() -> None:
     rule = dataclasses.replace(_LED_RULE, refdes=r"LED\d+|D5")
     issues = check_layout(board, LayoutRules(part_over_hole=(rule,)))
     assert [i.message for i in issues] == [_LED_HOLE_MESSAGE.format("D5")]
+
+
+def _clearance_board(body: str) -> Board:
+    """Build a board whose only feature is the 10x8 serial box (80 mm²) plus body."""
+    return parse_board(
+        '(kicad_pcb (layers (36 "B.SilkS" user) (37 "F.SilkS" user))'
+        ' (gr_rect (start 0 0) (end 10 8) (layer "F.SilkS") (fill yes))' + body + ")"
+    )
+
+
+_CLEARANCE_RULES = LayoutRules(min_serial_box_mm2=80, serial_box_clearance_mm=0.5)
+
+
+def _clearance_issues(board: Board, rules: LayoutRules = _CLEARANCE_RULES) -> list[str]:
+    return [i.message for i in check_layout(board, rules)]
+
+
+def test_serial_box_clearance_clean_board() -> None:
+    assert _clearance_issues(_clearance_board("")) == []
+
+
+def test_serial_box_clearance_pad_too_close() -> None:
+    """A 1x1 SMD pad centered 0.8 mm off the box edge leaves a 0.3 mm gap."""
+    board = _clearance_board(
+        '(footprint "Lib:R1" (layer "F.Cu") (at 10.8 4)'
+        ' (property "Reference" "R1" (at 0 -2 0) (layer "F.SilkS"))'
+        ' (pad "1" smd rect (at 0 0) (size 1 1) (layers "F.Cu" "F.Mask")'
+        '  (net "SIG")))'
+    )
+    assert _clearance_issues(board) == [
+        (
+            "serial box comes within 0.30 mm of R1 pad 1 at (10.80, 4.00), "
+            "under the 0.5 mm clearance — keep the handwritten serial field "
+            "clear of pads (§7 checklist)"
+        )
+    ]
+
+
+def test_serial_box_clearance_uses_footprint_rotation() -> None:
+    """The pad lands inside the box only once the 90° rotation is applied."""
+    board = _clearance_board(
+        '(footprint "Lib:R1" (layer "F.Cu") (at 13 4 90)'
+        ' (property "Reference" "R1" (at 0 0 0) (layer "F.SilkS") (hide yes))'
+        ' (pad "1" smd rect (at 0 -4 0) (size 1 1) (layers "F.Cu")'
+        '  (net "SIG")))'
+    )
+    assert _clearance_issues(board) == [
+        (
+            "serial box comes within 0.00 mm of R1 pad 1 at (9.00, 4.00), "
+            "under the 0.5 mm clearance — keep the handwritten serial field "
+            "clear of pads (§7 checklist)"
+        )
+    ]
+
+
+def test_serial_box_clearance_circle_pad_gap() -> None:
+    """A circle pad's gap is its center distance minus the radius."""
+    board = _clearance_board(
+        '(footprint "Lib:H1" (layer "F.Cu") (at 12 4)'
+        ' (property "Reference" "H1" (at 0 -3 0) (layer "F.SilkS"))'
+        ' (pad "" np_thru_hole circle (at 0 0) (size 1.7 1.7) (drill 1)'
+        '  (layers "*.Cu" "*.Mask")))'
+    )
+    rules = dataclasses.replace(_CLEARANCE_RULES, serial_box_clearance_mm=1.2)
+    assert _clearance_issues(board, rules) == [
+        (
+            "serial box comes within 1.15 mm of H1 at (12.00, 4.00), under "
+            "the 1.2 mm clearance — keep the handwritten serial field clear "
+            "of pads (§7 checklist)"
+        )
+    ]
+    looser = dataclasses.replace(_CLEARANCE_RULES, serial_box_clearance_mm=1.1)
+    assert _clearance_issues(board, looser) == []
+
+
+def test_serial_box_clearance_ignores_the_other_face() -> None:
+    """A B-side pad under an F.SilkS box never meets the ink."""
+    board = _clearance_board(
+        '(footprint "Lib:J1" (layer "B.Cu") (at 5 4)'
+        ' (property "Reference" "J1" (at 0 0 0) (layer "B.SilkS"))'
+        ' (pad "1" smd rect (at 0 0) (size 2 2) (layers "B.Cu" "B.Mask")'
+        '  (net "SIG")))'
+    )
+    assert _clearance_issues(board) == []
+
+
+def test_serial_box_clearance_text_inside() -> None:
+    board = _clearance_board(' (gr_text "oparroy v2" (at 5 4 0) (layer "F.SilkS"))')
+    assert _clearance_issues(board) == [
+        (
+            "silkscreen text 'oparroy v2' comes within 0.00 mm of the serial "
+            "box, under the 0.5 mm clearance (§7 checklist)"
+        )
+    ]
+
+
+def test_serial_box_clearance_footprint_reference() -> None:
+    """A visible reference designator inside the box counts as text."""
+    board = _clearance_board(
+        '(footprint "Lib:R1" (layer "F.Cu") (at 5 4)'
+        ' (property "Reference" "R1" (at 0 0 0) (layer "F.SilkS")))'
+    )
+    assert _clearance_issues(board) == [
+        (
+            "silkscreen text 'R1' comes within 0.00 mm of the serial box, "
+            "under the 0.5 mm clearance (§7 checklist)"
+        )
+    ]
+
+
+def test_serial_box_clearance_hidden_reference_is_ignored() -> None:
+    board = _clearance_board(
+        '(footprint "Lib:R1" (layer "F.Cu") (at 5 4)'
+        ' (property "Reference" "R1" (at 0 0 0) (layer "F.SilkS") (hide yes)))'
+    )
+    assert _clearance_issues(board) == []
+
+
+def test_serial_box_clearance_needs_the_area_minimum() -> None:
+    board = _clearance_board("")
+    issues = _clearance_issues(board, LayoutRules(serial_box_clearance_mm=0.5))
+    assert issues == [
+        (
+            "serial_box_clearance_mm needs min_serial_box_mm2 to identify the "
+            "serial-number box (§7 checklist)"
+        )
+    ]
+
+
+_SERIAL_BOX_RULES = LayoutRules(min_serial_box_mm2=100, serial_box_clearance_mm=1.5)
+
+
+def test_node_board_serial_box_is_clear() -> None:
+    """Calibration: the node board's serial box keeps 1.5 mm clear."""
+    board = parse_board(_NODE_BOARD.read_text())
+    assert check_layout(board, _SERIAL_BOX_RULES) == []
+
+
+def test_node_board_serial_box_clearance_is_not_vacuous() -> None:
+    """At 2 mm the mounting holes beside the box trip the clearance."""
+    board = parse_board(_NODE_BOARD.read_text())
+    rules = dataclasses.replace(_SERIAL_BOX_RULES, serial_box_clearance_mm=2.0)
+    issues = check_layout(board, rules)
+    assert [i.message for i in issues] == [
+        (
+            "serial box comes within 1.70 mm of REF** at (102.62, 94.49), "
+            "under the 2.0 mm clearance — keep the handwritten serial field "
+            "clear of pads (§7 checklist)"
+        ),
+        (
+            "serial box comes within 1.70 mm of REF** at (131.57, 94.49), "
+            "under the 2.0 mm clearance — keep the handwritten serial field "
+            "clear of pads (§7 checklist)"
+        ),
+    ]
