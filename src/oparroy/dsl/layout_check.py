@@ -3,7 +3,8 @@
 KiCad's own DRC stays authoritative for manufacturability; these checks
 cover project semantics DRC can't know about: bypass-path copper
 independence (§4), placement contracts (§4.1), mechanical contracts
-(corner radius, mounting holes with keepouts), the stackup contract
+(corner radius, mounting holes with keepouts, routed-hole pad
+clearance), the stackup contract
 (§6/§9), and the §7 board-level checklist (silkscreen ID fields,
 serial-number box, power LED, terminal protection: TVS adjacent to its
 connector, series R between TVS and µC pin). One :class:`LayoutRules`
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
 
     from oparroy.dsl.annotate import Annotation
     from oparroy.dsl.ir import Circuit, Net, Part
-    from oparroy.dsl.kicad_pcb import ArcSegment, NetClass, Segment, Via
+    from oparroy.dsl.kicad_pcb import ArcSegment, NetClass, Pad, Segment, Via
     from oparroy.dsl.kicad_pro import Project
 
 _EPSILON_MM = 1e-6
@@ -124,6 +125,27 @@ class PartOverHoleRule:
 
 
 @dataclass(frozen=True)
+class HolePadClearanceRule:
+    r"""A footprint's routed holes keep ``min_clearance_mm`` from pads (§7).
+
+    The status-LED light-pipe slots sit inside the segment connectors'
+    courtyards — the board's waived ``npth_inside_courtyard`` pair. The
+    waiver stands only while the slot edges keep real clearance to the
+    connector pads; this rule is that guard. ``hole`` full-matches the
+    footprints carrying the unconnected ``np_thru_hole`` pads, ``pads``
+    the footprints whose copper pads must stay clear — the
+    :class:`AdjacencyRule` idiom. Both shapes are capsules along their
+    long axis (stadium-exact for routed slots, corner-conservative for
+    roundrect pads); pad-local rotations are not modeled.
+    """
+
+    name: str
+    hole: str
+    pads: str
+    min_clearance_mm: float
+
+
+@dataclass(frozen=True)
 class LayoutRules:
     """The layout contract; ``None``/empty fields disable their check."""
 
@@ -144,6 +166,7 @@ class LayoutRules:
     terminal_protection: tuple[TerminalProtectionRule, ...] = ()
     footprint_sets: tuple[FootprintSetRule, ...] = ()
     part_over_hole: tuple[PartOverHoleRule, ...] = ()
+    hole_pad_clearance: tuple[HolePadClearanceRule, ...] = ()
 
 
 def check_layout(
@@ -169,6 +192,7 @@ def check_layout(
     issues.extend(_check_terminal_protection(board, rules))
     issues.extend(_check_footprint_set(board, rules))
     issues.extend(_check_part_over_hole(board, rules))
+    issues.extend(_check_hole_pad_clearance(board, rules))
     issues.extend(_check_required_footprints(board, rules))
     issues.extend(_check_bypass(board, rules))
     issues.extend(_check_bypass_copper(board, rules))
@@ -804,6 +828,69 @@ def _check_part_over_hole(board: Board, rules: LayoutRules) -> list[Issue]:
     return issues
 
 
+def _check_hole_pad_clearance(board: Board, rules: LayoutRules) -> list[Issue]:
+    issues: list[Issue] = []
+    for rule in rules.hole_pad_clearance:
+        targets = _ref_matches(board, rule.pads)
+        for hole_fp in _ref_matches(board, rule.hole):
+            issues.extend(_check_hole_footprint(hole_fp, targets, rule))
+    return issues
+
+
+def _check_hole_footprint(
+    hole_fp: Footprint, targets: list[Footprint], rule: HolePadClearanceRule
+) -> list[Issue]:
+    issues: list[Issue] = []
+    for hole_pad in hole_fp.pads:
+        if hole_pad.kind != "np_thru_hole" or hole_pad.net is not None:
+            continue
+        if hole_pad.drill is None:
+            continue
+        slot = _pad_capsule(hole_fp, hole_pad, hole_pad.drill)
+        for target in targets:
+            if target is hole_fp:
+                continue
+            for pad in target.pads:
+                if pad.size is None or pad.kind == "np_thru_hole":
+                    continue
+                clearance, at = _capsule_clearance(
+                    slot, _pad_capsule(target, pad, pad.size)
+                )
+                if clearance < rule.min_clearance_mm - _EPSILON_MM:
+                    issues.extend(
+                        _error(
+                            f"{rule.name}: {hole_fp.ref}'s routed hole is "
+                            f"{clearance:.2f} mm from {target.ref} pad "
+                            f"{pad.number} at ({at.x:.2f}, {at.y:.2f}), under "
+                            f"the {rule.min_clearance_mm} mm floor — the "
+                            "waived courtyard overlap stays safe only while "
+                            "this clearance holds"
+                        )
+                    )
+    return issues
+
+
+def _pad_capsule(
+    footprint: Footprint, pad: Pad, extents_mm: Point
+) -> tuple[Point, Point, float]:
+    """Build the pad's capsule on the board: spine along its long axis.
+
+    The radius is the short axis's half. A capsule is exact for a routed
+    stadium slot and corner-conservative for a roundrect pad (it bulges
+    past the rounded corners). ``extents_mm`` is the pad's ``size``, or
+    its ``drill`` for the routed hole itself.
+    """
+    half_spine = abs(extents_mm.x - extents_mm.y) / 2
+    axis = (
+        Point(half_spine, 0.0)
+        if extents_mm.x >= extents_mm.y
+        else Point(0.0, half_spine)
+    )
+    a = footprint.board_position(Point(pad.at.x - axis.x, pad.at.y - axis.y))
+    b = footprint.board_position(Point(pad.at.x + axis.x, pad.at.y + axis.y))
+    return a, b, min(extents_mm.x, extents_mm.y) / 2
+
+
 def terminal_protection_rules(
     circuit: Circuit,
     annotation: Annotation,
@@ -1014,27 +1101,35 @@ def _board_copper(board: Board) -> list[_Copper]:
 
 
 def _capsule_contact(first: _Copper, second: _Copper) -> tuple[float, Point]:
-    """Centerline gap (radii subtracted) and the closest pair's midpoint."""
-    hit = (
-        None
-        if first.a == first.b or second.a == second.b
-        else _segment_intersection_point(first.a, first.b, second.a, second.b)
-    )
+    """Surface gap (radii subtracted) and the closest pair's midpoint."""
+    gap, at = _capsule_gap(first.a, first.b, second.a, second.b)
+    return gap - first.radius - second.radius, at
+
+
+def _capsule_clearance(
+    first: tuple[Point, Point, float], second: tuple[Point, Point, float]
+) -> tuple[float, Point]:
+    """Surface-to-surface gap between two capsules, and its midpoint."""
+    a1, b1, radius1 = first
+    a2, b2, radius2 = second
+    gap, at = _capsule_gap(a1, b1, a2, b2)
+    return gap - radius1 - radius2, at
+
+
+def _capsule_gap(a1: Point, b1: Point, a2: Point, b2: Point) -> tuple[float, Point]:
+    """Spine-to-spine distance of two capsules, and the closest pair's midpoint."""
+    hit = None if a1 == b1 or a2 == b2 else _segment_intersection_point(a1, b1, a2, b2)
     if hit is not None:
         near_first = near_second = hit
     else:
-        candidates = [
-            (end, _closest_on_segment(end, second.a, second.b))
-            for end in (first.a, first.b)
-        ] + [
-            (_closest_on_segment(end, first.a, first.b), end)
-            for end in (second.a, second.b)
+        candidates = [(end, _closest_on_segment(end, a2, b2)) for end in (a1, b1)] + [
+            (_closest_on_segment(end, a1, b1), end) for end in (a2, b2)
         ]
         near_first, near_second = min(
             candidates, key=lambda pair: pair[0].distance(pair[1])
         )
     at = Point((near_first.x + near_second.x) / 2, (near_first.y + near_second.y) / 2)
-    return near_first.distance(near_second) - first.radius - second.radius, at
+    return near_first.distance(near_second), at
 
 
 def _closest_on_segment(p: Point, a: Point, b: Point) -> Point:

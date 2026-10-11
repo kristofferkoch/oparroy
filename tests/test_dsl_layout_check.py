@@ -16,6 +16,7 @@ from oparroy.dsl import (
     BypassRule,
     Circuit,
     FootprintSetRule,
+    HolePadClearanceRule,
     LayoutRules,
     PartOverHoleRule,
     Project,
@@ -901,6 +902,51 @@ def test_serial_box_clearance_pad_too_close() -> None:
     ]
 
 
+_SLOT_RULE = HolePadClearanceRule(
+    name="LED slot clear of connector pads",
+    hole=r"LED\d+",
+    pads=r"J\d+",
+    min_clearance_mm=1.3,
+)
+
+
+def _slot_board(led_at: str, conn_at: str) -> Board:
+    """One LED with its routed slot, one connector with a single 5x1.02 pad."""
+    return parse_board(
+        "(kicad_pcb (layers)"
+        f' (footprint "Lib:LED" (layer "F.Cu") (at {led_at})'
+        '  (property "Reference" "LED1" (at 0 0) (layer "F.SilkS"))'
+        '  (pad "" np_thru_hole oval (at 0 0) (size 1.5 2.4)'
+        '   (drill oval 1.5 2.4) (layers "*.Cu" "*.Mask")))'
+        f' (footprint "Lib:Conn" (layer "B.Cu") (at {conn_at})'
+        '  (property "Reference" "J1" (at 0 0) (layer "B.SilkS"))'
+        '  (pad "1" smd roundrect (at 0 0) (size 5 1.02) (layers "B.Cu")'
+        '   (net "SIG"))))'
+    )
+
+
+def _slot_issues(board: Board, rule: HolePadClearanceRule = _SLOT_RULE) -> list[str]:
+    rules = LayoutRules(hole_pad_clearance=(rule,))
+    return [i.message for i in check_layout(board, rules)]
+
+
+def test_hole_pad_clearance_pass() -> None:
+    # Slot spine end to pad spine: 5 - 0.45 - 0.75 - 0.51 = 3.29 mm.
+    assert _slot_issues(_slot_board("0 0", "0 5")) == []
+
+
+def test_hole_pad_clearance_violation() -> None:
+    # Slot spine end to pad spine: 2.9 - 0.45 - 0.75 - 0.51 = 1.19 mm.
+    assert _slot_issues(_slot_board("0 0", "0 2.9")) == [
+        (
+            "LED slot clear of connector pads: LED1's routed hole is 1.19 mm "
+            "from J1 pad 1 at (0.00, 1.67), under the 1.3 mm floor — the "
+            "waived courtyard overlap stays safe only while this clearance "
+            "holds"
+        )
+    ]
+
+
 def test_serial_box_clearance_uses_footprint_rotation() -> None:
     """The pad lands inside the box only once the 90° rotation is applied."""
     board = _clearance_board(
@@ -1016,5 +1062,85 @@ def test_node_board_serial_box_clearance_is_not_vacuous() -> None:
             "serial box comes within 1.70 mm of REF** at (131.57, 94.49), "
             "under the 2.0 mm clearance — keep the handwritten serial field "
             "clear of pads (§7 checklist)"
+        ),
+    ]
+
+
+def test_hole_pad_clearance_applies_footprint_rotation() -> None:
+    """The connector's pad lands under the slot only once rotated 180°."""
+
+    def board(rotation: str) -> Board:
+        return parse_board(
+            "(kicad_pcb (layers)"
+            ' (footprint "Lib:LED" (layer "F.Cu") (at 4 0)'
+            '  (property "Reference" "LED1" (at 0 0) (layer "F.SilkS"))'
+            '  (pad "" np_thru_hole oval (at 0 0) (size 1.5 2.4)'
+            '   (drill oval 1.5 2.4) (layers "*.Cu" "*.Mask")))'
+            f' (footprint "Lib:Conn" (layer "B.Cu") (at 10 0{rotation})'
+            '  (property "Reference" "J1" (at 0 0) (layer "B.SilkS"))'
+            '  (pad "1" smd roundrect (at 3 0) (size 5 1.02) (layers "B.Cu")'
+            '   (net "SIG"))))'
+        )
+
+    assert _slot_issues(board("")) == []
+    assert _slot_issues(board(" 180")) != []
+
+
+def test_hole_pad_clearance_skips_other_npth() -> None:
+    """The target footprint's own np_thru_hole pads are not copper pads."""
+    board = parse_board(
+        "(kicad_pcb (layers)"
+        ' (footprint "Lib:LED" (layer "F.Cu") (at 0 0)'
+        '  (property "Reference" "LED1" (at 0 0) (layer "F.SilkS"))'
+        '  (pad "" np_thru_hole oval (at 0 0) (size 1.5 2.4)'
+        '   (drill oval 1.5 2.4) (layers "*.Cu" "*.Mask")))'
+        ' (footprint "Lib:Conn" (layer "B.Cu") (at 0 0)'
+        '  (property "Reference" "J1" (at 0 0) (layer "B.SilkS"))'
+        '  (pad "" np_thru_hole circle (at 0 0) (size 3.2 3.2) (drill 3.2)'
+        '   (layers "*.Cu" "*.Mask"))))'
+    )
+    assert _slot_issues(board) == []
+
+
+def test_node_board_led_slots_clear_connector_pads() -> None:
+    """Calibration: the waived courtyard pair keeps real pad clearance.
+
+    The LED light-pipe slots sit inside the J1/J2 courtyards (the
+    excluded npth_inside_courtyard pair); the slot edges hold 1.35 mm
+    to the nearest connector pad, above the 1.3 mm floor.
+    """
+    board = parse_board(_NODE_BOARD.read_text())
+    assert check_layout(board, LayoutRules(hole_pad_clearance=(_SLOT_RULE,))) == []
+
+
+def test_node_board_led_slot_clearance_is_not_vacuous() -> None:
+    """A 2 mm floor flags every LED slot that sits under a connector."""
+    board = parse_board(_NODE_BOARD.read_text())
+    rule = dataclasses.replace(_SLOT_RULE, min_clearance_mm=2.0)
+    issues = check_layout(board, LayoutRules(hole_pad_clearance=(rule,)))
+    assert [i.message for i in issues] == [
+        (
+            "LED slot clear of connector pads: LED2's routed hole is 1.45 mm "
+            "from J1 pad 10 at (113.56, 74.77), under the 2.0 mm floor — the "
+            "waived courtyard overlap stays safe only while this clearance "
+            "holds"
+        ),
+        (
+            "LED slot clear of connector pads: LED1's routed hole is 1.35 mm "
+            "from J2 pad 1 at (131.44, 74.78), under the 2.0 mm floor — the "
+            "waived courtyard overlap stays safe only while this clearance "
+            "holds"
+        ),
+        (
+            "LED slot clear of connector pads: LED3's routed hole is 1.35 mm "
+            "from J1 pad 9 at (103.13, 74.77), under the 2.0 mm floor — the "
+            "waived courtyard overlap stays safe only while this clearance "
+            "holds"
+        ),
+        (
+            "LED slot clear of connector pads: LED4's routed hole is 1.57 mm "
+            "from J2 pad 2 at (120.56, 74.78), under the 2.0 mm floor — the "
+            "waived courtyard overlap stays safe only while this clearance "
+            "holds"
         ),
     ]
