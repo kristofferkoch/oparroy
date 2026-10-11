@@ -21,6 +21,17 @@ Scope: all oparroy firmware and host-testable firmware logic.
   ([DESIGN.md#8-verification-strategy](DESIGN.md#8-verification-strategy),
   settled): `-ffreestanding -nostdlib -fno-exceptions -fno-rtti`, no
   heap outside explicitly carved arenas.
+- **No strings on target**: string literals, formatting, and assembly
+  code never reach the µC image — flash is 16 KiB. Mechanically
+  enforced: `StaticString` (`firmware/lib/static_string.hpp`) is a
+  compile error under `-DOPARROY_TARGET`, and `VERIFY`'s target
+  personality captures a line-only `SourceLocation`
+  (`firmware/lib/verify.hpp`), so no check site references a string.
+  Failure-site identity is recovered host-side from the ELF instead:
+  reproducible builds keep it regenerable, addr2line maps the site's
+  PC, and the source line it lands on is the condition text.
+  `StringView`/`SourceLocation` themselves are pointer+size value
+  types and may cross the target boundary empty.
 - **No `__DATE__`/`__TIME__`/`__TIMESTAMP__`**: bit-for-bit
   reproducible builds are a hard constraint
   ([DESIGN.md#8-verification-strategy](DESIGN.md#8-verification-strategy));
