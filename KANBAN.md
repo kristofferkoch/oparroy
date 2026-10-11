@@ -62,17 +62,17 @@ ______________________________________________________________________
   LED over its routed hole); and **serial-box clearance** from
   same-side pads and other silkscreen text, over rotation-aware
   board-absolute pad geometry (footprint rotation now modeled,
-  pcbnew-verified).
-  Remaining, each calibrated against the node board (`boards/node/`)
-  — a draft layout with known DRC violations (over a hundred,
-  including NPTH-in-courtyard at the status-LED holes) that the
-  checker cannot yet see, so calibration asserts design-intent
-  invariants only (DESIGN.md §7):
-  **channelization hook** (per-instance layout
+  pcbnew-verified); and **pcbnew ingest validation** of the emitted
+  skeleton — a real KiCad load/save round trip with pcbnew itself as
+  ground truth (`tests/test_dsl_pcb_ingest.py`).
+  Remaining: the **channelization hook** (per-instance layout
   replication keyed on T7ba sheetpath metadata, meaningless until a
-  hierarchical board exists); **pcbnew ingest validation** of the
-  emitted skeleton (real KiCad round trip — the node board was the
-  first). Promoted to Next: the calibration board exists.
+  hierarchical board exists), to be calibrated against the node board
+  (`boards/node/`) — a draft layout with known DRC violations (over a
+  hundred, including NPTH-in-courtyard at the status-LED holes) that
+  the checker cannot yet see, so calibration asserts design-intent
+  invariants only (DESIGN.md §7). Promoted to Next: the calibration
+  board exists.
   **Blocked by:** — · **Unblocks:** T10
 - **T25 — Project-owned unit-test harness.** AK LibTest-style (raised
   in PR #17 review): `TEST_CASE`/`EXPECT` macros over a tiny report

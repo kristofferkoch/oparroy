@@ -1253,7 +1253,8 @@ part-over-hole (a matching footprint carries an unconnected
 status LED over its routed hole, rotation-free since the pad offset is
 footprint-local)), and `pcb_emit.py` (a
 byte-identical skeleton emitter pushing constraints into pcbnew
-pre-audit; round-trips through the parser). Proven against
+pre-audit; round-trips through the parser and through real pcbnew
+ingest — `tests/test_dsl_pcb_ingest.py`). Proven against
 `tests/fixtures/board_pass.kicad_pcb` and calibrated against
 `boards/node/`, where the bypass chain clears all other copper by the
 class clearance (0.3 mm), all four terminal chains meet the
@@ -1275,7 +1276,8 @@ subcircuit sheetpaths — waits for a hierarchical board).
 
 Skeleton emitter, KiCad 10 shape (verified headless against KiCad
 10.0.6 — `kicad-cli pcb upgrade`/`pcb drc`, exercised in
-`tests/test_dsl_kicad10.py`): KiCad 10 rejects `net_class` in
+`tests/test_dsl_kicad10.py`; pcbnew load/save round trip, exercised in
+`tests/test_dsl_pcb_ingest.py`): KiCad 10 rejects `net_class` in
 `.kicad_pcb` `(setup)`, so the skeleton is a **pair** —
 `pcb_emit.emit_pcb` writes the `.kicad_pcb` (stackup, keepouts, net
 list; still format 20240108, pcbnew upgrades on open) and
@@ -1289,11 +1291,14 @@ the board minimums are DRC-enforced headless; net-class track width
 is a routing default only, so per-net width/via contracts stay with
 the layout checker, which now reads classes from the project
 (`kicad_pro.parse_project`, `check_layout(..., project=...)`) with
-board-file classes as fallback. Quirks, both documented where the
+board-file classes as fallback. Quirks, all documented where the
 code hits them: stackup paste layers must not carry
-thickness/material (the upgrader mangles them into dielectrics), and
+thickness/material (the upgrader mangles them into dielectrics);
 a class clearance ≤ 0.25 mm is enforced but the violation text
-reports an empty constraint name (above 0.25 mm it cites the class).
+reports an empty constraint name (above 0.25 mm it cites the class);
+and a pcbnew save drops the net-code table — unreferenced net
+declarations vanish from the `.kicad_pcb`, so the net→class contract
+lives in the `.kicad_pro` alone after a KiCad round trip.
 The node board's spec is `design/node_board.py`; the emitted pair
 lives in `boards/node/`.
 
