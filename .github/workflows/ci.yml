@@ -138,7 +138,7 @@ jobs:
       # needs README.md via pyproject's readme field).
       - uses: actions/checkout@v5
         with:
-          cone-mode: false
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             flake.nix
             flake.lock
@@ -180,7 +180,7 @@ jobs:
       # the ones this job never runs.
       - uses: actions/checkout@v5
         with:
-          cone-mode: false
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             flake.nix
             flake.lock
@@ -242,7 +242,7 @@ jobs:
       # for a sim-only run.
       - uses: actions/checkout@v5
         with:
-          cone-mode: false
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             flake.nix
             flake.lock
@@ -280,7 +280,7 @@ jobs:
       # purpose — setup parses every subdir meson.build (circuits/).
       - uses: actions/checkout@v5
         with:
-          cone-mode: false
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             flake.nix
             flake.lock
@@ -320,7 +320,7 @@ jobs:
       # parses every subdir meson.build (circuits/, firmware/*/).
       - uses: actions/checkout@v5
         with:
-          cone-mode: false
+          sparse-checkout-cone-mode: false
           sparse-checkout: |
             flake.nix
             flake.lock
