@@ -7,14 +7,16 @@ independence (§4), placement contracts (§4.1), mechanical contracts
 clearance), the stackup contract
 (§6/§9), and the §7 board-level checklist (silkscreen ID fields,
 serial-number box, power LED, terminal protection: TVS adjacent to its
-connector, series R between TVS and µC pin), and the sheet-partition
-contract (each hierarchical sheet's footprints are exactly the capture's
-parts for that sheet — the metadata channelization keys on). One
+connector, series R between TVS and µC pin), and channelization (each
+hierarchical sheet's footprints are exactly the capture's parts for that
+sheet, and replicated instances of one subcircuit place their footprints
+congruently — one rigid transform per replica). One
 :class:`LayoutRules` value is the contract; :func:`check_layout` reports
 every violation as a batch of :class:`oparroy.dsl.check.Issue`, like the
-schematic validation pass. The terminal-protection and sheet-partition
-rules derive from the capture — :func:`terminal_protection_rules`,
-:func:`sheet_parts_rules` — because board refdes move under KiCad's
+schematic validation pass. The terminal-protection, sheet-partition, and
+channelization rules derive from the capture —
+:func:`terminal_protection_rules`, :func:`sheet_parts_rules`,
+:func:`channelization_rules` — because board refdes move under KiCad's
 geographic annotation while capture paths stay stable.
 """
 
@@ -29,9 +31,10 @@ from typing import TYPE_CHECKING
 from oparroy.dsl.check import Issue, Severity
 from oparroy.dsl.ir import natural_key
 from oparroy.dsl.kicad_pcb import Board, Edge, EdgeKind, Footprint, Pad, Point, Rect
+from oparroy.dsl.subcircuit import Subcircuit
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
     from oparroy.dsl.annotate import Annotation
     from oparroy.dsl.ir import Circuit, Net, Part
@@ -44,6 +47,9 @@ _JUNCTION_LINE_COUNT = 2
 _MIN_POLYGON_POINTS = 3
 _ARC_SAGITTA_MM = 0.01
 _ORIGIN = Point(0.0, 0.0)
+_CHANNEL_ROTATIONS_DEG = (0, 90, 180, 270)
+_CHANNEL_ANGLE_TOLERANCE_DEG = 0.01
+_MIN_CHANNEL_INSTANCES = 2
 
 
 @dataclass(frozen=True)
@@ -130,6 +136,37 @@ class SheetPartsRule:
 
 
 @dataclass(frozen=True)
+class ChannelInstance:
+    """One replicated instance of a channel: sheet prefix, ordered parts.
+
+    ``sheet`` is the instance's sheetpath (``"/T0/"``); footprints filed
+    under it or a nested sheet belong to the instance. ``refdes`` lists
+    the instance's parts in the channel's canonical order — the i-th
+    entries of a channel's instances correspond (the same subcircuit
+    part in each replica).
+    """
+
+    sheet: str
+    refdes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ChannelizationRule:
+    """Replicated instances place their footprints congruently (§7).
+
+    Channelization — lay out one tile, replicate it per instance: every
+    instance after the first (the reference) must map onto the reference
+    by one rigid transform, a translation plus a right-angle rotation,
+    within ``tolerance_mm``; each part's own rotation shifts with the
+    tile's. A mirrored (layer-flipped) replica is not a replication.
+    """
+
+    name: str
+    instances: tuple[ChannelInstance, ...]
+    tolerance_mm: float = 0.02
+
+
+@dataclass(frozen=True)
 class PartOverHoleRule:
     r"""Every matching footprint sits over its routed hole (§4.1).
 
@@ -187,6 +224,7 @@ class LayoutRules:
     terminal_protection: tuple[TerminalProtectionRule, ...] = ()
     footprint_sets: tuple[FootprintSetRule, ...] = ()
     sheet_parts: tuple[SheetPartsRule, ...] = ()
+    channelization: tuple[ChannelizationRule, ...] = ()
     part_over_hole: tuple[PartOverHoleRule, ...] = ()
     hole_pad_clearance: tuple[HolePadClearanceRule, ...] = ()
 
@@ -214,6 +252,7 @@ def check_layout(
     issues.extend(_check_terminal_protection(board, rules))
     issues.extend(_check_footprint_set(board, rules))
     issues.extend(_check_sheet_parts(board, rules))
+    issues.extend(_check_channelization(board, rules))
     issues.extend(_check_part_over_hole(board, rules))
     issues.extend(_check_hole_pad_clearance(board, rules))
     issues.extend(_check_required_footprints(board, rules))
@@ -858,6 +897,152 @@ def _check_sheet_parts(board: Board, rules: LayoutRules) -> list[Issue]:
     return issues
 
 
+def _filed_under(fp: Footprint, sheet: str) -> bool:
+    """Return whether a footprint belongs to an instance's sheet subtree.
+
+    The trailing slash keeps prefixes exact: ``/N10/`` is not under
+    ``/N1/``. The root sheet matches exactly only — everything starts
+    with ``"/"``.
+    """
+    return fp.sheetname == sheet or (sheet != "/" and fp.sheetname.startswith(sheet))
+
+
+def _check_channelization(board: Board, rules: LayoutRules) -> list[Issue]:
+    issues: list[Issue] = []
+    for rule in rules.channelization:
+        reference, *replicas = rule.instances
+        complete = _channel_membership(board, rule, issues)
+        if reference.sheet not in complete:
+            continue
+        placed = {fp.ref: fp for fp in board.footprints}
+        ref_fps = [placed[ref] for ref in reference.refdes]
+        for replica in replicas:
+            if replica.sheet not in complete:
+                continue
+            replica_fps = [placed[ref] for ref in replica.refdes]
+            issues.extend(
+                _channel_congruence(rule, reference, ref_fps, replica, replica_fps)
+            )
+    return issues
+
+
+def _channel_membership(
+    board: Board, rule: ChannelizationRule, issues: list[Issue]
+) -> set[str]:
+    """Flag incomplete instance sheets; return the exact ones' names."""
+    complete = set()
+    for instance in rule.instances:
+        present = sorted(
+            (fp.ref for fp in board.footprints if _filed_under(fp, instance.sheet)),
+            key=natural_key,
+        )
+        exact = True
+        unexpected = [ref for ref in present if ref not in instance.refdes]
+        if unexpected:
+            exact = False
+            issues.extend(
+                _error(
+                    f"{rule.name}: {', '.join(unexpected)} filed under sheet "
+                    f"{instance.sheet} outside the channel instance's parts — "
+                    "every instance of a channel carries the same parts (§7)"
+                )
+            )
+        missing = sorted(
+            (ref for ref in instance.refdes if ref not in present), key=natural_key
+        )
+        if missing:
+            exact = False
+            issues.extend(
+                _error(
+                    f"{rule.name}: {', '.join(missing)} missing from sheet "
+                    f"{instance.sheet} — every instance of a channel carries "
+                    "the same parts (§7)"
+                )
+            )
+        if exact:
+            complete.add(instance.sheet)
+    return complete
+
+
+def _channel_congruence(
+    rule: ChannelizationRule,
+    reference: ChannelInstance,
+    ref_fps: list[Footprint],
+    replica: ChannelInstance,
+    replica_fps: list[Footprint],
+) -> list[Issue]:
+    pairs = list(zip(ref_fps, replica_fps, strict=True))
+    if not pairs:
+        return []  # an instance of only power symbols places nothing
+    for ref_fp, replica_fp in pairs:
+        if ref_fp.layer != replica_fp.layer:
+            return _error(
+                f"{rule.name}: {replica_fp.ref} in {replica.sheet} is on "
+                f"{replica_fp.layer}, not {ref_fp.layer} as in "
+                f"{reference.sheet} — a mirrored tile is not a replication (§7)"
+            )
+    rotation, residuals = _fit_channel(ref_fps, replica_fps)
+    worst = max(residuals)
+    if worst > rule.tolerance_mm:
+        offenders = [
+            replica_fp.ref
+            for replica_fp, residual in zip(replica_fps, residuals, strict=True)
+            if residual > rule.tolerance_mm
+        ]
+        return _error(
+            f"{rule.name}: {replica.sheet} does not replicate "
+            f"{reference.sheet}: {', '.join(offenders)} off the best-fit "
+            f"{rotation}° transform by up to {worst:.2f} mm, past the "
+            f"{rule.tolerance_mm:g} mm tolerance — replicated tiles are "
+            "congruent (§7)"
+        )
+    issues: list[Issue] = []
+    for ref_fp, replica_fp in pairs:
+        expected = (ref_fp.rotation_deg - rotation) % 360
+        actual = replica_fp.rotation_deg % 360
+        if (
+            min((actual - expected) % 360, (expected - actual) % 360)
+            > _CHANNEL_ANGLE_TOLERANCE_DEG
+        ):
+            issues.extend(
+                _error(
+                    f"{rule.name}: {replica_fp.ref} in {replica.sheet} is "
+                    f"rotated {actual:g}°, not the {expected:g}° the tile's "
+                    f"{rotation}° transform implies — replicated tiles "
+                    "are congruent (§7)"
+                )
+            )
+    return issues
+
+
+def _fit_channel(
+    ref_fps: list[Footprint], replica_fps: list[Footprint]
+) -> tuple[int, list[float]]:
+    """Fit the best rigid transform: translation plus a right-angle rotation.
+
+    Returns the rotation and the per-part residuals of the best fit
+    (least maximum residual; ties break to the smaller rotation). The
+    translation is the mean anchor delta — the least-squares offset for
+    a fixed rotation.
+    """
+    best_rotation = 0
+    best_residuals: list[float] = []
+    for rotation in _CHANNEL_ROTATIONS_DEG:
+        deltas = [
+            (
+                replica.at.x - ref.at.rotated(rotation).x,
+                replica.at.y - ref.at.rotated(rotation).y,
+            )
+            for ref, replica in zip(ref_fps, replica_fps, strict=True)
+        ]
+        tx = sum(dx for dx, _ in deltas) / len(deltas)
+        ty = sum(dy for _, dy in deltas) / len(deltas)
+        residuals = [math.hypot(dx - tx, dy - ty) for dx, dy in deltas]
+        if not best_residuals or max(residuals) < max(best_residuals):
+            best_rotation, best_residuals = rotation, residuals
+    return best_rotation, best_residuals
+
+
 def _check_part_over_hole(board: Board, rules: LayoutRules) -> list[Issue]:
     issues: list[Issue] = []
     for rule in rules.part_over_hole:
@@ -1033,6 +1218,97 @@ def sheet_parts_rules(
         )
         for sheet, refdes in sorted(sheets.items())
     )
+
+
+def channelization_rules(
+    circuit: Circuit, annotation: Annotation, *, tolerance_mm: float = 0.02
+) -> tuple[ChannelizationRule, ...]:
+    """Derive the channelization contract from a capture.
+
+    Instances captured from the same subcircuit — grouped by
+    ``Subcircuit`` type, or by identity for a plain capture callable;
+    the key the instrumentation transform pass scopes per-tile
+    declarations on — form one channel and must be laid out congruently.
+    The hierarchy is walked per parent circuit; each group of two or
+    more instances yields one :class:`ChannelizationRule`, the
+    lexically-first instance the reference. An instance's parts are its
+    flat parts under its path, ordered by capture-relative path, so the
+    i-th parts of two instances correspond. Refdes come from
+    ``annotation`` (capture path → placed refdes, e.g. from
+    :func:`oparroy.dsl.annotate.annotation_from_pcb`); a part missing
+    from it was never placed, a ``ValueError``. Singleton groups yield
+    no rule — the contract is vacuous until a board repeats a
+    subcircuit.
+    """
+    flat = circuit.flatten() if circuit.instances else circuit
+    groups: list[tuple[str, list[tuple[str, ...]]]] = []
+    _channel_groups(circuit, (), groups)
+    return tuple(
+        ChannelizationRule(
+            name=f"{label} channel",
+            instances=tuple(
+                ChannelInstance(
+                    sheet=f"/{'/'.join(path)}/",
+                    refdes=_instance_refdes(flat, path, annotation.refs),
+                )
+                for path in paths
+            ),
+            tolerance_mm=tolerance_mm,
+        )
+        for label, paths in groups
+    )
+
+
+def _channel_groups(
+    circuit: Circuit,
+    prefix: tuple[str, ...],
+    groups: list[tuple[str, list[tuple[str, ...]]]],
+) -> None:
+    """Collect same-subcircuit instance groups of two or more, per parent."""
+    by_subcircuit: dict[object, tuple[str, list[tuple[str, ...]]]] = {}
+    for name, instance in circuit.instances.items():
+        if instance.subcircuit is None:
+            continue
+        key, label = _subcircuit_key(instance.subcircuit)
+        path = (*prefix, name)
+        by_subcircuit.setdefault(key, (label, []))[1].append(path)
+        _channel_groups(instance.circuit, path, groups)
+    for label, paths in by_subcircuit.values():
+        if len(paths) < _MIN_CHANNEL_INSTANCES:
+            continue
+        paths.sort(key=lambda path: natural_key("/".join(path)))
+        groups.append((label, paths))
+
+
+def _subcircuit_key(subcircuit: Callable[[Circuit], None]) -> tuple[object, str]:
+    """Group key: the type for ``Subcircuit`` instances, identity for callables."""
+    if isinstance(subcircuit, Subcircuit):
+        return type(subcircuit), type(subcircuit).__name__
+    label = getattr(subcircuit, "__name__", None) or type(subcircuit).__name__
+    return subcircuit, label
+
+
+def _instance_refdes(
+    flat: Circuit, path: tuple[str, ...], refs: Mapping[str, str]
+) -> tuple[str, ...]:
+    """Return the instance's placed refdes, ordered by capture-relative path."""
+    prefix = "/".join(path) + "/"
+    keys = sorted(
+        (
+            key
+            for key, part in flat.parts.items()
+            if key.startswith(prefix) and not part.symbol.is_power
+        ),
+        key=lambda key: natural_key(key[len(prefix) :]),
+    )
+    refdes = []
+    for key in keys:
+        ref = refs.get(key)
+        if ref is None:
+            msg = f"{key} has no refdes in the annotation — not placed"
+            raise ValueError(msg)
+        refdes.append(ref)
+    return tuple(refdes)
 
 
 def _terminal_chain_parts(net: Net) -> tuple[list[Part], list[Part]] | None:
