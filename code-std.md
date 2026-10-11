@@ -63,11 +63,14 @@ needs to earn its place every time it's touched.
   (`firmware/lib/test.hpp`, AK LibTest-style): `TEST_CASE` defines a
   case, `EXPECT` records a failure and continues, and the runner
   returns the 1-based index of the first failing case as its exit
-  code. The host runner (`firmware/lib/test_main.cpp`) reports with
-  `write(2)` and a hand-rolled itoa, so no hosted header enters the
-  tree and tests compile against the shipped freestanding
-  configuration — packaged frameworks that want exceptions, RTTI, or a
-  hosted runtime fail that bar
+  code. Strings move as `StringView` (`firmware/lib/string_view.hpp`)
+  and assemble in `StaticString`
+  (`firmware/lib/static_string.hpp`, decimal formatting included) —
+  never as `const char*` plus a separate length. The host runner
+  (`firmware/lib/test_main.cpp`) reports with `write(2)` over those
+  cells, so no hosted header enters the tree and tests compile against
+  the shipped freestanding configuration — packaged frameworks that
+  want exceptions, RTTI, or a hosted runtime fail that bar
   ([code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain)).
   The report hook is a per-personality wiring point in
   `lib::verify_failed`'s shape (`firmware/lib/verify.hpp`).

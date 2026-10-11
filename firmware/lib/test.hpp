@@ -9,8 +9,9 @@
 // want exceptions, RTTI, or a hosted runtime, and a per-target flag
 // fork for tests is exactly the test-build-vs-shipped-build split the
 // doctrine rejects. No hosted header enters the tree: the host runner
-// (firmware/lib/test_main.cpp) reports with write(2) and a hand-rolled
-// itoa, the one syscall declared by hand.
+// (firmware/lib/test_main.cpp) reports with write(2) — the one
+// syscall, declared by hand — over the foundation string cells
+// (string_view.hpp, static_string.hpp).
 //
 // The report hook is a wiring point in lib::verify_failed's shape
 // (firmware/lib/verify.hpp): declared here, defined once per
@@ -24,12 +25,14 @@
 // process exit code that names the failing check even when output is
 // swallowed.
 
+#include "string_view.hpp"
+
 namespace lib::test {
 
 using CaseFunction = void (*)();
 
 struct Case {
-    const char* name = nullptr;
+    StringView name;
     CaseFunction function = nullptr;
     // Registration link, set by Registrar. mutable so the TEST_CASE
     // metadata objects stay const.
@@ -65,8 +68,16 @@ struct Report {
     int first_failure = 0;
 };
 
+// One failed EXPECT, bundled: same-typed parameters would invite
+// transposition at every call site (code-std-cpp.md#3-types-and-arithmetic).
+struct Failure {
+    StringView condition;
+    StringView file;
+    int line = 0;
+};
+
 // The report hook — the wiring point described in the header comment.
-void case_failed(const char* condition, const char* file, int line);
+void case_failed(const Failure& failure);
 
 // Runs every registered case, reporting each failed EXPECT through
 // case_failed. Registrars prepend, so the registry is reversed into
@@ -128,5 +139,5 @@ inline Report run_all_cases() {
     if (condition) {                                                                               \
     } else {                                                                                       \
         ::lib::test::current_case_failed = true;                                                   \
-        ::lib::test::case_failed(#condition, __FILE__, __LINE__);                                  \
+        ::lib::test::case_failed(::lib::test::Failure{#condition, __FILE__, __LINE__});            \
     }
