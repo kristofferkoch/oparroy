@@ -19,6 +19,14 @@
 # klee-proofs, fuzz, and the unit tests across all cores; the ngspice
 # benches are too slow for that to matter, so they fan out as the
 # `sim` matrix instead.
+#
+# Gates are conditional on their declared inputs (see `changes`): a
+# PR that touches none of a gate's inputs skips it, and `check`
+# counts skipped as green. Push runs on main ignore the filters and
+# run everything, so a wrong filter can never leave the merged result
+# unvalidated. lint has no filter — it checks every file type and is
+# cheap — so a change that matches nothing else (docs, boards,
+# datasheets) still gets linted.
 name: ci
 
 on:
@@ -31,9 +39,85 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Change detection for the conditional gates: each filter below is
+  # one gate's declared inputs, and the gate runs only when a PR
+  # touches a match. The shared prefix (this workflow, the flake) is
+  # in every filter — a CI or toolchain change revalidates
+  # everything; keep the prefix lines identical across filters.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      pytest: ${{ steps.filter.outputs.pytest }}
+      firmware: ${{ steps.filter.outputs.firmware }}
+      sim: ${{ steps.filter.outputs.sim }}
+      rv32ec: ${{ steps.filter.outputs.rv32ec }}
+      reproducibility: ${{ steps.filter.outputs.reproducibility }}
+    steps:
+      # fetch-depth 0: on push events paths-filter diffs against the
+      # pre-push HEAD in the local clone (PRs go through the API).
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            pytest:
+              - '.github/workflows/ci.yml'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+              - 'src/**'
+              - 'tests/**'
+              - 'design/**'
+              # test_dsl_spice.py copies circuits/lib and runs the
+              # watchdog-chargepump bench; test_dsl_spice.py and
+              # test_status_leds.py drive benches via scripts/sim-run;
+              # test_node_pins.py reads the committed firmware copy.
+              - 'circuits/**'
+              - 'scripts/sim-run'
+              - 'firmware/node/pins.hpp'
+            firmware:
+              - '.github/workflows/ci.yml'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'firmware/**'
+              - 'meson.build'
+              - 'meson/**'
+              - 'scripts/klee-prove'
+              - 'scripts/fuzz-run'
+            sim:
+              - '.github/workflows/ci.yml'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'circuits/**'
+              - 'meson.build'
+              - 'meson/**'
+              - 'scripts/sim-run'
+            rv32ec:
+              - '.github/workflows/ci.yml'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'firmware/**'
+              - 'meson.build'
+              - 'meson/**'
+            reproducibility:
+              - '.github/workflows/ci.yml'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'firmware/**'
+              - 'meson.build'
+              - 'meson/**'
+              - 'scripts/check-reproducible'
+
   # Python side (uv's lane): DSL unit tests + doctests. The shell
   # hook exports OPARROY_KICAD_* so the KiCad-library tests run.
   pytest:
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.pytest == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -53,6 +137,8 @@ jobs:
   # Firmware: host build + unit tests, KLEE proofs, bounded fuzz
   # runs. The ngspice subcircuit benches are the `sim` matrix below.
   firmware:
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.firmware == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -79,6 +165,8 @@ jobs:
   # circuits/meson.build; keep the two lists in sync. fail-fast off
   # so one failing bench doesn't hide the others' results.
   sim:
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.sim == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -115,6 +203,8 @@ jobs:
 
   # Firmware rv32ec cross build.
   rv32ec:
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.rv32ec == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -138,6 +228,8 @@ jobs:
   # The script makes its own fresh build dirs; the configured
   # build/host exists only because the gate is wired as a run_target.
   reproducibility:
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.reproducibility == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -192,10 +284,13 @@ jobs:
 
   # Aggregate the parallel gates into the single required context
   # branch protection and Mergify key on. if: always() so a failed
-  # need (which skips dependents by default) still turns this red.
+  # need (which skips dependents by default) still turns this red —
+  # including the `changes` job itself. A gate skipped by its input
+  # filter reports 'skipped', which the condition below treats as
+  # green; only failure and cancelled turn the aggregate red.
   check:
     if: always()
-    needs: [pytest, firmware, sim, rv32ec, reproducibility, lint]
+    needs: [changes, pytest, firmware, sim, rv32ec, reproducibility, lint]
     runs-on: ubuntu-latest
     steps:
       - name: aggregate gate results
