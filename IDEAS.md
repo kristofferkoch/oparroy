@@ -258,3 +258,5 @@ real work — **move**, don't copy. Reference, don't duplicate.
   goes beyond them. Open leftover: their licensing pattern (permissive
   protocol + copyleft reference + trademarked name) vs our settled
   plain MIT — revisit only if the standard/tooling framing resonates.
+
+throwaway line for the CI skip demonstration — this PR gets closed unmerged
