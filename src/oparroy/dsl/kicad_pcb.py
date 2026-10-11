@@ -92,7 +92,12 @@ class Footprint:
 
     ``at`` and ``rotation_deg`` read the footprint's ``at`` node;
     ``texts`` carries the visible reference/value/user texts with
-    footprint-local ``at``.
+    footprint-local ``at``. ``sheetname`` reads the ``sheetname`` node —
+    the hierarchical sheet the footprint's part was placed from
+    (``"/PHY1/"``, ``"/"`` for root parts); ``""`` when the file carries
+    no such node (hand-placed footprints). It is the layout-side half of
+    the sheetpath metadata the channelization checks key on (DESIGN.md
+    §7).
     """
 
     lib: str
@@ -102,6 +107,7 @@ class Footprint:
     pads: tuple[Pad, ...]
     rotation_deg: float = 0.0
     texts: tuple[Text, ...] = ()
+    sheetname: str = ""
 
     def board_position(self, local: Point) -> Point:
         """Resolve a footprint-local point to board-absolute coordinates.
@@ -521,6 +527,7 @@ def _parse_footprint(node: list[Sexp]) -> Footprint:
         pads=tuple(_parse_pad(pad) for pad in _children(node, "pad")),
         rotation_deg=rotation,
         texts=tuple(_parse_footprint_texts(node)),
+        sheetname=_atom(_child(node, "sheetname") or [], 1) or "",
     )
 
 
