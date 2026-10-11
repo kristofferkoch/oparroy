@@ -122,8 +122,15 @@ ______________________________________________________________________
   bandwidth need (assert reports; the §4 `lib::verify_failed` wiring
   point reports over this transport), RP2040 pin/PIO cost (feeds the
   T30 budget), connector or pogo style, and interaction with the SWIO
-  flash mux (does debug ride the same mux?). Recorded into DESIGN.md
-  §6 on resolution. **Blocked by:** — · **Unblocks:** T10
+  flash mux (does debug ride the same mux?). The encoding is settled
+  in direction already: dictionary-based (defmt-style) — format
+  strings interned in a non-loaded ELF section, the wire carrying the
+  record address plus raw binary arguments, the host decoding with the
+  ELF as the string table; no strings or formatting code on the target
+  ([code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain)'s
+  no-strings rule), and a `consteval` format-string parse makes
+  placeholder/argument mismatches compile errors. Recorded into
+  DESIGN.md §6 on resolution. **Blocked by:** — · **Unblocks:** T10
 - **T34 — CI board block diagram.** *Shape: docs.* One page showing
   the whole CI board as blocks and the wires between them: the USB-C
   inlet → 5 V → 3.3 V regulator power tree (T35), the RP2040
