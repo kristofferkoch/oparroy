@@ -1255,7 +1255,16 @@ pre-audit; round-trips through the parser). Proven against
 `boards/node/`, where the bypass chain clears all other copper by the
 class clearance (0.3 mm), all four terminal chains meet the
 placement contract, B.Cu carries exactly J1/J2, and all four status
-LEDs sit over their holes. Not yet
+LEDs sit over their holes. The node board is a draft layout, not a
+golden reference: `kicad-cli pcb drc` reports over a hundred
+violations on it — clearance errors down to 0.15 mm against the 0.3 mm
+Power class, and NPTH-in-courtyard errors where LED1's and LED3's
+routed holes sit inside the J2/J1 courtyards — none of which the
+checker can see, since footprint rotation and courtyards are not
+modeled. Calibration asserts design-intent invariants only; the board
+is where the checks are meant to find bugs, so a check able to see a
+known board violation is calibrated to flag it, never to pass it.
+Not yet
 landed: serial
 box pad/silkscreen clearance (waits on footprint rotation modeling)
 and

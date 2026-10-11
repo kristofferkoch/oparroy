@@ -60,7 +60,11 @@ ______________________________________________________________________
   **footprint-set equality** (the B.Cu footprint set is exactly the
   segment connectors) and **part-over-hole** (each reverse-mount status
   LED over its routed hole).
-  Remaining, each calibrated against the node board (`boards/node/`):
+  Remaining, each calibrated against the node board (`boards/node/`)
+  — a draft layout with known DRC violations (over a hundred,
+  including NPTH-in-courtyard at the status-LED holes) that the
+  checker cannot yet see, so calibration asserts design-intent
+  invariants only (DESIGN.md §7):
   **serial-box clearance** from pads
   and other silkscreen text (needs board-absolute pad positions —
   footprint rotation is not yet modeled);
@@ -220,7 +224,8 @@ ______________________________________________________________________
   C22385222 header stock before ordering (buy-ahead deferred); the
   node board's silkscreen nudges and JLCPCB's NPTH-to-copper
   capability check at quote time (fab-prep leftovers inherited from
-  the node-board design — the board's remaining small DRC warnings
+  the node-board design — the board's DRC violations, over a hundred
+  including the status-LED holes inside the connector courtyards,
   stay deliberately unfixed until then), then fab via JLCPCB (§6):
   assemble 2, the minimum; blanks hand-solderable. Fabs **second**,
   after the T10 CI board: the CI board's eight tiles are the first
