@@ -24,9 +24,12 @@
 # PR that touches none of a gate's inputs skips it, and `check`
 # counts skipped as green. Push runs on main ignore the filters and
 # run everything, so a wrong filter can never leave the merged result
-# unvalidated. lint has no filter — it checks every file type and is
-# cheap — so a change that matches nothing else (docs, boards,
-# datasheets) still gets linted.
+# unvalidated. The declaration is enforced, not just consulted: each
+# gate sparse-checks-out only its own inputs, so a dependency the
+# filter doesn't declare fails the gate instead of silently passing.
+# lint has no filter — it checks every file type and is cheap — so a
+# change that matches nothing else (docs, boards/lib, the root
+# markdown) still gets linted, and lint keeps a full checkout.
 name: ci
 
 on:
@@ -76,16 +79,21 @@ jobs:
               # test_dsl_spice.py copies circuits/lib and runs the
               # watchdog-chargepump bench; test_dsl_spice.py and
               # test_status_leds.py drive benches via scripts/sim-run;
-              # test_node_pins.py reads the committed firmware copy.
+              # test_node_pins.py reads the committed firmware copy;
+              # test_dsl_layout_check.py parses the node board;
+              # test_dsl_parts_db.py asserts datasheet dirs exist.
               - 'circuits/**'
               - 'scripts/sim-run'
               - 'firmware/node/pins.hpp'
+              - 'boards/node/**'
+              - 'datasheets/**'
             firmware:
               - '.github/workflows/ci.yml'
               - 'flake.nix'
               - 'flake.lock'
               - 'firmware/**'
               - 'meson.build'
+              - 'meson.options'
               - 'meson/**'
               - 'scripts/klee-prove'
               - 'scripts/fuzz-run'
@@ -95,6 +103,7 @@ jobs:
               - 'flake.lock'
               - 'circuits/**'
               - 'meson.build'
+              - 'meson.options'
               - 'meson/**'
               - 'scripts/sim-run'
             rv32ec:
@@ -103,6 +112,7 @@ jobs:
               - 'flake.lock'
               - 'firmware/**'
               - 'meson.build'
+              - 'meson.options'
               - 'meson/**'
             reproducibility:
               - '.github/workflows/ci.yml'
@@ -110,6 +120,7 @@ jobs:
               - 'flake.lock'
               - 'firmware/**'
               - 'meson.build'
+              - 'meson.options'
               - 'meson/**'
               - 'scripts/check-reproducible'
 
@@ -120,7 +131,29 @@ jobs:
     if: github.event_name == 'push' || needs.changes.outputs.pytest == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Sparse checkout: only this gate's declared inputs are present,
+      # so a dependency the changes filter doesn't know about fails
+      # here instead of silently passing. Mirror of the filter minus
+      # ci.yml (non-cone mode: root files need explicit entries; uv
+      # needs README.md via pyproject's readme field).
       - uses: actions/checkout@v5
+        with:
+          cone-mode: false
+          sparse-checkout: |
+            flake.nix
+            flake.lock
+            README.md
+            pyproject.toml
+            uv.lock
+            .python-version
+            src/**
+            tests/**
+            design/**
+            circuits/**
+            scripts/sim-run
+            firmware/node/pins.hpp
+            boards/node/**
+            datasheets/**
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -141,7 +174,21 @@ jobs:
     if: github.event_name == 'push' || needs.changes.outputs.firmware == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Sparse checkout: only this gate's declared inputs are present
+      # (see the pytest job for the rationale). scripts/ whole:
+      # meson setup find_program/files()s every runner script, even
+      # the ones this job never runs.
       - uses: actions/checkout@v5
+        with:
+          cone-mode: false
+          sparse-checkout: |
+            flake.nix
+            flake.lock
+            meson.build
+            meson.options
+            meson/**
+            firmware/**
+            scripts/**
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -185,7 +232,26 @@ jobs:
           - cable-reach-tb_redriver
           - cable-reach-tb_reach_noise
     steps:
+      # Sparse checkout: only this gate's declared inputs are present
+      # (see the pytest job for the rationale). scripts/ whole:
+      # meson setup find_program/files()s every runner script. The
+      # bare 'meson.build' pattern is recursive on purpose — setup
+      # parses every subdir meson.build (circuits/, firmware/*/).
+      # firmware/** and the bare (recursive) 'meson.build' pattern:
+      # setup walks every subdir and checks its sources exist, even
+      # for a sim-only run.
       - uses: actions/checkout@v5
+        with:
+          cone-mode: false
+          sparse-checkout: |
+            flake.nix
+            flake.lock
+            meson.build
+            meson.options
+            meson/**
+            circuits/**
+            firmware/**
+            scripts/**
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -207,7 +273,22 @@ jobs:
     if: github.event_name == 'push' || needs.changes.outputs.rv32ec == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Sparse checkout: only this gate's declared inputs are present
+      # (see the pytest job for the rationale). scripts/ whole: the
+      # root meson.build find_programs the runner scripts even in
+      # cross builds. The bare 'meson.build' pattern is recursive on
+      # purpose — setup parses every subdir meson.build (circuits/).
       - uses: actions/checkout@v5
+        with:
+          cone-mode: false
+          sparse-checkout: |
+            flake.nix
+            flake.lock
+            meson.build
+            meson.options
+            meson/**
+            firmware/**
+            scripts/**
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -232,7 +313,22 @@ jobs:
     if: github.event_name == 'push' || needs.changes.outputs.reproducibility == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Sparse checkout: only this gate's declared inputs are present
+      # (see the pytest job for the rationale). scripts/ whole:
+      # meson setup find_program/files()s every runner script. The
+      # bare 'meson.build' pattern is recursive on purpose — setup
+      # parses every subdir meson.build (circuits/, firmware/*/).
       - uses: actions/checkout@v5
+        with:
+          cone-mode: false
+          sparse-checkout: |
+            flake.nix
+            flake.lock
+            meson.build
+            meson.options
+            meson/**
+            firmware/**
+            scripts/**
 
       - uses: cachix/install-nix-action@v31
         with:
