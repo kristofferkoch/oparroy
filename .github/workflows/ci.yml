@@ -11,12 +11,14 @@
 #
 # The gates run as parallel jobs — none of them consumes another's
 # output, so wall-clock is the slowest job, not their sum. Each job
-# pays the fixed install-nix + cache-pull cost (~a minute, warm
-# cache). The `check` job only aggregates: branch protection and
-# .mergify.yml both require the single context `check`, so it fails
-# when any need fails and stays green otherwise. Intra-job parallelism
-# is already maximal: ninja/meson drive klee-proofs, fuzz, sim, and
-# the unit tests across all cores.
+# (and each `sim` matrix leg) pays the fixed install-nix + cache-pull
+# cost (~a minute, warm cache). The `check` job only aggregates:
+# branch protection and .mergify.yml both require the single context
+# `check`, so it fails when any need fails and stays green otherwise.
+# Intra-job parallelism is already maximal: ninja/meson drive
+# klee-proofs, fuzz, and the unit tests across all cores; the ngspice
+# benches are too slow for that to matter, so they fan out as the
+# `sim` matrix instead.
 name: ci
 
 on:
@@ -49,7 +51,7 @@ jobs:
       - run: nix develop -c sh -c 'uv sync --frozen && uv run --frozen pytest'
 
   # Firmware: host build + unit tests, KLEE proofs, bounded fuzz
-  # runs, ngspice subcircuit benches.
+  # runs. The ngspice subcircuit benches are the `sim` matrix below.
   firmware:
     runs-on: ubuntu-latest
     steps:
@@ -69,7 +71,47 @@ jobs:
           nix develop -c meson setup build/host --native-file meson/native/clang.ini
           nix develop -c ninja -C build/host
           nix develop -c meson test -C build/host --print-errorlogs
-          nix develop -c ninja -C build/host klee-proofs fuzz sim
+          nix develop -c ninja -C build/host klee-proofs fuzz
+
+  # Subcircuit simulation benches (circuits/**/tb_*.cir, DESIGN.md
+  # §7) — the firmware-side wall-clock long pole by far, so one job
+  # per bench. The legs mirror the sim-* run_targets in
+  # circuits/meson.build; keep the two lists in sync. fail-fast off
+  # so one failing bench doesn't hide the others' results.
+  sim:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bench:
+          - watchdog-chargepump-tb_engage
+          - watchdog-chargepump-tb_missed_pulse
+          - watchdog-chargepump-tb_glitch
+          - watchdog-supervisor-tb_engage
+          - watchdog-supervisor-tb_missed_pulse
+          - watchdog-supervisor-tb_glitch
+          - phy-segment-tb_decode
+          - phy-segment-tb_noise
+          - phy-segment-tb_fault
+          - cable-reach-tb_reach
+          - cable-reach-tb_redriver
+          - cable-reach-tb_reach_noise
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: oparroy
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - run: |
+          nix develop -c meson setup build/host --native-file meson/native/clang.ini
+          nix develop -c ninja -C build/host sim-${{ matrix.bench }}
 
   # Firmware rv32ec cross build.
   rv32ec:
@@ -153,7 +195,7 @@ jobs:
   # need (which skips dependents by default) still turns this red.
   check:
     if: always()
-    needs: [pytest, firmware, rv32ec, reproducibility, lint]
+    needs: [pytest, firmware, sim, rv32ec, reproducibility, lint]
     runs-on: ubuntu-latest
     steps:
       - name: aggregate gate results

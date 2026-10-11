@@ -3,6 +3,8 @@
 # its subcircuit's contract (engage timing, missed-pulse tolerance,
 # glitch behavior). scripts/sim-run runs one bench and propagates the
 # pass/fail exit status from its control block.
+# CI runs each sim-* target as its own matrix leg
+# (.github/workflows/ci.yml) — add new benches to that matrix too.
 if not meson.is_cross_build()
   ngspice = find_program('ngspice')
 
