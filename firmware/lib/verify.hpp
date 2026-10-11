@@ -40,9 +40,10 @@
 //   ~0.5 ms — deliberate bypass-engage, never a hung loop. The hook
 //   must not return; the cross build is compile/archive-only, so the
 //   undefined reference is the wiring point until the node firmware
-//   provides it. The location arrives as a SourceLocation
+//   provides it. The hook takes the line-only SourceLocation
 //   (source_location.hpp) — current() captures the macro-invocation
-//   site from its builtin-backed default arguments.
+//   line from the builtin's default-argument instantiation, and no
+//   string literals reach the image (the no-strings rule below).
 // - Everything else (host): __builtin_trap(). Fuzz builds get a crash
 //   artifact; a constexpr-violated contract is a compile error.
 //
@@ -61,24 +62,29 @@ extern "C" [[noreturn]] void klee_report_error(const char* file, int line, const
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define UNREACHABLE() __builtin_unreachable()
 #elif defined(OPARROY_TARGET)
-// Per-personality includes: only this branch reads the location/string
-// headers, and hoisting them would pull them into the KLEE bitcode
-// parses (and trip misc-include-cleaner on the host personality).
+// Per-personality includes: only this branch reads the location
+// header, and hoisting it would pull it into the KLEE bitcode parses
+// (and trip misc-include-cleaner on the host personality).
 #include "source_location.hpp"
-#include "string_view.hpp"
 
+// No strings on the target (code-std-cpp.md#1-language-and-toolchain):
+// the hook takes the line-only SourceLocation and nothing else — no
+// condition text, no file/function literals, so a VERIFY site
+// references no strings and the image carries none. Full site identity
+// is recoverable host-side from the ELF: the hook can take the site's
+// PC with __builtin_return_address, addr2line maps it, and the source
+// line it lands on is the condition text.
 namespace lib {
-[[noreturn]] void verify_failed(StringView condition, SourceLocation location);
+[[noreturn]] void verify_failed(SourceLocation location);
 }
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define VERIFY(condition)                                                                          \
     if (condition) {                                                                               \
     } else {                                                                                       \
-        lib::verify_failed(#condition, ::lib::SourceLocation::current());                          \
+        lib::verify_failed(::lib::SourceLocation::current());                                      \
     }
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define UNREACHABLE()                                                                              \
-    lib::verify_failed("reached the unreachable", ::lib::SourceLocation::current())
+#define UNREACHABLE() lib::verify_failed(::lib::SourceLocation::current())
 #else
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define VERIFY(condition)                                                                          \

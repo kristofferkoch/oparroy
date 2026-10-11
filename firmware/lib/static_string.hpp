@@ -11,6 +11,16 @@
 // full means the caller mis-sized, a bug, so push_back VERIFYs and
 // KLEE proves the trap unreachable. Size generously — a message buffer
 // that overflows is a mis-sizing bug, not a data condition.
+//
+// Host-side only: no string assembly code on the target µC
+// (code-std-cpp.md#1-language-and-toolchain's no-strings rule), so the
+// header refuses to exist there. StringView (string_view.hpp) stays
+// available — a view is pointer+size, zero-cost when empty; it's the
+// literals and the formatting that must never reach the image.
+
+#if defined(OPARROY_TARGET)
+#error "StaticString is host-side: no string assembly code on the target"
+#endif
 
 #include "static_vector.hpp"
 #include "string_view.hpp"

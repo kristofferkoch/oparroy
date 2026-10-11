@@ -16,6 +16,13 @@
 // strings cross interfaces as views, never const char* — the builtins
 // hand over NUL-terminated literals, and the view measures them once,
 // constexpr-folded at any constant call site.
+//
+// No strings on the target (code-std-cpp.md#1-language-and-toolchain):
+// under OPARROY_TARGET, current() captures the line alone and the
+// views stay empty, so a capture references no string literals and the
+// µC image carries none. Full site identity is recoverable host-side
+// from the ELF instead — addr2line maps the site's PC, and the source
+// line it lands on is the condition text.
 
 #include "string_view.hpp"
 
@@ -26,6 +33,14 @@ public:
     // The empty location.
     constexpr SourceLocation() = default;
 
+#if defined(OPARROY_TARGET)
+    // Line-only capture — see the header comment.
+    static constexpr SourceLocation current(int line = __builtin_LINE()) {
+        SourceLocation location;
+        location.m_line = line;
+        return location;
+    }
+#else
     // Callers never pass arguments — the defaults are the payload.
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     static constexpr SourceLocation current(StringView file = __builtin_FILE(),
@@ -37,6 +52,7 @@ public:
         location.m_line = line;
         return location;
     }
+#endif
 
     [[nodiscard]] constexpr StringView file_name() const {
         return m_file;

@@ -1,6 +1,7 @@
 // Translation unit for the header-only foundation library: keeps the
-// GCC cross build (rv32ec) and clang-tidy compiling every lib/ header,
-// and hosts the constexpr static_assert proofs of each cell
+// GCC cross build (rv32ec) and clang-tidy compiling every lib/ header
+// (StaticString excepted on target — host-side by fiat), and hosts the
+// constexpr static_assert proofs of each cell
 // (code-std.md#4-tests). TRY's runtime paths live in test_foundation.cpp —
 // a statement expression can't be constant-evaluated, so the macro is
 // proved on the host test runner instead.
@@ -10,11 +11,16 @@
 #include "range.hpp"
 #include "source_location.hpp"
 #include "span.hpp"
-#include "static_string.hpp"
 #include "static_vector.hpp"
 #include "string_view.hpp"
 #include "utility.hpp"
 #include "verify.hpp"
+
+// StaticString is host-side by fiat (it #errors under OPARROY_TARGET),
+// so its include and its proof sit out the cross build.
+#if !defined(OPARROY_TARGET)
+#include "static_string.hpp"
+#endif
 
 #include <cstdint>
 
@@ -148,6 +154,7 @@ namespace {
         return literal == "hello" && !(literal == measured) && !(literal == StringView{"hello", 4});
     }
 
+#if !defined(OPARROY_TARGET)
     constexpr bool static_string_assembles_messages() {
         StaticString<32> text;
         text.append("cases: ");
@@ -163,6 +170,7 @@ namespace {
         boundary.append(static_cast<unsigned long>(109));
         return StringView{zero} == "0" && StringView{boundary} == "109";
     }
+#endif
 
     constexpr bool source_location_captures_the_call_site() {
         // The builtin-backed defaults evaluate at the call expression,
@@ -172,10 +180,17 @@ namespace {
         if (here.line() != expected_line) {
             return false;
         }
+#if defined(OPARROY_TARGET)
+        // Target capture is line-only: the views stay empty so no
+        // string literals reach the image — this proof is the rule's
+        // compile-time enforcement on the capture side.
+        return here.file_name().is_empty() && here.function_name().is_empty();
+#else
         // The file and function names arrive as measured views.
         const StringView file = here.file_name();
         const StringView function = here.function_name();
         return !file.is_empty() && function == "source_location_captures_the_call_site";
+#endif
     }
 
 } // namespace
@@ -188,7 +203,9 @@ static_assert(vector_collects_range());
 static_assert(move_transfers_the_handle());
 static_assert(arena_handle_arrow_access());
 static_assert(string_view_measures_and_compares());
+#if !defined(OPARROY_TARGET)
 static_assert(static_string_assembles_messages());
+#endif
 static_assert(source_location_captures_the_call_site());
 
 } // namespace lib
