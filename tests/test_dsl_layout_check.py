@@ -20,10 +20,13 @@ from oparroy.dsl import (
     LayoutRules,
     PartOverHoleRule,
     Project,
+    SheetPartsRule,
+    Subcircuit,
     TerminalProtectionRule,
     annotation_from_pcb,
     check_layout,
     parse_board,
+    sheet_parts_rules,
     terminal_protection_rules,
 )
 
@@ -786,6 +789,149 @@ def test_node_board_back_copper_set_is_not_vacuous() -> None:
             "back-side footprint set: U1 missing from B.Cu — the footprint "
             "set is exact (§7 checklist)"
         ),
+    ]
+
+
+def _sheet_footprint(ref: str, sheet: str) -> str:
+    sheetname = f' (sheetname "{sheet}")' if sheet else ""
+    return (
+        f'(footprint "Lib:{ref}" (layer "F.Cu") (at 0 0)'
+        f' (property "Reference" "{ref}" (at 0 0) (layer "F.SilkS"))'
+        f"{sheetname})"
+    )
+
+
+_PHY_SHEET_RULE = SheetPartsRule(
+    name="sheet /PHY1/ footprint set",
+    sheet="/PHY1/",
+    refs=("C1", "R1", "R2"),
+)
+
+
+def _sheet_issues(board: Board, rule: SheetPartsRule = _PHY_SHEET_RULE) -> list[str]:
+    rules = LayoutRules(sheet_parts=(rule,))
+    return [i.message for i in check_layout(board, rules)]
+
+
+def test_sheet_parts_pass() -> None:
+    """Other sheets and hand-placed (sheetname-less) footprints don't count."""
+    board = _chain_board(
+        _sheet_footprint("R1", "/PHY1/"),
+        _sheet_footprint("R2", "/PHY1/"),
+        _sheet_footprint("C1", "/PHY1/"),
+        _sheet_footprint("U1", "/"),
+        _sheet_footprint("H1", ""),
+    )
+    assert _sheet_issues(board) == []
+
+
+def test_sheet_parts_unexpected_under_the_sheet() -> None:
+    board = _chain_board(
+        _sheet_footprint("R1", "/PHY1/"),
+        _sheet_footprint("R2", "/PHY1/"),
+        _sheet_footprint("C1", "/PHY1/"),
+        _sheet_footprint("U1", "/PHY1/"),
+    )
+    assert _sheet_issues(board) == [
+        (
+            "sheet /PHY1/ footprint set: U1 filed under sheet /PHY1/ outside "
+            "the sheet's part set — the layout's hierarchy metadata must "
+            "match the capture (§7)"
+        )
+    ]
+
+
+def test_sheet_parts_member_missing_from_the_sheet() -> None:
+    board = _chain_board(
+        _sheet_footprint("R1", "/PHY1/"),
+        _sheet_footprint("R2", "/PHY1/"),
+        _sheet_footprint("C1", "/WD1/"),
+    )
+    assert _sheet_issues(board) == [
+        (
+            "sheet /PHY1/ footprint set: C1 missing from sheet /PHY1/ — "
+            "the sheet's footprint set is exact (§7)"
+        )
+    ]
+
+
+class _Rc(Subcircuit):
+    """One resistor across in/gnd; the smallest repeated instance."""
+
+    def capture(self, circuit: Circuit) -> None:
+        """Build the cell: R1 from in to gnd."""
+        r1 = circuit.part(
+            "R1", symbol="Device:R", value="1k", footprint="StubFP:R_0603"
+        )
+        circuit.connect(circuit.port("in"), r1[1])
+        circuit.connect(circuit.port("gnd"), r1[2])
+
+
+def _two_rc_board(symbols: StubSymbols) -> Circuit:
+    board = Circuit("board", symbols)
+    inp = board.net("in")
+    gnd = board.net("gnd")
+    feed = board.part("RF", symbol="Device:R", value="1k", footprint="StubFP:R_0603")
+    board.connect(inp, feed[1])
+    board.connect(gnd, feed[2])
+    for i in range(2):
+        board.instance(f"LP{i}", _Rc(), **{"in": inp, "gnd": gnd})
+    return board
+
+
+def test_sheet_parts_rules_from_capture(symbols: StubSymbols) -> None:
+    board = _two_rc_board(symbols)
+    annotation = Annotation({"RF": "R1", "LP0/R1": "R2", "LP1/R1": "R3"})
+    assert sheet_parts_rules(board, annotation) == (
+        SheetPartsRule(name="sheet / footprint set", sheet="/", refs=("R1",)),
+        SheetPartsRule(name="sheet /LP0/ footprint set", sheet="/LP0/", refs=("R2",)),
+        SheetPartsRule(name="sheet /LP1/ footprint set", sheet="/LP1/", refs=("R3",)),
+    )
+
+
+def test_sheet_parts_rules_requires_placed_parts(symbols: StubSymbols) -> None:
+    board = _two_rc_board(symbols)
+    with pytest.raises(ValueError, match="LP1/R1 has no refdes in the annotation"):
+        sheet_parts_rules(board, Annotation({"RF": "R1", "LP0/R1": "R2"}))
+
+
+def _node_sheet_rules(kicad_libs: KiCadLibraries) -> LayoutRules:
+    """Build the sheet-partition contract the node capture implies."""
+    circuit = capture(kicad_libs)
+    pcb_text = _NODE_BOARD.read_text()
+    return LayoutRules(
+        sheet_parts=sheet_parts_rules(circuit, annotation_from_pcb(circuit, pcb_text))
+    )
+
+
+def test_node_board_sheet_partition_matches_capture(
+    kicad_libs: KiCadLibraries,
+) -> None:
+    """Calibration: every board footprint sits under its capture sheet."""
+    board = parse_board(_NODE_BOARD.read_text())
+    assert check_layout(board, _node_sheet_rules(kicad_libs)) == []
+
+
+def test_node_board_sheet_partition_is_not_vacuous(
+    kicad_libs: KiCadLibraries,
+) -> None:
+    """A declared part absent from the sheet flags as missing."""
+    base = _node_sheet_rules(kicad_libs)
+    rules = dataclasses.replace(
+        base,
+        sheet_parts=tuple(
+            dataclasses.replace(rule, refs=(*rule.refs, "R99"))
+            if rule.sheet == "/SL1/"
+            else rule
+            for rule in base.sheet_parts
+        ),
+    )
+    issues = check_layout(parse_board(_NODE_BOARD.read_text()), rules)
+    assert [i.message for i in issues] == [
+        (
+            "sheet /SL1/ footprint set: R99 missing from sheet /SL1/ — "
+            "the sheet's footprint set is exact (§7)"
+        )
     ]
 
 
