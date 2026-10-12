@@ -3,11 +3,11 @@
 // surface of the slot-boundary bit counter. A 2-node circulation must
 // stamp each slot with exactly that node's bits and touch nothing else.
 
+#include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../../lib/span.hpp"
 #include "../bits.hpp"
 #include "../node.hpp"
-#include "klee.hpp"
 
 #include <cstdint>
 

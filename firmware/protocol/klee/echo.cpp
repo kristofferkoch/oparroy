@@ -4,11 +4,11 @@
 // bit-identical, every node forwards every legal bit, and the frame gap
 // latches exactly once per node (the vsync, §2).
 
+#include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../../lib/span.hpp"
 #include "../bits.hpp"
 #include "../node.hpp"
-#include "klee.hpp"
 
 #include <cstddef>
 #include <cstdint>
