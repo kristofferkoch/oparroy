@@ -136,7 +136,12 @@ infrastructure, by contrast, may cost freely.
   — pytest, firmware host build + unit tests, KLEE proofs, bounded
   fuzz runs, ngspice benches, the rv32ec cross build, the
   reproducibility gate, and the pre-commit suite — inside the nix dev
-  shell, so CI exercises byte-identical tools to a laptop.
+  shell, so CI exercises byte-identical tools to a laptop. Each gate
+  sparse-checks-out only its declared inputs, so an undeclared
+  dependency fails CI even when the full tree builds locally;
+  `scripts/check-sparse <gate>` rehearses a gate against a sparse
+  worktree before pushing (file content comes from `HEAD` — commit
+  source edits first).
 
 ## Repository layout
 
