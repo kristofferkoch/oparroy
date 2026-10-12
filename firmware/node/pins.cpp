@@ -22,7 +22,7 @@ static_assert(pins::rx_threshold_opa_n == 0);
 static_assert(pins::tx_a_tim1_ch == 1 && pins::tx_a_tx_dma == 2);
 static_assert(pins::tx_b_tim1_ch == 3 && pins::tx_b_tx_dma == 6);
 static_assert(pins::buzzer_tim1_ch == 4);
-static_assert(pins::rx_a_capture_dma == 5 && pins::rx_a_period_dma == 7);
+static_assert(pins::rx_a_period_dma == 5 && pins::rx_a_high_dma == 7);
 static_assert(pins::pot_adc == 6);
 
 // Plain GPIO: the §4 watchdog strobe.

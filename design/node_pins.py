@@ -39,12 +39,13 @@ def capture() -> PinMap:
     # §2/§3 ring PHY: OPA comparator RX, TIM1 PWM TX. The RX capture is
     # the OPA→TIM2_CH1 internal route — no pad spent on it (§2). The
     # DMA constants are the RM Table 8-2 peripheral mapping (dma.md):
-    # TIM2_CH1 → 5, TIM2_CH2 → 7 (PWM-input period+high), TIM1_CH1 →
-    # 2, TIM1_CH3 → 6.
+    # TIM2_CH1 → 5, TIM2_CH2 → 7 — in PWM-input mode CH1 captures the
+    # period and CH2 the high time (RM §11.3.4) — TIM1_CH1 → 2,
+    # TIM1_CH3 → 6.
     gpio.request(
         "rx_a",
         uses=("opa_p",),
-        const={"capture_dma": 5, "period_dma": 7},
+        const={"period_dma": 5, "high_dma": 7},
         doc="ring A receive, OPA positive input; TIM2_CH1 capture is the "
         "internal route, no GPIO spent on the comparator output (§2).",
     )
