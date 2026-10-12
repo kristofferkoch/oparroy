@@ -34,7 +34,8 @@ if not meson.is_cross_build()
       # custom_target scans no includes; list the header-only core by
       # hand or a header edit would rerun klee on stale bitcode.
       depend_files: [
-        'bits.hpp', 'cell.hpp', 'node.hpp', 'klee' / 'klee.hpp',
+        'bits.hpp', 'cell.hpp', 'node.hpp',
+        '..' / 'lib' / 'klee.hpp',
         '..' / 'lib' / 'range.hpp',
         '..' / 'lib' / 'span.hpp',
         '..' / 'lib' / 'verify.hpp',

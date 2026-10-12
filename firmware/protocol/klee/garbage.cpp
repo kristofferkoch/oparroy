@@ -8,12 +8,12 @@
 // (poisoned), not the node's own state() — an assertion that trusts the
 // implementation under test proves nothing (code-std.md#4-tests).
 
+#include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../../lib/verify.hpp"
 #include "../bits.hpp"
 #include "../cell.hpp"
 #include "../node.hpp"
-#include "klee.hpp"
 
 #include <cstdint>
 

@@ -5,8 +5,8 @@
 // legal cell is ever misclassified illegal (no false containment).
 
 #include "../cell.hpp"
+#include "../../lib/klee.hpp"
 #include "../bits.hpp"
-#include "klee.hpp"
 
 #include <cstdint>
 

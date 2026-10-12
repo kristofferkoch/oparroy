@@ -17,9 +17,8 @@
 //
 // Three personalities, one statement:
 // - KLEE bitcode (-DOPARROY_KLEE, firmware/protocol/meson.build):
-//   klee_report_error in KLEE_PROVE's shape (protocol/klee/klee.hpp) —
-//   the prover hunts for any path that reaches it. The intrinsic is
-//   re-declared here so lib/ stays below the harness layer. UNREACHABLE
+//   klee_report_error in KLEE_PROVE's shape (lib/klee.hpp, included
+//   below) — the prover hunts for any path that reaches it. UNREACHABLE
 //   is the one exception: it stays __builtin_unreachable() under KLEE.
 //   Spelling it klee_report_error puts a noreturn call after the
 //   switch, which changes clang 19's codegen enough to emit `freeze`
@@ -51,8 +50,7 @@
 // the tidy set (code-std.md#3-enforcement-split), matching KLEE_PROVE/FUZZ_PROVE.
 
 #if defined(OPARROY_KLEE)
-extern "C" [[noreturn]] void klee_report_error(const char* file, int line, const char* message,
-                                               const char* suffix);
+#include "klee.hpp"
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define VERIFY(condition)                                                                          \
     if (condition) {                                                                               \
