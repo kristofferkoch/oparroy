@@ -98,6 +98,17 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Tooling
 
+- **Bitwuzla backend for klee** (would unlock the full-width soft-runtime
+  proof): the node runtime's KLEE proof (firmware/node/klee/runtime.cpp)
+  exhausts the width-generic algorithm at 8 bits because the final
+  multiplier/divider equivalence query is a hard SAT instance for the
+  backends nixpkgs' klee 3.2 ships (measured: Z3 ~110 s for 16-bit
+  multiply, no result for 16-bit division or 32-bit anything in 5 min;
+  STP slower). Bitwuzla is the backend built for exactly these circuits
+  and upstream klee has support for it — a nixpkgs klee built with
+  bitwuzla would let the same harness run the actual 32/64-bit libcalls
+  over fully symbolic operands instead of proving the template at 8
+  bits and unit-testing the width edges.
 - **Content-addressed CI gating**: path-filter CI ("this change
   touches no C++, skip the firmware jobs") is fragile because
   the filter's idea of a gate's inputs drifts from the build's real

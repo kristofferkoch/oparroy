@@ -21,9 +21,10 @@ project('oparroy', 'cpp',
 # Freestanding flag set (code-std-cpp.md#1-language-and-toolchain) — the single source, replacing
 # scripts/freestanding-flags.sh. Meson targets get -std=c++23
 # -Wall -Wextra -Wpedantic -Werror from default_options above; custom
-# compiles (the KLEE bitcode targets in firmware/protocol) must compose
-# the full set by hand: ['-std=c++23', '-Wall', '-Wextra', '-Wpedantic',
-# '-Werror'] + freestanding_flags + repro_flags.
+# compiles (the KLEE bitcode targets in firmware/protocol and
+# firmware/node) must compose the full set by hand: ['-std=c++23',
+# '-Wall', '-Wextra', '-Wpedantic', '-Werror'] + freestanding_flags +
+# repro_flags.
 freestanding_flags = [
   '-ffreestanding',
   '-fno-exceptions',
@@ -50,10 +51,48 @@ repro_flags = [
 
 add_project_arguments(freestanding_flags + repro_flags, language: 'cpp')
 
+if not meson.is_cross_build()
+  # Configure-time existence check; proofs run through
+  # scripts/klee-prove.
+  klee = find_program('klee')
+
+  # Bitcode recipe: the meson-covered part of the freestanding set plus
+  # freestanding_flags + repro_flags composed by hand — see the
+  # freestanding_flags comment above. Lifetime markers are off: klee 3.2
+  # doesn't implement the intrinsic; they carry no semantics we need in
+  # proofs. The nix cc-wrapper appends its hardening bundle after these
+  # flags, so the compile runs at -O2 whether we want it or not — the
+  # vectorizers are the one -O2 pass klee 3.2 can't swallow
+  # (ShuffleVector, unimplemented), so they're off; the inliner's
+  # lifetime markers are dodged structurally (firmware/node/klee/
+  # runtime.cpp's prove_width comment).
+  klee_bitcode_flags = [
+    '-std=c++23', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
+  ] + freestanding_flags + repro_flags + [
+    # Marks the proof build for lib/verify.hpp: VERIFY becomes
+    # klee_report_error, so a reachable contract violation is a proof
+    # failure with a counterexample.
+    '-DOPARROY_KLEE',
+    '-Xclang', '-disable-lifetime-markers',
+    '-fno-vectorize', '-fno-slp-vectorize',
+    '-emit-llvm', '-c',
+  ]
+
+  # Every subdir's run_targets accumulate here; the alias is created
+  # after the last subdir.
+  klee_proofs = []
+endif
+
 subdir('firmware/lib')
 subdir('firmware/protocol')
 subdir('firmware/node')
 subdir('circuits')
+
+if not meson.is_cross_build()
+  # ninja klee-proofs: run every KLEE proof (protocol core, node
+  # runtime).
+  alias_target('klee-proofs', klee_proofs)
+endif
 
 # Reproducibility gate (DESIGN.md §8): builds every configuration twice
 # and compares artifact hashes — a mismatch is red like a failing test.
