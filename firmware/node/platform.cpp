@@ -28,17 +28,15 @@ namespace lib {
     // (verify.hpp spells out the mechanism).
     (void)location;
 
-    // Stop the strobe at its source, then pin PD3 low so a frozen-high
-    // AF output can't keep the charge pump fed. The watchdog engages
-    // bypass ~0.5 ms after the last edge (DESIGN.md §4) — the
-    // deliberate bypass-engage the hook contract asks for, not a hung
-    // loop masquerading as life.
+    // Stop the capture timer, then pin PD3 low: the strobe is
+    // software-toggled (main.cpp), so parking the loop already starves
+    // the charge pump — driving the pin low just keeps a frozen-high
+    // output from looking alive. The watchdog engages bypass ~0.5 ms
+    // after the last edge (DESIGN.md §4) — the deliberate
+    // bypass-engage the hook contract asks for, not a hung loop
+    // masquerading as life.
     tim2().ctlr1 = 0;
-    Gpio volatile& keepalive_port = gpio(pins::keepalive.port_base);
-    const uint32_t shift = 4u * pins::keepalive.bit;
-    keepalive_port.cfglr =
-        (keepalive_port.cfglr & ~(0xFu << shift)) | (gpio_cfglr_out_pp_10mhz << shift);
-    keepalive_port.bcr = 1u << pins::keepalive.bit;
+    gpio(pins::keepalive.port_base).bcr = 1u << pins::keepalive.bit;
 
     // Interrupts off, then park deliberately: by the time anything
     // could resume this core the watchdog has already routed the ring

@@ -106,7 +106,7 @@ if meson.is_cross_build()
   # runtime.cpp provides the freestanding four.
   ch32v003_ld = files('ch32v003.ld')
   node_elf = executable('node.elf',
-    ['runtime.cpp', 'startup.cpp', 'main.cpp', 'platform.cpp', pins_hpp],
+    ['runtime.cpp', 'startup.cpp', 'main.cpp', 'rx.cpp', 'platform.cpp', pins_hpp],
     cpp_args: [
       '-Os',
       '-ffunction-sections', '-fdata-sections',

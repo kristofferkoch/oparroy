@@ -31,6 +31,9 @@ SECTIONS {
     .rodata : {
         *(.srodata .srodata.*)
         *(.rodata .rodata.*)
+        /* .data's load address follows this section; startup copies it
+         * a word at a time, so the LMA must be word-aligned. */
+        . = ALIGN(4);
     } > FLASH
 
     /* .data runs from RAM, loads from flash; startup copies
@@ -47,6 +50,7 @@ SECTIONS {
         _edata = .;
     } > RAM AT > FLASH
     _sidata = LOADADDR(.data);
+    ASSERT(_sidata % 4 == 0, ".data load address must be word-aligned (word-wise startup copy)")
 
     .bss : {
         . = ALIGN(4);

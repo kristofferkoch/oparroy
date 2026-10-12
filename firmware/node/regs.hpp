@@ -36,6 +36,9 @@ inline constexpr uint32_t rcc_cfgr0_sw_pll = 0x2;   // SW[1:0]=10: PLL as SYSCLK
 inline constexpr uint32_t rcc_cfgr0_sws_mask = 0xC; // SWS[1:0] at [3:2]
 inline constexpr uint32_t rcc_cfgr0_sws_pll = 0x8;
 
+// RCC_AHBPCENR clock gate (RM §3.4.6; resets to 0x00000004 — SRAMEN).
+inline constexpr uint32_t rcc_ahbpcenr_dma1en = 1u << 0;
+
 // RCC_APB2PCENR / RCC_APB1PCENR clock gates (RM §3.4.7/§3.4.8).
 inline constexpr uint32_t rcc_apb2pcenr_afioen = 1u << 0;
 inline constexpr uint32_t rcc_apb2pcenr_iopaen = 1u << 2;
@@ -66,8 +69,10 @@ struct Gpio {
 
 // CFGLR nibble encodings (RM §7.3.1.1): MODE[1:0] in the low half (00
 // input, 01 = 10 MHz, 10 = 2 MHz, 11 = 30 MHz), CNF[1:0] in the high
-// half (output: 00 push-pull, 01 open-drain, 10 AF push-pull,
+// half (input: 00 analog, 01 floating, 10 pulled — OUTDR picks up (1)
+// vs down (0); output: 00 push-pull, 01 open-drain, 10 AF push-pull,
 // 11 AF open-drain).
+inline constexpr uint32_t gpio_cfglr_in_pulled = 0x8;
 inline constexpr uint32_t gpio_cfglr_out_pp_10mhz = 0x1;
 inline constexpr uint32_t gpio_cfglr_out_af_pp_10mhz = 0x9;
 
@@ -94,13 +99,36 @@ struct Tim2 {
 
 // TIM2_CTLR1 (RM §11.4.1).
 inline constexpr uint32_t tim2_ctlr1_cen = 1u << 0;
-// TIM2_CHCTLR1 channel-2 output fields (RM §11.4.7): OC2M[14:12] —
-// 110 is PWM mode 1 (active while CNT < CVR); CC2S=00 (output) is the
-// zero encoding.
-inline constexpr uint32_t tim2_chctlr1_oc2m_pwm1 = 0b110u << 12;
-// TIM2_CCER (RM §11.4.9): CC2E output enable; CC2P=0 (active high) is
-// the zero encoding.
+
+// TIM2_SMCFGR (RM §11.4.3): TS[6:4]=101 selects TI1FP1 as the slave
+// trigger, SMS[2:0]=100 resets CNT on that trigger — the PWM-input
+// capture's period measurement (RM §11.3.4).
+inline constexpr uint32_t tim2_smcfgr_ts_ti1fp1 = 0b101u << 4;
+inline constexpr uint32_t tim2_smcfgr_sms_reset = 0b100u;
+
+// TIM2_CHCTLR1 input-capture fields (RM §11.4.7): CC1S=01 maps CH1 to
+// TI1, CC2S=10 maps CH2 to TI1 (the PWM-input pair shares TI1);
+// ICxF=0011 is fCK_INT with N=8 — the input glitch filter (§2).
+inline constexpr uint32_t tim2_chctlr1_cc1s_in_ti1 = 0b01u;
+inline constexpr uint32_t tim2_chctlr1_ic1f_fckint_n8 = 0b0011u << 4;
+inline constexpr uint32_t tim2_chctlr1_cc2s_in_ti1 = 0b10u << 8;
+inline constexpr uint32_t tim2_chctlr1_ic2f_fckint_n8 = 0b0011u << 12;
+
+// TIM2_CCER (RM §11.4.9): CC1E/CC2E capture enables; CC1P=0 (rising)
+// is the zero encoding, CC2P=1 puts CH2 on the falling edge — period
+// on CH1, high time on CH2 (RM §11.3.4).
+inline constexpr uint32_t tim2_ccer_cc1e = 1u << 0;
 inline constexpr uint32_t tim2_ccer_cc2e = 1u << 4;
+inline constexpr uint32_t tim2_ccer_cc2p = 1u << 5;
+
+// TIM2_DMAINTENR (RM §11.4.4): capture DMA request enables.
+inline constexpr uint32_t tim2_dmaintenr_cc1de = 1u << 9;
+inline constexpr uint32_t tim2_dmaintenr_cc2de = 1u << 10;
+
+// TIM2_INTFR (RM §11.4.5): capture-overcapture flags (a second capture
+// before the first was drained), write-0-clear.
+inline constexpr uint32_t tim2_intfr_cc1of = 1u << 9;
+inline constexpr uint32_t tim2_intfr_cc2of = 1u << 10;
 
 // SysTick, base 0xE000F000 (PM §4 Table 4-1) — a core peripheral, hence
 // not in the RM (quirks.md §Clock).
@@ -117,6 +145,45 @@ inline constexpr uint32_t stk_ctlr_ste = 1u << 0;        // counter enable
 inline constexpr uint32_t stk_ctlr_stie = 1u << 1;       // interrupt enable
 inline constexpr uint32_t stk_ctlr_stclk_hclk = 1u << 2; // 1 = HCLK, 0 = HCLK/8
 inline constexpr uint32_t stk_ctlr_stre = 1u << 3;       // auto-reload at CMPR
+
+// One DMA channel's register block, at 0x40020008 + (channel−1)×0x14
+// (RM §8.3.3). The shared DMA_INTFR/DMA_INTFCR at the block base are
+// not modeled: the RX path polls CNTR and TIM2's CCxOF instead
+// (firmware/node/rx.cpp).
+struct DmaChannel {
+    uint32_t cfgr;  // 0x00
+    uint32_t cntr;  // 0x04 — transfers remaining; reloads in CIRC mode
+    uint32_t paddr; // 0x08
+    uint32_t maddr; // 0x0C
+};
+
+// DMA_CFGRx (RM §8.3.3): peripheral-to-memory is DIR=0, 8-bit
+// PSIZE/MSIZE the zero encoding.
+inline constexpr uint32_t dma_cfgr_en = 1u << 0;
+inline constexpr uint32_t dma_cfgr_circ = 1u << 5;
+inline constexpr uint32_t dma_cfgr_minc = 1u << 7;
+inline constexpr uint32_t dma_cfgr_psize_16 = 0b01u << 8;
+inline constexpr uint32_t dma_cfgr_msize_16 = 0b01u << 10;
+inline constexpr uint32_t dma_cfgr_pl_very_high = 0b11u << 12;
+
+// Extended configuration unit, base 0x40023800 (RM ch.17 Table 17-1).
+struct Exten {
+    uint32_t ctr; // 0x00
+};
+
+// EXTEN_CTR OPA fields (RM §17.2.1). The register also carries LDOTRIM
+// and the lock-up monitor (LKUPEN resets to 1, notes/opa.md) — access
+// is always read-modify-write.
+inline constexpr uint32_t exten_ctr_opa_en = 1u << 16;
+inline constexpr uint32_t exten_ctr_opa_nsel = 1u << 17;
+inline constexpr uint32_t exten_ctr_opa_psel = 1u << 18;
+
+// (port, bit, nibble) order mirrors the CFGLR layout; NOLINTNEXTLINE for the two narrow ints.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+inline void configure_pin(Gpio volatile& port, uint8_t bit, uint32_t nibble) {
+    const uint32_t shift = 4u * bit;
+    port.cfglr = (port.cfglr & ~(0xFu << shift)) | (nibble << shift);
+}
 
 [[nodiscard]] inline Rcc volatile& rcc() {
     // MMIO boundary: the RCC register block (RM §3.4 Table 3-1).
@@ -147,4 +214,19 @@ inline constexpr uint32_t stk_ctlr_stre = 1u << 3;       // auto-reload at CMPR
     // MMIO boundary: the core SysTick block (PM §4 Table 4-1).
     // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
     return *reinterpret_cast<SysTick volatile*>(0xE000F000u);
+}
+
+[[nodiscard]] inline DmaChannel volatile& dma_channel(uint32_t channel) {
+    // MMIO boundary: one DMA channel's register block (RM §8.3.3); the
+    // channel number is always a pins::*_dma constant (RM §8.2.3
+    // Table 8-2 maps the peripherals to channels).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
+    return *reinterpret_cast<DmaChannel volatile*>(0x40020008u + ((channel - 1u) * 0x14u));
+}
+
+[[nodiscard]] inline Exten volatile& exten() {
+    // MMIO boundary: the extended configuration unit (RM ch.17
+    // Table 17-1).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
+    return *reinterpret_cast<Exten volatile*>(0x40023800u);
 }
