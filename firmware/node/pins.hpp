@@ -28,8 +28,8 @@ struct Pad {
 // on the comparator output (§2).
 inline constexpr Pad rx_a{.port_base = gpio_a_base, .bit = 2, .package_pin = 6};
 inline constexpr uint8_t rx_a_opa_p = 0;
-inline constexpr uint8_t rx_a_capture_dma = 5;
-inline constexpr uint8_t rx_a_period_dma = 7;
+inline constexpr uint8_t rx_a_period_dma = 5;
+inline constexpr uint8_t rx_a_high_dma = 7;
 
 // rx_b — ring B receive, OPA positive input; source select is firmware policy via OPA_PSEL (§3).
 inline constexpr Pad rx_b{.port_base = gpio_d_base, .bit = 7, .package_pin = 4};
