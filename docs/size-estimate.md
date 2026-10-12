@@ -59,4 +59,15 @@ accelerometer paths all ship in every node.
 
 When the real numbers exist, append them here:
 
-- (first linked node image): — KB flash, — KB RAM
+- First linked node image (bring-up slice: startup/vectors/RCC,
+  keep-alive strobe, `verify_failed` hook — no protocol, RX/TX, vsync,
+  or app I/O yet): **604 B flash (3.7 % of 16 KB), 0 B RAM** at -Os.
+  Breakdown: vector table 152 B, reset + .data/.bss init 116 B,
+  `node_main` (RCC + strobe + heartbeat) 184 B, failure path 100 B,
+  memcpy 52 B — the mul/div runtime is gc-sections'd out until
+  something divides. Against the ~0.4 KB estimated for the landed
+  lines (startup/vectors/RCC 0.3 + strobe 0.1): the delta is the
+  never-estimated failure path and heartbeat. The envelope's real
+  miss was process, not code — the build defaulted to -O0 (1228 B)
+  until -Os was settled (DESIGN.md §8). Verdict and headroom
+  unchanged.
