@@ -14,7 +14,8 @@
 // at all in this image. extern "C", never returns
 // (code-std-cpp.md#1-language-and-toolchain).
 
-#include "pins.hpp"
+#include <pins.hpp>
+
 #include "regs.hpp"
 
 #include <cstdint>

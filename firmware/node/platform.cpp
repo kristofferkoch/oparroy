@@ -12,8 +12,9 @@
 #if defined(OPARROY_TARGET)
 
 #include "../lib/verify.hpp"
-#include "pins.hpp"
 #include "regs.hpp"
+
+#include <pins.hpp>
 
 #include <cstdint>
 
