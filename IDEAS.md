@@ -109,6 +109,18 @@ real work — **move**, don't copy. Reference, don't duplicate.
   bitwuzla would let the same harness run the actual 32/64-bit libcalls
   over fully symbolic operands instead of proving the template at 8
   bits and unit-testing the width edges.
+- **Pinned proof runs for hour-scale proofs**: once proofs grow past CI
+  time (a full-width runtime proof under bitwuzla, bigger state
+  machines), an 8-hour proof is fine — but CI must not run it. Instead
+  the proof runs offline and a commit pins the *result*: the klee
+  output (run stats, "0 error files"), the exact inputs (git SHA,
+  flake.lock rev, bitcode hash, entry point, klee flags), and the
+  verdict. CI then runs only the cheap check — recompute the input hash
+  from the tree and compare against the pin — so a source change that
+  invalidates a pinned proof fails loudly ("proof stale: re-run and
+  re-pin") instead of silently proving yesterday's code. Same
+  discipline as the checked-in pins.hpp golden policed by the pytest
+  pair, lifted from generation to verification.
 - **Content-addressed CI gating**: path-filter CI ("this change
   touches no C++, skip the firmware jobs") is fragile because
   the filter's idea of a gate's inputs drifts from the build's real
