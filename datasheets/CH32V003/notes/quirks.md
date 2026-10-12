@@ -220,6 +220,15 @@ against silicon are marked **unverified**.
 - **OPA pins collide with crystal and reset** — OPA0 inputs are PA1(OSCI)/
   PA2(OSCO): OPA0 and an HSE crystal are mutually exclusive. OPA1 uses
   PD0/PD7: conflicts with NRST if PD7 is reset-enabled. DS v1.8 pin table.
+- **The OPA→TIM2_CH1 internal route has no mux bit** — RM v1.9 ch.17
+  documents only OPA_EN/OPA_PSEL/OPA_NSEL in EXTEND_CTR; nothing enables
+  or steers the comparator output into TIM2_CH1. The route appears only
+  in the DS0 §1.1 system block diagram (OPAO → Compare → TIM2_CH1) and
+  DS0 §1.4.17's "directly into the TIMx input channel". The node
+  firmware assumes it is hardwired and always live (TIM2_CH1's pin PD4
+  stays an unused floating input). **Unverified** — bench-confirm on the
+  first RX bring-up; if the route needs an undocumented enable, the
+  capture stream will read as line silence.
 
 ## Timers
 
