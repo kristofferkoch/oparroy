@@ -4,7 +4,7 @@
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
       systems = [
         # klee is x86_64-linux only in nixpkgs; single-platform until a
@@ -12,22 +12,27 @@
         "x86_64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
+      pkgsFor = system: import nixpkgs {
+        inherit system;
+        config = {
+          # klee 3.2 is marked broken: upstream has only partial
+          # LLVM >= 16 support, so nixpkgs builds it against LLVM 19
+          # with ~23% of its own test suite xfailed (POSIX-runtime,
+          # UBSan features — the core symbolic engine is intact).
+          # Accept that; oparroy's harnesses exercise the core.
+          problems.handlers.klee.broken = "ignore";
+        };
+      };
     in
     {
+      packages = forAllSystems (system: {
+        minichlink = (pkgsFor system).callPackage ./nix/minichlink.nix { };
+      });
+
       devShells = forAllSystems (
         system:
         let
-          pkgs = import nixpkgs {
-            inherit system;
-            config = {
-              # klee 3.2 is marked broken: upstream has only partial
-              # LLVM >= 16 support, so nixpkgs builds it against LLVM 19
-              # with ~23% of its own test suite xfailed (POSIX-runtime,
-              # UBSan features — the core symbolic engine is intact).
-              # Accept that; oparroy's harnesses exercise the core.
-              problems.handlers.klee.broken = "ignore";
-            };
-          };
+          pkgs = pkgsFor system;
           # Must match the LLVM that nixpkgs' klee is built against, or
           # klee rejects our bitcode (verified: klee 3.2 → LLVM 19).
           llvmPkgs = pkgs.llvmPackages_19;
@@ -45,6 +50,9 @@
               # Node toolchain (CH32V003, RV32EC) — smoke-tested with
               # -march=rv32ec -mabi=ilp32e.
               pkgs.pkgsCross.riscv64-embedded.buildPackages.gcc
+              # WCH-LinkE programmer for the node's SWIO debug port
+              # (PD1) — flashing per DESIGN.md §6.
+              self.packages.${system}.minichlink
               # Supervisor toolchain (RP2040).
               pkgs.pkgsCross.arm-embedded.buildPackages.gcc
               # Host bitcode build (KLEE input) + static analysis +
@@ -99,6 +107,7 @@
               export PYTHONPATH=${pkgs.kicad.base}/lib/python${pkgs.python314.pythonVersion}/site-packages''${PYTHONPATH:+:$PYTHONPATH}
               echo "== oparroy dev shell =="
               riscv64-none-elf-gcc --version | head -1
+              minichlink -h 2>&1 | head -1
               arm-none-eabi-gcc --version | head -1
               clang --version | head -1
               clang-tidy --version | grep -E 'LLVM version' | head -1
