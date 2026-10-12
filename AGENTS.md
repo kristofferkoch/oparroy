@@ -22,6 +22,12 @@
   commit, but when it carries separable changes — a parser feature,
   a rule built on it, a doc note — split it into one commit per
   concept so review, cherry-pick, and revert stay cheap.
+- **Rehearse CI input declarations locally.** Every CI gate
+  sparse-checks-out only its declared inputs, so an undeclared
+  dependency passes locally and fails CI. After adding files or
+  editing the `changes` filters in `.github/workflows/ci.yml`, run
+  `scripts/check-sparse <gate>` to rehearse the gate against a sparse
+  worktree before pushing.
 
 ## Documentation — the IDEAS / KANBAN / DESIGN split
 

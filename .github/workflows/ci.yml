@@ -27,6 +27,10 @@
 # unvalidated. The declaration is enforced, not just consulted: each
 # gate sparse-checks-out only its own inputs, so a dependency the
 # filter doesn't declare fails the gate instead of silently passing.
+# Rehearse a gate's sparse set locally with `scripts/check-sparse
+# <gate>` before pushing filter edits — it parses the sparse-checkout
+# blocks below and runs the gate's commands in a sparse worktree, so
+# the run steps here and the script's defaults must stay in sync.
 # lint has no filter — it checks every file type and is cheap — so a
 # change that matches nothing else (docs, boards/lib, the root
 # markdown) still gets linted, and lint keeps a full checkout.
@@ -79,11 +83,13 @@ jobs:
               # test_dsl_spice.py copies circuits/lib and runs the
               # watchdog-chargepump bench; test_dsl_spice.py and
               # test_status_leds.py drive benches via scripts/sim-run;
+              # test_check_sparse.py drives scripts/check-sparse;
               # test_node_pins.py reads the committed firmware copy;
               # test_dsl_layout_check.py parses the node board;
               # test_dsl_parts_db.py asserts datasheet dirs exist.
               - 'circuits/**'
               - 'scripts/sim-run'
+              - 'scripts/check-sparse'
               - 'firmware/node/pins.hpp'
               - 'boards/node/**'
               - 'datasheets/**'
@@ -133,13 +139,17 @@ jobs:
     steps:
       # Sparse checkout: only this gate's declared inputs are present,
       # so a dependency the changes filter doesn't know about fails
-      # here instead of silently passing. Mirror of the filter minus
-      # ci.yml (non-cone mode: root files need explicit entries; uv
-      # needs README.md via pyproject's readme field).
+      # here instead of silently passing. Mirror of the filter
+      # (non-cone mode: root files need explicit entries; uv needs
+      # README.md via pyproject's readme field; test_check_sparse.py
+      # parses ci.yml itself). Keep the block shape
+      # (`sparse-checkout: |` at 10 spaces, patterns at 12) —
+      # scripts/check-sparse parses it for local rehearsal.
       - uses: actions/checkout@v5
         with:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
+            .github/workflows/ci.yml
             flake.nix
             flake.lock
             README.md
@@ -151,6 +161,7 @@ jobs:
             design/**
             circuits/**
             scripts/sim-run
+            scripts/check-sparse
             firmware/node/pins.hpp
             boards/node/**
             datasheets/**

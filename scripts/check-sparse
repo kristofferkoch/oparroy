@@ -1,0 +1,161 @@
+#!/bin/sh
+# Sparse-gate rehearsal: run one CI gate against a worktree that contains
+# only that gate's declared inputs, the same failure mode CI enforces via
+# actions/checkout sparse-checkout (.github/workflows/ci.yml). A
+# dependency the changes filter doesn't declare is absent here too, so
+# it fails on the laptop instead of after a push.
+#
+# The pattern lists are parsed out of the working tree's ci.yml — that
+# file stays the single source of truth, and uncommitted edits to it are
+# exactly what gets rehearsed. Formatting contract the parser relies on:
+# the job key at two-space indent (`  <gate>:`), `sparse-checkout: |` at
+# ten spaces, patterns at twelve. File content materializes from HEAD
+# (the branch tip is what CI sees); commit source edits before
+# rehearsing them.
+#
+# Usage:
+#   scripts/check-sparse --list <gate>     print the gate's sparse patterns
+#   scripts/check-sparse [--keep] <gate> [bench] [-- cmd...]
+#
+# Gates: pytest firmware sim rv32ec reproducibility. `sim` takes an
+# optional bench (a ci.yml matrix leg, e.g. watchdog-chargepump-tb_glitch);
+# without one it runs every bench via the `sim` alias target. `-- cmd...`
+# replaces the gate's default commands (which mirror ci.yml's run steps —
+# keep both in sync). --keep retains the sparse worktree and prints its
+# path instead of cleaning up.
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ci="$root/.github/workflows/ci.yml"
+gates="pytest firmware sim rv32ec reproducibility"
+
+usage() {
+    sed -n '2,/^set -eu$/p' "$0" | sed 's/^#\{0,1\} \{0,1\}//; /^set -eu$/d'
+    exit "${1:-1}"
+}
+
+keep=0
+list=0
+while [ $# -gt 0 ]; do
+    case $1 in
+        --keep) keep=1; shift ;;
+        --list) list=1; shift ;;
+        -h | --help) usage 0 ;;
+        *) break ;;
+    esac
+done
+
+[ $# -ge 1 ] || usage
+gate=$1
+shift
+case " $gates " in
+    *" $gate "*) ;;
+    *) echo "check-sparse: unknown gate '$gate' (one of: $gates)" >&2; exit 1 ;;
+esac
+
+bench=
+if [ $# -gt 0 ] && [ "$1" != "--" ]; then
+    [ "$gate" = sim ] || {
+        echo "check-sparse: only the sim gate takes a bench argument" >&2
+        exit 1
+    }
+    bench=$1
+    shift
+fi
+if [ $# -gt 0 ]; then
+    [ "$1" = "--" ] || usage
+    shift
+fi
+
+# Extract the gate's sparse-checkout literal block from ci.yml.
+patterns=$(awk -v job="$gate" '
+    $0 == "  " job ":" { injob = 1; next }
+    injob && /^  [^ ]/ { exit }
+    injob && $0 == "          sparse-checkout: |" { inblock = 1; next }
+    inblock && /^            / { sub(/^            /, ""); print; next }
+    inblock { exit }
+' "$ci")
+
+if [ -z "$patterns" ]; then
+    echo "check-sparse: no sparse-checkout block found for gate '$gate'" >&2
+    echo "check-sparse: ci.yml's shape changed? (job at 2-space indent," >&2
+    echo "check-sparse: 'sparse-checkout: |' at 10, patterns at 12)" >&2
+    exit 1
+fi
+
+if [ "$list" -eq 1 ]; then
+    printf '%s\n' "$patterns"
+    exit 0
+fi
+
+# Materialize the sparse worktree. The patterns file goes in the
+# worktree-private git dir and the sparse config is passed per-command
+# with -c, so the shared repo config — and every other worktree's
+# checkout — is untouched.
+tmp=$(mktemp -d)
+wt=$tmp/wt
+cleanup() {
+    if [ "$keep" -eq 1 ]; then
+        echo "check-sparse: kept sparse worktree at $wt" >&2
+        echo "check-sparse: remove with: git worktree remove --force $wt" >&2
+    else
+        git worktree remove --force "$wt" 2> /dev/null || rm -rf "$wt"
+        rm -rf "$tmp"
+    fi
+}
+trap cleanup EXIT
+
+git worktree add --no-checkout "$wt" HEAD > /dev/null
+gitdir=$(git -C "$wt" rev-parse --git-dir)
+case $gitdir in /*) ;; *) gitdir=$wt/$gitdir ;; esac
+mkdir -p "$gitdir/info"
+printf '%s\n' "$patterns" > "$gitdir/info/sparse-checkout"
+git -C "$wt" -c core.sparseCheckout=true -c core.sparseCheckoutCone=false \
+    checkout HEAD > /dev/null
+
+echo "check-sparse: $gate gate, $(printf '%s\n' "$patterns" | wc -l | tr -d ' ') patterns, worktree $wt" >&2
+
+if [ $# -gt 0 ]; then
+    (cd "$wt" && "$@")
+    exit
+fi
+
+case $gate in
+    pytest)
+        (cd "$wt" && nix develop -c sh -c 'uv sync --frozen && uv run --frozen pytest')
+        ;;
+    firmware)
+        (
+            cd "$wt"
+            nix develop -c meson setup build/host --native-file meson/native/clang.ini
+            nix develop -c ninja -C build/host
+            nix develop -c meson test -C build/host --print-errorlogs
+            nix develop -c ninja -C build/host klee-proofs fuzz
+        )
+        ;;
+    sim)
+        (
+            cd "$wt"
+            nix develop -c meson setup build/host --native-file meson/native/clang.ini
+            if [ -n "$bench" ]; then
+                nix develop -c ninja -C build/host "sim-$bench"
+            else
+                nix develop -c ninja -C build/host sim
+            fi
+        )
+        ;;
+    rv32ec)
+        (
+            cd "$wt"
+            nix develop -c meson setup build/rv32ec --cross-file meson/cross/rv32ec.ini
+            nix develop -c ninja -C build/rv32ec
+        )
+        ;;
+    reproducibility)
+        (
+            cd "$wt"
+            nix develop -c meson setup build/host --native-file meson/native/clang.ini
+            nix develop -c ninja -C build/host check-reproducible
+        )
+        ;;
+esac
