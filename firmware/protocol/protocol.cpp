@@ -9,6 +9,7 @@
 #include "bits.hpp"
 #include "cell.hpp"
 #include "node.hpp"
+#include "rx.hpp"
 
 #include <cstdint>
 
@@ -62,6 +63,80 @@ namespace {
 } // namespace
 
 static_assert(frame_cap_mutes());
+
+// RX burst decode (rx.hpp): a scripted walk over the decoder's phases —
+// pre-sync garbage dropped, marker resyncs, a high/period pair decodes
+// one bit, lockstep loss contains, the silence backstop swallows the
+// aliased across-gap period without a second break.
+namespace {
+
+    constexpr bool rx_decode_phases() {
+        const uint8_t telemetry_byte = 0;
+        Node node{NodeConfig{.slot_index = 0xFFFF, .slot_bits = 1},
+                  BitSlice{.bytes = lib::Span<const uint8_t>{&telemetry_byte, 1}, .bit_count = 8}};
+        RxDecoder decoder{node};
+
+        // Hunt: captures before the first marker never reach the node.
+        if (decoder.on_high(t1h_ticks) != TxAction::Idle ||
+            decoder.on_period(cell_period_nominal_ticks) != TxAction::Idle ||
+            node.state() != NodeState::Hunt) {
+            return false;
+        }
+
+        // The marker resyncs (on_break returns Idle — a break
+        // propagates as line idle), then a legal pair decodes a 1.
+        if (decoder.on_period(break_min_ticks) != TxAction::Idle ||
+            node.state() != NodeState::Forward || decoder.on_high(t1h_ticks) != TxAction::Idle ||
+            decoder.on_period(cell_period_nominal_ticks) != TxAction::EmitOne ||
+            node.bit_count() != 1) {
+            return false;
+        }
+
+        // A 0 cell, then lockstep loss (a period with no pending high):
+        // containment mutes the node until the next marker.
+        if (decoder.on_high(t0h_ticks) != TxAction::Idle ||
+            decoder.on_period(cell_period_nominal_ticks) != TxAction::EmitZero ||
+            decoder.on_period(cell_period_nominal_ticks) != TxAction::Idle ||
+            node.state() != NodeState::Mute || decoder.phase() != RxDecoder::Phase::Hunt) {
+            return false;
+        }
+
+        // The next marker resyncs both.
+        if (decoder.on_period(break_min_ticks) != TxAction::Idle ||
+            node.state() != NodeState::Forward) {
+            return false;
+        }
+
+        // The silence backstop: a ≥ CNT-wrap gap delivers the break and
+        // GapDiscard swallows the aliased across-gap period (60 ticks —
+        // legal-looking, never decoded); the next pair decodes clean.
+        if (decoder.on_silence() != TxAction::Idle || node.bit_count() != 0 ||
+            decoder.on_period(cell_period_nominal_ticks) != TxAction::Idle ||
+            decoder.on_high(t1h_ticks) != TxAction::Idle ||
+            decoder.on_period(cell_period_nominal_ticks) != TxAction::EmitOne ||
+            node.bit_count() != 1) {
+            return false;
+        }
+
+        // The frame's last cell never pairs: its high is pending when
+        // the next marker arrives, and the marker just resyncs.
+        if (decoder.on_high(t0h_ticks) != TxAction::Idle ||
+            decoder.on_period(5000) != TxAction::Idle || node.bit_count() != 0) {
+            return false;
+        }
+
+        // Overrun containment: an illegal cell mutes, Hunt resyncs.
+        if (decoder.on_high(t1h_ticks) != TxAction::Idle ||
+            decoder.on_overrun() != TxAction::Idle || node.state() != NodeState::Mute ||
+            decoder.phase() != RxDecoder::Phase::Hunt) {
+            return false;
+        }
+        return true;
+    }
+
+} // namespace
+
+static_assert(rx_decode_phases());
 
 // Foundation-library cells (firmware/lib/range.hpp, static_vector.hpp):
 // constexpr-proved here, the same TU that hosts Span's asserts.

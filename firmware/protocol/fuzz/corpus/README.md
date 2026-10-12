@@ -35,3 +35,15 @@ each), then events; a reset event takes one extra node-index byte.
 - `three-node-frames` — two clean frames through the chain (echo +
   stamping)
 - `faults` — illegal cells, a per-node brown-out, breaks
+
+## rx/
+
+Prefix: `tele0 tele1 slot_index(u16) slot_bits(u8, mapped to 1+x%16)`,
+then 3-byte events: selector + payload u16 LE. Selector % 8: 0–3
+period capture, 4–5 high capture, 6 control (payload % 3: silence /
+overrun / resync), 7 brown-out reset.
+
+- `clean-frames` — markers and nominal cells through the pairing path
+- `faults` — lockstep loss containment, silence backstop + alias
+  swallow, marker resync
+- `overrun-resync` — overrun containment, resync, brown-out
