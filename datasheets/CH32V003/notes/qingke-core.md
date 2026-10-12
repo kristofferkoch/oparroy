@@ -38,4 +38,22 @@ manual, vendored as `QingKeV2PM-processor-manual-v1.3.pdf`); RM ch.6.
   ([quirks.md](quirks.md) §EXTI).
 - VTF: two channels bypass vector-table lookup entirely (PM §3.5).
 
+## SysTick
+
+- 32-bit up-counter, memory-mapped (PM §4 Table 4-1): `STK_CTLR`
+  0xE000F000, `STK_SR` 0xE000F004, `STK_CNTR` 0xE000F008 (the full
+  32-bit count), `STK_CMPR` 0xE000F010. Absent from the DS and RM —
+  core peripheral (quirks.md §Clock).
+- `STK_CTLR` (PM §4 Table 4-2): bit 0 STE (counter enable), bit 1 STIE
+  (interrupt enable), bit 2 STCLK (1 = HCLK, 0 = HCLK/8 — the reset
+  default, quirks.md §Clock), bit 3 STRE (1 = reload from 0 at compare
+  match; **0 = keep counting up**, i.e. free-running with natural 2^32
+  wrap), bit 31 SWIE (software-interrupt trigger, self-clearing
+  required).
+- `STK_SR` bit 0 CNTIF: compare-match flag, **write 0 to clear**,
+  writing 1 is invalid (PM §4 Table 4-3) — inverted from the usual
+  W1C convention.
+- Free-running at 48 MHz HCLK the counter wraps every ~89.5 s; elapsed
+  = `now - last` (uint32) is wrap-safe.
+
 Quirks: see [quirks.md](quirks.md) §Clock / RCC and §EXTI / interrupts.
