@@ -48,9 +48,9 @@ concurrency:
 jobs:
   # Change detection for the conditional gates: each filter below is
   # one gate's declared inputs, and the gate runs only when a PR
-  # touches a match. The shared prefix (this workflow, the flake) is
-  # in every filter — a CI or toolchain change revalidates
-  # everything; keep the prefix lines identical across filters.
+  # touches a match. The shared prefix (this workflow, the flake and
+  # its nix/ modules) is in every filter — a CI or toolchain change
+  # revalidates everything; keep the prefix lines identical across filters.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -74,6 +74,7 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'flake.nix'
               - 'flake.lock'
+              - 'nix/**'
               - 'pyproject.toml'
               - 'uv.lock'
               - '.python-version'
@@ -97,6 +98,7 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'flake.nix'
               - 'flake.lock'
+              - 'nix/**'
               - 'firmware/**'
               - 'meson.build'
               - 'meson.options'
@@ -107,6 +109,7 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'flake.nix'
               - 'flake.lock'
+              - 'nix/**'
               - 'circuits/**'
               - 'meson.build'
               - 'meson.options'
@@ -116,6 +119,7 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'flake.nix'
               - 'flake.lock'
+              - 'nix/**'
               - 'firmware/**'
               - 'meson.build'
               - 'meson.options'
@@ -124,6 +128,7 @@ jobs:
               - '.github/workflows/ci.yml'
               - 'flake.nix'
               - 'flake.lock'
+              - 'nix/**'
               - 'firmware/**'
               - 'meson.build'
               - 'meson.options'
@@ -152,6 +157,7 @@ jobs:
             .github/workflows/ci.yml
             flake.nix
             flake.lock
+            nix/**
             README.md
             pyproject.toml
             uv.lock
@@ -195,6 +201,7 @@ jobs:
           sparse-checkout: |
             flake.nix
             flake.lock
+            nix/**
             meson.build
             meson.options
             meson/**
@@ -257,6 +264,7 @@ jobs:
           sparse-checkout: |
             flake.nix
             flake.lock
+            nix/**
             meson.build
             meson.options
             meson/**
@@ -295,6 +303,7 @@ jobs:
           sparse-checkout: |
             flake.nix
             flake.lock
+            nix/**
             meson.build
             meson.options
             meson/**
@@ -335,6 +344,7 @@ jobs:
           sparse-checkout: |
             flake.nix
             flake.lock
+            nix/**
             meson.build
             meson.options
             meson/**
