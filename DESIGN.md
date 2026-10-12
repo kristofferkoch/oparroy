@@ -1522,6 +1522,8 @@ resolves each is in KANBAN.md):
   informational only: 82% of 122 branches at landing). Whether to gate
   the build on a threshold,
   and at what red line, is undecided; the infrastructure supports it
-  (`llvm-cov export` JSON) once the suite matures. Also open: whether
-  the shipped node image builds at the measured `-O2` or at `-Os`
-  (16 KB flash). No card yet.
+  (`llvm-cov export` JSON) once the suite matures. The shipped node
+  image's optimization level is settled separately: `-Os` (the 16 KB
+  flash budget, [size-estimate.md](docs/size-estimate.md)); the `-O2`
+  release build stays the host-side coverage measurement
+  configuration.

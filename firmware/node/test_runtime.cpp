@@ -1,15 +1,18 @@
-// Host unit tests for the rv32ec soft integer runtime (runtime.cpp) —
-// named cases over the TEST harness (firmware/lib/test.hpp), same
-// pattern as firmware/lib/test_foundation.cpp. The implementations are
-// shift/subtract loops, so the suite's job is the edges: divide-by-zero
-// follows RISC-V hardware semantics (quotient all-ones, remainder =
-// dividend), signed overflow (INT_MIN / -1) wraps to the dividend,
-// signed division truncates toward zero, and unsigned results wrap mod
-// 2^N. Cases stay small: the EXPECT if/else chain counts against
+// Host unit tests for the rv32ec soft runtime (runtime.cpp) — named
+// cases over the TEST harness (firmware/lib/test.hpp), same pattern as
+// firmware/lib/test_foundation.cpp. The multiply/divide implementations
+// are shift/subtract loops, so the suite's job is the edges:
+// divide-by-zero follows RISC-V hardware semantics (quotient all-ones,
+// remainder = dividend), signed overflow (INT_MIN / -1) wraps to the
+// dividend, signed division truncates toward zero, and unsigned results
+// wrap mod 2^N. For the mem functions the edges are memmove's overlap
+// directions, zero-length ranges, and memset's value truncation.
+// Cases stay small: the EXPECT if/else chain counts against
 // readability-function-cognitive-complexity.
 
 #include "../lib/test.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 
@@ -25,6 +28,10 @@ extern "C" uint64_t __udivdi3(uint64_t, uint64_t);
 extern "C" uint64_t __umoddi3(uint64_t, uint64_t);
 extern "C" int64_t __divdi3(int64_t, int64_t);
 extern "C" int64_t __moddi3(int64_t, int64_t);
+extern "C" void* memcpy(void*, const void*, std::size_t);
+extern "C" void* memmove(void*, const void*, std::size_t);
+extern "C" void* memset(void*, int, std::size_t);
+extern "C" int memcmp(const void*, const void*, std::size_t);
 // NOLINTEND(cert-dcl51-cpp, readability-identifier-naming)
 // NOLINTEND(bugprone-reserved-identifier, cert-dcl37-c)
 
@@ -165,3 +172,73 @@ TEST_CASE(divdi3_moddi3_edges) {
     EXPECT(__divdi3(42, 0) == -1);
     EXPECT(__moddi3(-42, 0) == -42);
 }
+
+// Mem functions: raw buffers are the interface under test — std::array
+// stays out (startup.cpp's vector_table comment gives the freestanding
+// reasoning), and include-cleaner's libc-name misfire (runtime.cpp's
+// suppression block explains) hits every call site.
+// NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays, modernize-avoid-c-arrays, misc-include-cleaner)
+TEST_CASE(memcpy_copies_and_returns_dst) {
+    const uint8_t src[] = {0, 1, 2, 0xFF, 0x80};
+    uint8_t dst[sizeof src] = {};
+    EXPECT(memcpy(dst, src, sizeof src) == dst);
+    EXPECT(memcmp(dst, src, sizeof src) == 0);
+    // A zero-length copy touches nothing and returns dst.
+    const uint8_t guard[] = {0xAA};
+    EXPECT(memcpy(dst, guard, 0) == dst);
+    EXPECT(dst[0] == 0);
+}
+
+TEST_CASE(memmove_overlap_dst_below_src) {
+    uint8_t buf[] = {0, 1, 2, 3, 4, 5};
+    EXPECT(memmove(buf, buf + 2, 4) == buf);
+    EXPECT(buf[0] == 2);
+    EXPECT(buf[1] == 3);
+    EXPECT(buf[2] == 4);
+    EXPECT(buf[3] == 5);
+    EXPECT(buf[4] == 4);
+    EXPECT(buf[5] == 5);
+}
+
+TEST_CASE(memmove_overlap_dst_above_src) {
+    uint8_t buf[] = {0, 1, 2, 3, 4, 5};
+    // Backward copy: an ascending loop would smear 0,1,2,3 across [2,6).
+    EXPECT(memmove(buf + 2, buf, 4) == buf + 2);
+    EXPECT(buf[0] == 0);
+    EXPECT(buf[1] == 1);
+    EXPECT(buf[2] == 0);
+    EXPECT(buf[3] == 1);
+    EXPECT(buf[4] == 2);
+    EXPECT(buf[5] == 3);
+}
+
+TEST_CASE(memset_fills_and_returns_dst) {
+    uint8_t buf[4] = {1, 2, 3, 4};
+    EXPECT(memset(buf, 0xAB, sizeof buf) == buf);
+    EXPECT(buf[0] == 0xAB);
+    EXPECT(buf[3] == 0xAB);
+    // The value converts to unsigned char: 0x107 fills 0x07 — the
+    // truncation is the behavior under test.
+    // NOLINTNEXTLINE(bugprone-suspicious-memset-usage)
+    EXPECT(memset(buf, 0x107, 1) == buf);
+    EXPECT(buf[0] == 0x07);
+    EXPECT(buf[1] == 0xAB);
+    EXPECT(memset(buf, 0, 0) == buf);
+    EXPECT(buf[0] == 0x07);
+}
+
+TEST_CASE(memcmp_sign_and_prefix) {
+    const uint8_t a[] = {1, 2, 3};
+    const uint8_t b[] = {1, 2, 4};
+    EXPECT(memcmp(a, b, sizeof a) < 0);
+    EXPECT(memcmp(b, a, sizeof a) > 0);
+    EXPECT(memcmp(a, b, 2) == 0);
+    EXPECT(memcmp(a, b, 0) == 0);
+    // The sign is the unsigned byte difference: 0x00 vs 0xFF is
+    // negative, never positive.
+    const uint8_t lo[] = {0x00};
+    const uint8_t hi[] = {0xFF};
+    EXPECT(memcmp(lo, hi, 1) < 0);
+    EXPECT(memcmp(hi, lo, 1) > 0);
+}
+// NOLINTEND(cppcoreguidelines-avoid-c-arrays, modernize-avoid-c-arrays, misc-include-cleaner)
