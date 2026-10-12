@@ -40,7 +40,6 @@ graph TD
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
-    T11b[T11b RX burst decode] --> T11d
     T11c[T11c TX streaming] --> T11d
     T11d[T11d cut-through + vsync + personality] --> T12
     T32[T32 supervisor firmware] --> T12
@@ -50,20 +49,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T11b — RX burst decode.** Split out of T11 after the target
-  bring-up (startup, linker script, first node.elf link, keep-alive
-  strobe, `lib::verify_failed`, pins.hpp `custom_target()`, minichlink
-  in the flake) shipped. The ring RX path on the CH32V003: OPA
-  comparator routed internally to TIM2 CH1, PWM-input capture streaming
-  period/high pairs over DMA ch5/7 into a static ring buffer (§2), burst
-  decode of `CapturedCell` pairs into the protocol core's
-  `Node::on_bit`/`on_illegal_cell`/`on_break`
-  (`firmware/protocol/node.hpp`) — decode core host-testable and
-  harness-developed like the protocol, MMIO glue thin. RX source select
-  between OPP0 (PA2) and OPP1 (PD7) via `OPA_PSEL` (§3); the flip
-  policy keys on edge presence, not decode quality (T13's protocol
-  keepalive direction). **Blocked by:** — ·
-  **Unblocks:** T11d
 - **T11c — TX streaming.** Split out of T11. The ring TX path: TIM1
   PWM + DMA compare streaming (ch2/ch6), re-synthesizing cells snapped
   to nominal so jitter is per-hop, never cumulative (§2); identical
@@ -302,7 +287,7 @@ ______________________________________________________________________
   gains debug-transport reporting (over the line-only SourceLocation)
   once T33 settles — the strobe-stop half already landed with the
   bring-up. Settles the §9 -O2/-Os ship-flavor question against real
-  image size. **Blocked by:** T11b, T11c ·
+  image size. **Blocked by:** T11c ·
   **Unblocks:** T12, T13
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
@@ -340,7 +325,7 @@ ______________________________________________________________________
   flap-latch semantics on subsequent faults, flap contagion between
   adjacent nodes, escalation-command delivery over the flapping
   fabric, and ring-level convergence as a proof obligation. Direction
-  to design for in T11b–T11d: **protocol-level keepalive** — a healthy line
+  to design for in T11c/T11d: **protocol-level keepalive** — a healthy line
   is never silent longer than ~1 s — so silence is an unambiguous
   fault signal and flip policy keys on edge presence, not decode
   quality. T5's detection hooks: supervisor frame-echo comparison,

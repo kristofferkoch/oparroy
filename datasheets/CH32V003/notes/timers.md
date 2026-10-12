@@ -21,14 +21,23 @@ TIM2 (GPTM, base `0x40000000`, RM §11.4):
   (CHCTLRx) → edge detector → polarity `CCxP` (CCER) → mux `CCxS[1:0]`
   (01 = ICx on TIx, 10 = on the other channel, 11 = TRC) → prescaler
   `ICxPSC[1:0]` (capture every 1/2/4/8 events) → latch CNT into CHxCVR.
-  Flags: CCxIF (INTFR), overcapture CCxOF.
+  Flags: CCxIF (INTFR), overcapture CCxOF — write-0-clear
+  (RM §11.4.5).
 - ICxF filter values (RM §11.4.7): 0000 = none (sampled at fDTS);
   0001–0011 = fCK_INT, N=2/4/8; 0100–0111 = fDTS/2 or /4, N=6/8;
   1000–1111 = fDTS/8, /16, /32, N=5/6/8. fDTS set by CKD[1:0] in CTLR1.
 - DMA/IRQ enables in DMAINTENR: bit 0 UIE, 1 CC1IE … 4 CC4IE, 6 TIE;
   bit 8 UDE, 9 CC1DE … 12 CC4DE, 14 TDE.
-- PWM-input mode (period + pulse on CH1/CH2 with SMS=100 reset mode)
-  measures a two-edge waveform with zero ISR work (RM §11.3.4).
+- PWM-input mode (RM §11.3.4) measures period + high time of a
+  two-edge waveform with zero ISR work. Verified recipe, cross-checked
+  against the SDK's `TIM_PWMIConfig` (EVT/EXAM/TIM/Input_Capture):
+  CC1S=01 (IC1 on TI1), CC1P=0 (rising), CC2S=10 (IC2 on TI1),
+  CC2P=1 (falling), TS=101 (TI1FP1 as slave trigger), SMS=100 (CNT
+  reset on trigger), CC1E+CC2E — CH1CVR then reads the period, CH2CVR
+  the high time. Only TI1FP1/TI2FP2 reach the slave-mode controller,
+  so the channel pair is always CH1+CH2, and both channels are inputs:
+  no CH2 output (and no CNT-based PWM) can coexist with PWM-input
+  capture on the same timer.
 - Output/PWM mode (RM §11.4.1, §11.4.7–11.4.9): `CTLR1` bit 0 CEN
   (counter enable); `CHCTLR1` covers channels 1–2, `CHCTLR2` channels
   3–4 — per channel CCxS[1:0] (00 = output), OCxM[2:0] (110 = PWM mode
@@ -40,12 +49,14 @@ TIM2 (GPTM, base `0x40000000`, RM §11.4):
   needed.
 - RM §11 chapeau calls TIM2 16-bit; the CHxCVR registers are 32-bit wide
   (WCH convention; usable 16 bits).
-- **Keep-alive strobe route:** TIM2_CH2 default-maps to PD3
-  (TIM2_RM=00, AFIO reset — gpio-pinout.md), so PD3 carries a hardware
-  PWM strobe with no remap; PD4 (TIM2_CH1/ETR's pin) stays untouched
-  and channel 1's internal OPA→capture route is per-channel config,
-  independent of channel 2's output. Caveat for the RX work: PSC/ATRLR
-  are per-timer, so RX capture and the strobe share TIM2's base rate.
+- **Keep-alive strobe is software-generated** — the firmware toggles
+  PD3 as a plain GPIO. The earlier plan (TIM2_CH2 hardware PWM default-
+  mapped to PD3, TIM2_RM=00) died with the RX capture design: PWM-input
+  capture takes both CH1 and CH2 as inputs and puts CNT under slave-mode
+  reset (see the PWM-input bullet), leaving no timer resource for an
+  independent PWM. A hardware strobe would also have kept the §4 charge
+  pump fed through a firmware hang, and a hung MCU is a bypass case
+  (DESIGN.md §3).
 
 TIM1 (ADTM, base `0x40012C00`, RM §10.4):
 
