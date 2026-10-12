@@ -244,6 +244,17 @@ against silicon are marked **unverified**.
   table and the CPU lands in the default `1: j 1b` loop with no diagnostic
   ([openwch/ch32v003#15](https://github.com/openwch/ch32v003/issues/15)).
   Directly relevant to this project's C++ firmware.
+- **Vector entry 0 is an instruction, not an address** — the WCH EVT
+  startup emits `.option norvc; j handle_reset` at the vector base and
+  `.word <handler>` for every other entry
+  ([startup_ch32v00x.S](https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Startup/startup_ch32v00x.S)).
+  Neither the RM nor the processor manual states the reset path outright;
+  the mechanism that makes the SDK correct is mtvec resetting to 0
+  (PM §3.2) — unified-entry mode at base 0 — and PM §2.2's unified entry
+  *fetching a jump instruction* from the base. Consistent only with
+  entry 0 being executed, not read as an address, and the `norvc` is
+  load-bearing: a compressed `c.j` occupies half a slot and shifts every
+  later entry off the hardware's number×4 indexing.
 - **STM32-style NVIC priority API doesn't map cleanly** — PFIC priority
   configuration via `NVIC_PriorityGroupConfig` produces no observable
   preemption change for users; QingKe priority/interrupt-enable model

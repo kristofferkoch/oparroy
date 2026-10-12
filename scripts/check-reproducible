@@ -14,7 +14,8 @@ trap 'rm -rf "$tmp"' EXIT
 # Sorted "hash  path" list of build artifacts, paths relative to the
 # build dir so the two runs are comparable.
 hashes() {
-    find "$1" -type f \( -name '*.a' -o -name '*.o' -o -name '*.bc' \) \
+    find "$1" -type f \( -name '*.a' -o -name '*.o' -o -name '*.bc' \
+        -o -name '*.elf' -o -name '*.bin' \) \
         -exec sha256sum {} + | sed "s|$tmp/[^/]*/||" | sort -k2
 }
 

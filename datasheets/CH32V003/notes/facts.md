@@ -14,8 +14,11 @@ Sources (canonical PDFs live in `datasheets/CH32V003/`):
   cover is V1.8.
 - `CH32V003RM-reference-manual-v1.9.pdf` — cited as (RM §x.y); fetched
   2026-09-26 from wch-ic.com.
-- Core-level CSRs (PFIC, SysTick, debug) live in the separate
-  QingKeV2_Processor_Manual, not in the RM (RM overview).
+- Core-level CSRs (PFIC, SysTick, debug) live in the separate QingKeV2
+  processor manual, not in the RM (RM overview) —
+  `QingKeV2PM-processor-manual-v1.3.pdf`, cited as (PM §x.y); fetched
+  2026-10-12 from the ch32-riscv-ug/WCH-common mirror (the wch-ic.com
+  download gate is a JS app).
 - `QingKeV2DM-debug-manual-v1.0.pdf` — cited as (QDM §x.y); fetched
   2026-09-29 from openwch/ch32v003. Covers the SWIO wire protocol
   (ch.2) and the RISC-V v0.13.2 debug module (ch.3).
@@ -38,6 +41,8 @@ All registers are accessed as 32-bit words unless noted; WCH header names
   ESIG/unique ID
 - [power-reset.md](power-reset.md) — power modes, POR/PVD, watchdogs
 - [sdi-debug.md](sdi-debug.md) — single-wire debug on PD1
+- [qingke-core.md](qingke-core.md) — QingKe V2A core: reset path, mtvec,
+  PFIC CSRs, SysTick
 
 ## Memory map (RM §1.2, DS0 §1.2)
 
@@ -85,6 +90,8 @@ All registers are accessed as 32-bit words unless noted; WCH header names
 
 Full bit-level register tables (every field of TIMx, ADC, USART, I2C, SPI,
 DMA, FLASH_CTLR), the IWDG/WWDG register sets, DMA CFGR field encodings,
-and the PFIC/SysTick core CSRs (in the QingKeV2_Processor_Manual) are not
-inlined — consult `datasheets/CH32V003/CH32V003RM-reference-manual-v1.9.pdf`
-chapters 4–16 for those, and the QingKe processor manual for core CSRs.
+and the PFIC register block are not inlined — consult
+`datasheets/CH32V003/CH32V003RM-reference-manual-v1.9.pdf` chapters 4–16
+for those, and `QingKeV2PM-processor-manual-v1.3.pdf` for core CSRs (the
+startup/mtvec/SysTick subset is extracted in
+[qingke-core.md](qingke-core.md)).
