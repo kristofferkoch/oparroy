@@ -12,7 +12,9 @@
 # is the compile proof that the header builds under the freestanding
 # rule set on every toolchain in the matrix. runtime.cpp is the soft
 # integer runtime the rv32ec link needs (no M extension, no libgcc
-# multilib — see its header comment); its unit tests run on the host.
+# multilib — see its header comment); its unit tests run on the host,
+# and klee/runtime.cpp proves the width-generic algorithm (runtime.hpp)
+# exhaustively at 8 bits against the host's native operators.
 python3 = find_program('python3', native: true)
 
 pins_hpp = custom_target('node-pins-hpp',
@@ -42,6 +44,38 @@ if not meson.is_cross_build()
   test('node-runtime', executable('node-runtime-test',
     ['runtime.cpp', 'test_runtime.cpp', '../lib/test_main.cpp'],
   ), suite: 'firmware')
+
+  # KLEE proof of the soft integer runtime (klee/runtime.cpp):
+  # single-TU like the protocol harnesses — runtime.hpp is header-only
+  # precisely so the harness instantiates the same templates at 8 bits
+  # (its header comment gives the proof strategy). -use-merge
+  # activates the klee_open_merge/klee_close_merge regions around the
+  # shift/subtract loops: without it each symbolic operand bit forks a
+  # state.
+  bc = custom_target('klee-runtime8-bc',
+    input: 'klee' / 'runtime.cpp',
+    output: 'runtime8.bc',
+    # custom_target scans no includes; list the headers by hand or an
+    # edit would rerun klee on stale bitcode.
+    depend_files: [
+      'runtime.hpp',
+      '..' / 'lib' / 'klee.hpp',
+      '..' / 'lib' / 'range.hpp',
+    ],
+    command: meson.get_compiler('cpp').cmd_array() + klee_bitcode_flags + [
+      '@INPUT@', '-o', '@OUTPUT@',
+    ],
+    build_by_default: true,
+  )
+  klee_proofs += run_target('klee-runtime8',
+    command: [
+      files('../../scripts/klee-prove'),
+      meson.current_build_dir() / 'klee-out-runtime8',
+      '-use-merge',
+      '--entry-point=klee_runtime8',
+      bc,
+    ],
+  )
 endif
 
 if meson.is_cross_build()

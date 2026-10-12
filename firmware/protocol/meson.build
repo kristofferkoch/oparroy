@@ -8,25 +8,6 @@
 static_library('protocol', 'protocol.cpp')
 
 if not meson.is_cross_build()
-  klee = find_program('klee')
-
-  # Bitcode recipe: the meson-covered part of the freestanding set plus
-  # freestanding_flags + repro_flags composed by hand — see the
-  # freestanding_flags comment in the root meson.build. Lifetime markers
-  # are off: klee 3.2 doesn't implement the intrinsic; they carry no
-  # semantics we need in proofs.
-  klee_bitcode_flags = [
-    '-std=c++23', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
-  ] + freestanding_flags + repro_flags + [
-    # Marks the proof build for lib/verify.hpp: VERIFY becomes
-    # klee_report_error, so a reachable contract violation is a proof
-    # failure with a counterexample.
-    '-DOPARROY_KLEE',
-    '-Xclang', '-disable-lifetime-markers',
-    '-emit-llvm', '-c',
-  ]
-
-  klee_proofs = []
   foreach proof : ['cell', 'echo', 'enum', 'garbage']
     bc = custom_target('klee-' + proof + '-bc',
       input: 'klee' / (proof + '.cpp'),
@@ -54,9 +35,6 @@ if not meson.is_cross_build()
       ],
     )
   endforeach
-
-  # ninja klee-proofs: run every KLEE proof of the protocol core.
-  alias_target('klee-proofs', klee_proofs)
 
   # Fuzz harnesses (DESIGN.md §8 — alongside KLEE, not instead of it):
   # libFuzzer + ASan/UBSan over the same protocol core, driven by the
