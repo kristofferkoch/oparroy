@@ -14,6 +14,9 @@ conventions in [facts.md](facts.md). Sources: RM ch.3; DS0 §1.3,
 - PLL: fixed ×2 only. Source select `PLLSRC` (RCC_CFGR0 bit 16): 0 = HSI,
   1 = HSE. 24 MHz HSI ×2 = 48 MHz SYSCLK — the project's clock plan.
 - LSI: ~128 kHz RC (100–150 kHz) for IWDG/AWU. No LSE.
+- `RCC_CTLR` (0x40021000, reset 0x0000xx83, RM §3.4.1): bit 0 HSION,
+  bit 1 HSIRDY, bits [7:3] HSITRIM, [15:8] HSICAL, bit 16 HSEON, 17
+  HSERDY, 18 HSEBYP, 19 CSSON, bit 24 PLLON, bit 25 PLLRDY.
 - `RCC_CFGR0` (0x40021004, reset 0x00000020):
   - `SW[1:0]`/`SWS[1:0]`: 00 HSI, 01 HSE, 10 PLL.
   - `HPRE[3:0]`: AHB prescaler /1…/256; **reset value 0010b = SYSCLK/3
@@ -34,5 +37,11 @@ conventions in [facts.md](facts.md). Sources: RM ch.3; DS0 §1.3,
 - Software reset: RSTSYS in PFIC_CFGR or SYSRST in PFIC_SCTLR (RM §3.2.2).
 - Flash wait states: FLASH_ACTLR LATENCY = 0 for ≤24 MHz, 1 for ≤48 MHz
   (RM §16.3.1).
+- 48 MHz bring-up sequence (HSI×2 PLL), cross-checked against the WCH
+  EVT/ch32fun init (which matches the RM exactly — no quirk):
+  FLASH_ACTLR.LATENCY=1 *before* the faster clock; RCC_CFGR0 = 0
+  (HPRE=/1, PLLSRC=HSI, both zero encodings); RCC_CTLR |= PLLON; poll
+  PLLRDY; RCC_CFGR0 SW=10b; poll SWS[1:0] (bits [3:2]) == 10b to confirm
+  the switch took.
 
 Quirks: see [quirks.md](quirks.md) §Clock / RCC.

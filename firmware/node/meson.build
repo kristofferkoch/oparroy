@@ -23,7 +23,7 @@ if meson.is_cross_build()
   # reproducible artifact.
   ch32v003_ld = files('ch32v003.ld')
   node_elf = executable('node.elf',
-    ['runtime.cpp', 'startup.cpp', 'main.cpp'],
+    ['runtime.cpp', 'startup.cpp', 'main.cpp', 'platform.cpp'],
     cpp_args: [
       '-ffunction-sections', '-fdata-sections',
       '-fno-unwind-tables', '-fno-asynchronous-unwind-tables',

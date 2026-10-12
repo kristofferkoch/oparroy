@@ -11,12 +11,21 @@
 // which point every entry is a handler *address*.
 //
 // Every non-reset entry defaults to unexpected_trap: an interrupt or
-// fault the firmware never armed is a bug, so it parks with interrupts
-// off — the §4 watchdog bypass follows. lib::verify_failed takes over
-// this role when the platform hook lands with the bring-up body.
+// fault the firmware never armed is a bug, so it routes to the platform
+// failure hook — lib::verify_failed (platform.cpp) — and the §4
+// watchdog bypass follows.
 //
 // All vector-reachable symbols are extern "C" — C++ name mangling
 // silently breaks vector linking (quirks.md §EXTI).
+
+// verify.hpp declares lib::verify_failed only under -DOPARROY_TARGET,
+// so the include and the trap body guard on it: meson only ever
+// compiles this TU in the cross build, and the guard keeps the
+// host-personality clang-tidy parse (the pre-commit hook's fallback
+// flags) clean.
+#if defined(OPARROY_TARGET)
+#include "../lib/verify.hpp"
+#endif
 
 #include <cstdint>
 
@@ -124,13 +133,11 @@ static_assert(sizeof(vector_table) == 38 * sizeof(VectorEntry));
 }
 
 [[noreturn]] void unexpected_trap() {
-    // mstatus.MIE = 0 (PM §7.2): no further interrupts, then park.
-    // Placeholder until the platform failure hook lands — the bring-up
-    // body rewires this to lib::verify_failed.
-    __asm__ volatile("csrci mstatus, 8");
-    for (;;) {
-        __asm__ volatile("" ::: "memory");
-    }
+#if defined(OPARROY_TARGET)
+    lib::verify_failed(lib::SourceLocation::current());
+#else
+    __builtin_trap();
+#endif
 }
 
 } // extern "C"

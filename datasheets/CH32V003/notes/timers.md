@@ -29,8 +29,23 @@ TIM2 (GPTM, base `0x40000000`, RM §11.4):
   bit 8 UDE, 9 CC1DE … 12 CC4DE, 14 TDE.
 - PWM-input mode (period + pulse on CH1/CH2 with SMS=100 reset mode)
   measures a two-edge waveform with zero ISR work (RM §11.3.4).
+- Output/PWM mode (RM §11.4.1, §11.4.7–11.4.9): `CTLR1` bit 0 CEN
+  (counter enable); `CHCTLR1` covers channels 1–2, `CHCTLR2` channels
+  3–4 — per channel CCxS[1:0] (00 = output), OCxM[2:0] (110 = PWM mode
+  1: active while CNT < CVR, 111 = PWM mode 2), OCxPE preload, OCxFE;
+  channel 2's fields sit at [15:8] of CHCTLR1 (OC2M at [14:12]).
+  `CCER`: per channel CCxE output enable at bit 4(x−1), CCxP polarity
+  (0 = active high) one bit higher. Square wave on CHx: PSC, ATRLR,
+  CHxCVR, CHCTLRx OCxM=110, CCER CCxE=1, CTLR1 CEN=1 — no interrupt
+  needed.
 - RM §11 chapeau calls TIM2 16-bit; the CHxCVR registers are 32-bit wide
   (WCH convention; usable 16 bits).
+- **Keep-alive strobe route:** TIM2_CH2 default-maps to PD3
+  (TIM2_RM=00, AFIO reset — gpio-pinout.md), so PD3 carries a hardware
+  PWM strobe with no remap; PD4 (TIM2_CH1/ETR's pin) stays untouched
+  and channel 1's internal OPA→capture route is per-channel config,
+  independent of channel 2's output. Caveat for the RX work: PSC/ATRLR
+  are per-timer, so RX capture and the strobe share TIM2's base rate.
 
 TIM1 (ADTM, base `0x40012C00`, RM §10.4):
 
