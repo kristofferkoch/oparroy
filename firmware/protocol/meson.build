@@ -8,14 +8,14 @@
 static_library('protocol', 'protocol.cpp')
 
 if not meson.is_cross_build()
-  foreach proof : ['cell', 'echo', 'enum', 'garbage']
+  foreach proof : ['cell', 'echo', 'enum', 'garbage', 'rx']
     bc = custom_target('klee-' + proof + '-bc',
       input: 'klee' / (proof + '.cpp'),
       output: proof + '.bc',
       # custom_target scans no includes; list the header-only core by
       # hand or a header edit would rerun klee on stale bitcode.
       depend_files: [
-        'bits.hpp', 'cell.hpp', 'node.hpp',
+        'bits.hpp', 'cell.hpp', 'node.hpp', 'rx.hpp',
         '..' / 'lib' / 'klee.hpp',
         '..' / 'lib' / 'range.hpp',
         '..' / 'lib' / 'span.hpp',
@@ -46,7 +46,7 @@ if not meson.is_cross_build()
   # can reuse these harnesses unchanged.
   fuzz_flags = ['-fsanitize=fuzzer,address,undefined', get_option('fuzz_optimization')]
   fuzz_runs = []
-  foreach harness : ['cell', 'node', 'ring']
+  foreach harness : ['cell', 'node', 'ring', 'rx']
     fuzz_exe = executable('fuzz-' + harness, 'fuzz' / (harness + '.cpp'),
       cpp_args: fuzz_flags,
       link_args: fuzz_flags,
