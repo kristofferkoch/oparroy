@@ -3,7 +3,9 @@
 // (host clang, rv32ec GCC). The static_asserts pin the load-bearing
 // facts so a garbled regeneration can't pass vacuously — content drift
 // is caught byte-exact by tests/golden/node-pins.hpp.
-#include "pins.hpp"
+// Angle brackets: the build-dir regeneration (meson.build) is the copy
+// this compiles; the checked-in header is the pytest-pinned reference.
+#include <pins.hpp>
 
 // Peripheral-forced pads (datasheets/CH32V003/notes/opa.md, gpio-pinout.md).
 static_assert(pins::rx_a.port_base == pins::gpio_a_base && pins::rx_a.bit == 2);

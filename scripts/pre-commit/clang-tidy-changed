@@ -16,9 +16,15 @@ fi
 # injects its resource dir and C++ headers at compile time, so neither
 # lands in compile_commands.json. Append both by hand — libc++ (same
 # LLVM, flake-pinned) keeps the parse reproducible instead of whatever
-# GCC the host happens to have. The -std/-ffreestanding flags are also
-# appended: harmless duplicates for files in the database, and they
-# keep files not yet added to the meson build (no DB entry) parseable.
+# GCC the host happens to have. The -std/-ffreestanding flags serve the
+# same end. Note the trailing `--` makes clang-tidy 19 parse with
+# exactly these arguments — the database entry's own flags (its -I set
+# included) are NOT merged — so every include path the sources need is
+# spelled out here: quoted includes resolve against the source file's
+# directory unaided, but the generated <pins.hpp> needs its two
+# possible homes listed, build dir first so a compiled tree lints the
+# fresh header and a configure-only tree falls back to the checked-in
+# reference (pinned byte-identical by tests/test_node_pins.py).
 : "${OPARROY_LIBCXX_INCLUDE:?run inside the nix dev shell (nix develop)}"
 
 status=0
@@ -26,6 +32,7 @@ for f do
     clang-tidy --quiet -p "$builddir" "$f" -- \
         -std=c++23 -ffreestanding -fno-exceptions -fno-rtti \
         -resource-dir "$(clang -print-resource-dir)" \
-        -nostdinc++ -isystem "$OPARROY_LIBCXX_INCLUDE" || status=1
+        -nostdinc++ -isystem "$OPARROY_LIBCXX_INCLUDE" \
+        -I"$builddir/firmware/node" -I"$root/firmware/node" || status=1
 done
 exit "$status"

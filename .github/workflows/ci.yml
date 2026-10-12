@@ -99,6 +99,9 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
               - 'nix/**'
+              - 'design/__init__.py'
+              - 'design/node_pins.py'
+              - 'src/**'
               - 'firmware/**'
               - 'meson.build'
               - 'meson.options'
@@ -120,6 +123,9 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
               - 'nix/**'
+              - 'design/__init__.py'
+              - 'design/node_pins.py'
+              - 'src/**'
               - 'firmware/**'
               - 'meson.build'
               - 'meson.options'
@@ -129,6 +135,9 @@ jobs:
               - 'flake.nix'
               - 'flake.lock'
               - 'nix/**'
+              - 'design/__init__.py'
+              - 'design/node_pins.py'
+              - 'src/**'
               - 'firmware/**'
               - 'meson.build'
               - 'meson.options'
@@ -205,6 +214,9 @@ jobs:
             meson.build
             meson.options
             meson/**
+            design/__init__.py
+            design/node_pins.py
+            src/**
             firmware/**
             scripts/**
 
@@ -307,6 +319,9 @@ jobs:
             meson.build
             meson.options
             meson/**
+            design/__init__.py
+            design/node_pins.py
+            src/**
             firmware/**
             scripts/**
 
@@ -348,6 +363,9 @@ jobs:
             meson.build
             meson.options
             meson/**
+            design/__init__.py
+            design/node_pins.py
+            src/**
             firmware/**
             scripts/**
 
