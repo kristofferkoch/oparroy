@@ -5,9 +5,12 @@
 // lives in the accessors at the bottom, each next to a comment naming
 // the block it maps (code-std-cpp.md#3-types-and-arithmetic). Only the
 // registers the firmware touches are modeled; offsets follow the RM
-// maps. Bit constants keep the RM's field names, lowercase per
+// maps, and each block's static_asserts pin the layout to those maps —
+// a transcription slip is a build error, not a wrong register. Bit
+// constants keep the RM's field names, lowercase per
 // code-std-cpp.md#7-naming-and-layout.
 
+#include <cstddef>
 #include <cstdint>
 
 // RCC, base 0x40021000 (RM §3.4 Table 3-1).
@@ -21,6 +24,15 @@ struct Rcc {
     uint32_t apb2pcenr; // 0x18
     uint32_t apb1pcenr; // 0x1C
 };
+
+static_assert(offsetof(Rcc, cfgr0) == 0x04);
+static_assert(offsetof(Rcc, intr) == 0x08);
+static_assert(offsetof(Rcc, apb2prstr) == 0x0C);
+static_assert(offsetof(Rcc, apb1prstr) == 0x10);
+static_assert(offsetof(Rcc, ahbpcenr) == 0x14);
+static_assert(offsetof(Rcc, apb2pcenr) == 0x18);
+static_assert(offsetof(Rcc, apb1pcenr) == 0x1C);
+static_assert(sizeof(Rcc) == 0x20);
 
 // RCC_CTLR (RM §3.4.1).
 inline constexpr uint32_t rcc_ctlr_hsion = 1u << 0;
@@ -53,6 +65,8 @@ struct FlashInterface {
     uint32_t actlr; // 0x00
 };
 
+static_assert(sizeof(FlashInterface) == 0x04);
+
 // FLASH_ACTLR LATENCY[1:0] (RM §16.3.1): 00 for SYSCLK ≤ 24 MHz,
 // 01 for ≤ 48 MHz.
 inline constexpr uint32_t flash_actlr_latency_1ws = 1;
@@ -67,6 +81,14 @@ struct Gpio {
     uint32_t bcr;   // 0x14 — bit clear
     uint32_t lckr;  // 0x18
 };
+
+static_assert(offsetof(Gpio, cfghr) == 0x04);
+static_assert(offsetof(Gpio, indr) == 0x08);
+static_assert(offsetof(Gpio, outdr) == 0x0C);
+static_assert(offsetof(Gpio, bshr) == 0x10);
+static_assert(offsetof(Gpio, bcr) == 0x14);
+static_assert(offsetof(Gpio, lckr) == 0x18);
+static_assert(sizeof(Gpio) == 0x1C);
 
 // CFGLR nibble encodings (RM §7.3.1.1): MODE[1:0] in the low half (00
 // input, 01 = 10 MHz, 10 = 2 MHz, 11 = 30 MHz), CNF[1:0] in the high
@@ -98,6 +120,24 @@ struct Tim2 {
     uint32_t ch3cvr;     // 0x3C
     uint32_t ch4cvr;     // 0x40
 };
+
+static_assert(offsetof(Tim2, ctlr2) == 0x04);
+static_assert(offsetof(Tim2, smcfgr) == 0x08);
+static_assert(offsetof(Tim2, dmaintenr) == 0x0C);
+static_assert(offsetof(Tim2, intfr) == 0x10);
+static_assert(offsetof(Tim2, swevgr) == 0x14);
+static_assert(offsetof(Tim2, chctlr1) == 0x18);
+static_assert(offsetof(Tim2, chctlr2) == 0x1C);
+static_assert(offsetof(Tim2, ccer) == 0x20);
+static_assert(offsetof(Tim2, cnt) == 0x24);
+static_assert(offsetof(Tim2, psc) == 0x28);
+static_assert(offsetof(Tim2, atrlr) == 0x2C);
+static_assert(offsetof(Tim2, reserved30) == 0x30);
+static_assert(offsetof(Tim2, ch1cvr) == 0x34);
+static_assert(offsetof(Tim2, ch2cvr) == 0x38);
+static_assert(offsetof(Tim2, ch3cvr) == 0x3C);
+static_assert(offsetof(Tim2, ch4cvr) == 0x40);
+static_assert(sizeof(Tim2) == 0x44);
 
 // TIM2_CTLR1 (RM §11.4.1).
 inline constexpr uint32_t tim2_ctlr1_cen = 1u << 0;
@@ -157,6 +197,27 @@ struct Tim1 {
     uint32_t dmaadr;    // 0x4C — burst DMA address
 };
 
+static_assert(offsetof(Tim1, ctlr2) == 0x04);
+static_assert(offsetof(Tim1, smcfgr) == 0x08);
+static_assert(offsetof(Tim1, dmaintenr) == 0x0C);
+static_assert(offsetof(Tim1, intfr) == 0x10);
+static_assert(offsetof(Tim1, swevgr) == 0x14);
+static_assert(offsetof(Tim1, chctlr1) == 0x18);
+static_assert(offsetof(Tim1, chctlr2) == 0x1C);
+static_assert(offsetof(Tim1, ccer) == 0x20);
+static_assert(offsetof(Tim1, cnt) == 0x24);
+static_assert(offsetof(Tim1, psc) == 0x28);
+static_assert(offsetof(Tim1, atrlr) == 0x2C);
+static_assert(offsetof(Tim1, rptcr) == 0x30);
+static_assert(offsetof(Tim1, ch1cvr) == 0x34);
+static_assert(offsetof(Tim1, ch2cvr) == 0x38);
+static_assert(offsetof(Tim1, ch3cvr) == 0x3C);
+static_assert(offsetof(Tim1, ch4cvr) == 0x40);
+static_assert(offsetof(Tim1, bdtr) == 0x44);
+static_assert(offsetof(Tim1, dmacfgr) == 0x48);
+static_assert(offsetof(Tim1, dmaadr) == 0x4C);
+static_assert(sizeof(Tim1) == 0x50);
+
 // TIM1_CTLR1 (RM §10.4.1).
 inline constexpr uint32_t tim1_ctlr1_cen = 1u << 0;
 
@@ -209,6 +270,12 @@ struct SysTick {
     uint32_t cmpr;       // 0x10
 };
 
+static_assert(offsetof(SysTick, sr) == 0x04);
+static_assert(offsetof(SysTick, cntr) == 0x08);
+static_assert(offsetof(SysTick, reserved0c) == 0x0C);
+static_assert(offsetof(SysTick, cmpr) == 0x10);
+static_assert(sizeof(SysTick) == 0x14);
+
 // STK_CTLR (PM §4 Table 4-2).
 inline constexpr uint32_t stk_ctlr_ste = 1u << 0;        // counter enable
 inline constexpr uint32_t stk_ctlr_stie = 1u << 1;       // interrupt enable
@@ -226,6 +293,13 @@ struct DmaChannel {
     uint32_t maddr; // 0x0C
 };
 
+static_assert(offsetof(DmaChannel, cntr) == 0x04);
+static_assert(offsetof(DmaChannel, paddr) == 0x08);
+static_assert(offsetof(DmaChannel, maddr) == 0x0C);
+// The block stride (0x14, the dma_channel() accessor) is wider than the
+// modeled registers.
+static_assert(sizeof(DmaChannel) == 0x10);
+
 // DMA_CFGRx (RM §8.3.3): peripheral-to-memory is DIR=0, 8-bit
 // PSIZE/MSIZE the zero encoding.
 inline constexpr uint32_t dma_cfgr_en = 1u << 0;
@@ -240,6 +314,8 @@ inline constexpr uint32_t dma_cfgr_pl_very_high = 0b11u << 12;
 struct Exten {
     uint32_t ctr; // 0x00
 };
+
+static_assert(sizeof(Exten) == 0x04);
 
 // EXTEN_CTR OPA fields (RM §17.2.1). The register also carries LDOTRIM
 // and the lock-up monitor (LKUPEN resets to 1, notes/opa.md) — access
