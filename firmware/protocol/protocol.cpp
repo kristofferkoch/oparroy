@@ -10,6 +10,7 @@
 #include "cell.hpp"
 #include "node.hpp"
 #include "rx.hpp"
+#include "tx.hpp"
 
 #include <cstdint>
 
@@ -137,6 +138,71 @@ namespace {
 } // namespace
 
 static_assert(rx_decode_phases());
+
+// TX store-and-forward (tx.hpp): a scripted walk over the sequencer's
+// stream contract — nothing plays before the first closed frame, frames
+// play bit-exact snapped to nominal, tx_break_cells of idle follow
+// every frame, a contained frame never regenerates, and an over-full
+// ring drops the accumulating frame. Capacity 64 like the harnesses, so
+// the overflow path is in reach.
+namespace {
+
+    constexpr bool pops_idle(TxSequencer<64>& sequencer, uint16_t count) {
+        for ([[maybe_unused]] const uint16_t i : lib::irange(count)) {
+            if (sequencer.pop() != tx_idle_compare) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    constexpr bool tx_sequencer_phases() {
+        TxSequencer<64> sequencer;
+
+        // Nothing plays before the first closed frame.
+        sequencer.push(TxAction::EmitOne);
+        if (!pops_idle(sequencer, 4)) {
+            return false;
+        }
+
+        // A one-bit frame: t1h, then at least tx_break_cells of idle.
+        sequencer.on_break();
+        if (sequencer.pop() != t1h_ticks || !pops_idle(sequencer, tx_break_cells + 4)) {
+            return false;
+        }
+
+        // A two-bit frame plays snapped to nominal, then the idle run.
+        sequencer.push(TxAction::EmitZero);
+        sequencer.push(TxAction::EmitOne);
+        sequencer.on_break();
+        if (sequencer.pop() != t0h_ticks || sequencer.pop() != t1h_ticks ||
+            !pops_idle(sequencer, tx_break_cells)) {
+            return false;
+        }
+
+        // Containment: an Idle mid-frame discards it, a discarded frame
+        // accumulates nothing, and the break closes nothing.
+        sequencer.push(TxAction::EmitOne);
+        sequencer.push(TxAction::Idle);
+        sequencer.push(TxAction::EmitOne);
+        sequencer.on_break();
+        if (!pops_idle(sequencer, 8)) {
+            return false;
+        }
+
+        // Overflow: capacity bits accumulate; the next append drops the
+        // frame, and the break again closes nothing.
+        for ([[maybe_unused]] const uint16_t i : lib::irange(uint16_t{64})) {
+            sequencer.push(TxAction::EmitOne);
+        }
+        sequencer.push(TxAction::EmitOne);
+        sequencer.on_break();
+        return pops_idle(sequencer, 8);
+    }
+
+} // namespace
+
+static_assert(tx_sequencer_phases());
 
 // Foundation-library cells (firmware/lib/range.hpp, static_vector.hpp):
 // constexpr-proved here, the same TU that hosts Span's asserts.
