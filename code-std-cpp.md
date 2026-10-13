@@ -126,8 +126,13 @@ Scope: all oparroy firmware and host-testable firmware logic.
   `VERIFY` hook adding the target-side check.
 - RAII for every resource and lock; no paired acquire/release calls
   separated by user code.
-- MMIO register blocks are `volatile` structs via placement `new` —
-  type-safe register access, no raw integer pokes.
+- MMIO register blocks are `volatile` structs mapped by
+  `reinterpret_cast` accessors at the block base
+  (firmware/node/regs.hpp), with `static_assert`s pinning every offset
+  to the RM map. Registers with non-plain access semantics
+  (write-0-clear status, strongly-typed compositions) are wrapper
+  members so misuse is a compile error — type-safe register access, no
+  raw integer pokes.
 - Data shared between ISR and main: `volatile` plus explicit ordering,
   or an RAII interrupt-guard for multi-byte updates. Single-core means
   this is short, and every instance is deliberate.

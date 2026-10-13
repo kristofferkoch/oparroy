@@ -109,7 +109,7 @@ assembler-stock status, footprint-assignment and
 annotation/back-annotation stages, dot dump, firmware pin-header
 generation with the GPIO-budget check) lives in `src/oparroy/dsl/`; circuit captures
 live in `design/` (DESIGN.md §7 DSL shape). Firmware is freestanding
-C++ (no standard library; RAII, placement new on memory-mapped I/O)
+C++ (no standard library; RAII, typed volatile structs over memory-mapped I/O)
 under an aviation-grade rule set, statically checked, KLEE-verified
 from the start (DESIGN.md §8).
 Tool provisioning: nix flake for everything non-Python (compilers,
