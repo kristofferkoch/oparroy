@@ -65,8 +65,9 @@ infrastructure, by contrast, may cost freely.
 
 ## Firmware direction
 
-- **Freestanding C++, no standard library** — RAII, placement `new` on
-  memory-mapped I/O, `constexpr` config; no exceptions/RTTI/heap.
+- **Freestanding C++, no standard library** — RAII, typed volatile
+  structs over memory-mapped I/O, `constexpr` config; no
+  exceptions/RTTI/heap.
 - Foundation library modeled on **SerenityOS's AK**, landed in
   `firmware/lib/`: `ErrorOr<T>` with `TRY` propagation and fallible
   `try_*` APIs, `VERIFY` with a target failure hook, fixed-capacity

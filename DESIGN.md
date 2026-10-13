@@ -14,8 +14,8 @@ Settled:
 - CI: **local script first** (`test-hw` style target), CI platform
   integration deferred until the board exists
 - Firmware language: **freestanding C++ — no standard library**,
-  zero-cost abstractions only (RAII, placement new on memory-mapped
-  I/O), under an aviation-grade rule set (§8)
+  zero-cost abstractions only (RAII, typed volatile structs over
+  memory-mapped I/O), under an aviation-grade rule set (§8)
 - Tool provisioning: **nix flake** for everything non-Python (SDCC/GCC
   toolchains, KLEE/clang, ngspice, KiCad, provers); **uv** for Python
   deps — see §8
@@ -1334,9 +1334,10 @@ provers) wired in from the first firmware commit,
 not retrofitted. Language: **freestanding C++, no standard library**
 (`-ffreestanding -nostdlib`, no exceptions, no RTTI, no heap unless
 explicitly carved out) — the zero-cost subset used deliberately: RAII
-for resource/lock ownership, placement `new` on memory-mapped I/O for
-type-safe register blocks, `constexpr` for pin/config tables, templates
-where they erase per-node cost. **Exceptions policy** (retained:
+for resource/lock ownership, typed `volatile` structs over
+memory-mapped I/O for type-safe register blocks, `constexpr` for
+pin/config tables, and templates where they erase per-node cost.
+**Exceptions policy** (retained:
 `-fno-exceptions`): the unwinder + personality routine + unwind tables
 cost ~10–40 KB flash — more than the entire
 16 KB CH32V003; `throw` allocates (heap or emergency buffer) in a
