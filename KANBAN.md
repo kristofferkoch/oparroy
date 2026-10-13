@@ -40,7 +40,6 @@ graph TD
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
-    T11c[T11c TX streaming] --> T11d
     T11d[T11d cut-through + vsync + personality] --> T12
     T32[T32 supervisor firmware] --> T12
 ```
@@ -49,17 +48,20 @@ ______________________________________________________________________
 
 ## Next
 
-- **T11c — TX streaming.** Split out of T11. The ring TX path: TIM1
-  PWM + DMA compare streaming (ch2/ch6), re-synthesizing cells snapped
-  to nominal so jitter is per-hop, never cumulative (§2); identical
-  compare values onto both directions (§3); `tx_kill` on TIM1_BKIN
-  wired so the watchdog's bypass brakes both channels (§4). Ends in a
-  **store-and-forward** ring node that passes bits end-to-end — the
-  correctness rung before cut-through. Developed inside the
-  verification harness (T16b–e) from the first commit — no hardware
-  needed, so it runs in parallel with the board track.
-  **Blocked by:** — ·
-  **Unblocks:** T11d
+- **T11d — Cut-through, vsync, personality.** Split out of T11; the
+  slice that makes a multi-node ring pass bits end-to-end. Switch from
+  the store-and-forward TX path to per-bit cut-through forwarding with
+  on-the-fly slot rewrite (DESIGN.md §2) and measure timing closure.
+  Gap-latched (vsync) output apply and input sampling per §2's
+  global-shutter rule, from a double buffer. Trill pattern
+  (docs/bela-lessons.md §2): **one firmware image, personality by
+  node-type ID** — a single HIL target; ENUM frames stamped with the
+  factory UNIID plus the flash type byte (§2). `lib::verify_failed`
+  gains debug-transport reporting (over the line-only SourceLocation)
+  once T33 settles — the strobe-stop half already landed with the
+  bring-up. Settles the §9 -O2/-Os ship-flavor question against real
+  image size. **Blocked by:** — ·
+  **Unblocks:** T12, T13
 - **T31 — CI scan control/observe plane.** *Shape: design.* Split out
   of the instrumented-CI design work. Settles the §6 shift-register
   plane as its own design: 74HC595-class control stages and
@@ -275,20 +277,6 @@ ______________________________________________________________________
   is T32.
   **Blocked by:** T30, T31, T33, T35 ·
   **Unblocks:** T12, T15
-- **T11d — Cut-through, vsync, personality.** Split out of T11; the
-  slice that makes a multi-node ring pass bits end-to-end. Switch from
-  T11c's store-and-forward to per-bit cut-through forwarding with
-  on-the-fly slot rewrite (DESIGN.md §2) and measure timing closure.
-  Gap-latched (vsync) output apply and input sampling per §2's
-  global-shutter rule, from a double buffer. Trill pattern
-  (docs/bela-lessons.md §2): **one firmware image, personality by
-  node-type ID** — a single HIL target; ENUM frames stamped with the
-  factory UNIID plus the flash type byte (§2). `lib::verify_failed`
-  gains debug-transport reporting (over the line-only SourceLocation)
-  once T33 settles — the strobe-stop half already landed with the
-  bring-up. Settles the §9 -O2/-Os ship-flavor question against real
-  image size. **Blocked by:** T11c ·
-  **Unblocks:** T12, T13
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10, T11d,
@@ -325,7 +313,7 @@ ______________________________________________________________________
   flap-latch semantics on subsequent faults, flap contagion between
   adjacent nodes, escalation-command delivery over the flapping
   fabric, and ring-level convergence as a proof obligation. Direction
-  to design for in T11c/T11d: **protocol-level keepalive** — a healthy line
+  to design for in T11d: **protocol-level keepalive** — a healthy line
   is never silent longer than ~1 s — so silence is an unambiguous
   fault signal and flip policy keys on edge presence, not decode
   quality. T5's detection hooks: supervisor frame-echo comparison,
