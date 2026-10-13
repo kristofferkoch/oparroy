@@ -39,13 +39,42 @@ Calibration: ch32v003fun-class programs with timer+DMA+ADC land at
 
 | Component                                            | Estimate                   |
 | ---------------------------------------------------- | -------------------------- |
-| RX DMA ring (16 cells × 8 B)                         | 128 B                      |
-| TX compare buffer (16 × 2 B)                         | 32 B                       |
+| RX capture rings (16 cells × 2 × 2 B)                | 64 B                       |
+| TX compare DMA rings (16 cells × 2 × 2 B)            | 64 B                       |
+| Cut-through FIFO (128 cells × 2 B)                   | 256 B                      |
 | vsync double-buffer                                  | ~16 B                      |
-| Ring/DMA subtotal (hard-capped ≤256 B, DESIGN.md §2) | ~180 B                     |
+| Ring/DMA subtotal (hard-capped ≤256 B, DESIGN.md §2) | 128 B                      |
 | `Node` object + app state (debounce, ADC)            | ~64 B                      |
 | Stack (shallow calls, 1–2 ISR levels)                | 256–512 B                  |
-| **Total**                                            | **~0.5–0.8 KB — ~30–40 %** |
+| **Total**                                            | **~0.6–0.9 KB — ~30–45 %** |
+
+## Cut-through timing closure
+
+The cut-through FIFO replaces the store-and-forward frame queue as the
+TX-side rate matcher. Its depth is set by the worst-case fill the
+re-emitted break forces, not by the CPU burst alone:
+
+- **Rate drift**: upstream and local HSI each span ±2.2 % over
+  −40–85 °C (facts.md, DS0 §3.3.6), so a node measures the upstream cell
+  period at 60 × (1 ± 4.4 %) local ticks — a pre-sized ENUM frame
+  (832 bits) drifts ≈ 37 cells.
+- **Break overlap**: on_break re-arms a tx_break_cells = 48 idle run
+  before the next frame's bits play, so those bits accumulate while the
+  idles drain (~50 cells for an ENUM at the worst skew), then the rest
+  of the frame drifts (~35 cells) — ≈ 85 cells steady-state.
+- **RX burst**: rx_poll drains ≤ 16 captures into the FIFO per poll —
+  +16 cells transient.
+
+128 cells (256 B) covers ≈ 100 cells of worst case with margin — the
+same footprint the store-and-forward frame queue occupied. Overflow is
+reachable only for over-long frames (≳1.8 kbit at the extreme skew, well
+past the 832-bit pre-sized ENUM; the 2048-bit cap mutes the node either
+way) and mutes like the store-and-forward rung: drop, never corrupt a
+cell mid-frame. The per-bit loop's CPU cost is strictly below the
+store-and-forward rung's — cut-through enqueues a compare where
+store-and-forward bit-packed a frame queue — so the §2 ~10 cycles/bit
+decode budget stays the binding term; the exact count lands with
+on-target measurement (the test board).
 
 ## Verdict
 
