@@ -8,10 +8,35 @@
 // maps, and each block's static_asserts pin the layout to those maps —
 // a transcription slip is a build error, not a wrong register. Bit
 // constants keep the RM's field names, lowercase per
-// code-std-cpp.md#7-naming-and-layout.
+// code-std-cpp.md#7-naming-and-layout. Registers with non-plain access
+// semantics are wrapper members (W0cReg below; WoReg further down), so
+// misuse is a compile error rather than a wrong-register write.
 
 #include <cstddef>
 #include <cstdint>
+
+// Write-0-clear status register (TIMx_INTFR, RM §10.4.5/§11.4.5):
+// read() inspects the flags, clear(mask) writes ~mask — 0 clears the
+// flag, 1 leaves it, so clearing needs no read. The type makes the
+// wrong shapes compile errors: `|=`-style read-modify-write would
+// clear every pending flag, and wholesale assignment is never right.
+// One word of storage, so the block layouts are unchanged.
+struct W0cReg {
+    [[nodiscard]] uint32_t read() const volatile {
+        return bits;
+    }
+    void clear(uint32_t mask) volatile {
+        bits = ~mask;
+    }
+    W0cReg(const W0cReg&) = delete;
+    W0cReg& operator=(const W0cReg&) = delete;
+    W0cReg(W0cReg&&) = delete;
+    W0cReg& operator=(W0cReg&&) = delete;
+    ~W0cReg() = default;
+
+private:
+    volatile uint32_t bits;
+};
 
 // RCC, base 0x40021000 (RM §3.4 Table 3-1).
 struct Rcc {
@@ -106,7 +131,7 @@ struct Tim2 {
     uint32_t ctlr2;      // 0x04
     uint32_t smcfgr;     // 0x08
     uint32_t dmaintenr;  // 0x0C
-    uint32_t intfr;      // 0x10
+    W0cReg intfr;        // 0x10 — write-0-clear
     uint32_t swevgr;     // 0x14
     uint32_t chctlr1;    // 0x18 — channels 1/2
     uint32_t chctlr2;    // 0x1C — channels 3/4
@@ -179,7 +204,7 @@ struct Tim1 {
     uint32_t ctlr2;     // 0x04
     uint32_t smcfgr;    // 0x08
     uint32_t dmaintenr; // 0x0C
-    uint32_t intfr;     // 0x10
+    W0cReg intfr;       // 0x10 — write-0-clear
     uint32_t swevgr;    // 0x14
     uint32_t chctlr1;   // 0x18 — channels 1/2
     uint32_t chctlr2;   // 0x1C — channels 3/4

@@ -102,7 +102,7 @@ void dma_resync() {
     dma_config(pins::rx_a_high_dma, tim2().ch2cvr, high_ring);
     // Captures during the disabled window set the overcapture flags;
     // they belong to the discarded stream.
-    tim2().intfr &= ~(tim2_intfr_cc1of | tim2_intfr_cc2of);
+    tim2().intfr.clear(tim2_intfr_cc1of | tim2_intfr_cc2of);
     poll_state.read_idx = 0;
     poll_state.last_progress_ticks = systick().cntr;
 }
@@ -166,7 +166,7 @@ void rx_poll() {
     // Overcapture: an entry may be lost and ring pairing is unprovable
     // — the decoder contains (drops to Hunt) and the streams restart
     // aligned.
-    if ((tim.intfr & (tim2_intfr_cc1of | tim2_intfr_cc2of)) != 0) {
+    if ((tim.intfr.read() & (tim2_intfr_cc1of | tim2_intfr_cc2of)) != 0) {
         tx_push(decoder.on_overrun());
         dma_resync();
         return;
