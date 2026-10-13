@@ -40,7 +40,9 @@ graph TD
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
-    T11d[T11d cut-through + vsync + personality] --> T12
+    T11d1[T11d1 cut-through forwarding] --> T11d3
+    T11d2[T11d2 vsync double-buffer] --> T11d3
+    T11d3[T11d3 personality + ENUM] --> T12
     T32[T32 supervisor firmware] --> T12
 ```
 
@@ -48,19 +50,40 @@ ______________________________________________________________________
 
 ## Next
 
-- **T11d — Cut-through, vsync, personality.** Split out of T11; the
-  slice that makes a multi-node ring pass bits end-to-end. Switch from
-  the store-and-forward TX path to per-bit cut-through forwarding with
-  on-the-fly slot rewrite (DESIGN.md §2) and measure timing closure.
-  Gap-latched (vsync) output apply and input sampling per §2's
-  global-shutter rule, from a double buffer. Trill pattern
+- **T11d1 — Cut-through forwarding.** Split out of T11d. Switch the
+  store-and-forward TX path (`firmware/protocol/tx.hpp` `TxSequencer`,
+  DESIGN.md §2's fallback rung made real) to **per-bit cut-through**: a
+  bounded compare FIFO — each decoded bit maps straight to its nominal
+  compare value, a break appends the re-emitted idle run, and the
+  store-and-forward sequencer stays as the §2 fallback rung. Delivers
+  the **timing-closure measurement**: cycle-count the per-bit loop and
+  derive the worst-case FIFO fill (the 832-bit pre-sized ENUM × ±4.4 %
+  HSI relative drift ≈ 37 cells + the 16-cell RX burst ⇒ ~48–64 cells
+  ≈ 128 B, inside §2's 256 B ring-DMA cap), recorded in
+  `docs/size-estimate.md`. Proofs re-targeted to the cut-through
+  contract (shadow models in `klee/tx.cpp`, `fuzz/tx.cpp`,
+  `fuzz/ring_tx.cpp`). **Blocked by:** — ·
+  **Unblocks:** T11d3
+- **T11d2 — vsync double-buffer.** Split out of T11d. `Node::on_break()`
+  gains the §2 global-shutter apply/sample: pending command outputs
+  apply and inputs sample atomically at the frame gap, from a double
+  buffer — today it only bumps `latch_count`. Extends the Node contract
+  and its proofs (`klee/echo.cpp` asserts the once-per-frame latch; add
+  double-buffer coherence). **Blocked by:** — ·
+  **Unblocks:** T11d3
+- **T11d3 — Personality + ENUM.** Split out of T11d. The Trill pattern
   (docs/bela-lessons.md §2): **one firmware image, personality by
-  node-type ID** — a single HIL target; ENUM frames stamped with the
-  factory UNIID plus the flash type byte (§2). `lib::verify_failed`
-  gains debug-transport reporting (over the line-only SourceLocation)
-  once T33 settles — the strobe-stop half already landed with the
-  bring-up. Settles the §9 -O2/-Os ship-flavor question against real
-  image size. **Blocked by:** — ·
+  node-type ID** — a single HIL target. Read the 96-bit ESIG UNIID
+  (0x1FFFF7E8/EC/F0, flash-option-bytes.md) plus the flash type byte
+  (option-byte Data0 or a flash data page, docs/phy-analysis.md §6)
+  into the 104-bit ENUM stamp and wire it as the Node's telemetry.
+  **Slot location is find-first-empty-slot discovery** (settled): the
+  node streams the ENUM frame and stamps the first still-all-zero
+  104-bit slot, so position stays provision-free; the empty-slot scan
+  replaces the fixed `slot_index`. `lib::verify_failed`'s
+  debug-transport reporting stays deferred (T33); the strobe-stop half
+  already landed with the bring-up. Settles the §9 -O2/-Os ship-flavor
+  question against real image size. **Blocked by:** T11d1, T11d2 ·
   **Unblocks:** T12, T13
 - **T31 — CI scan control/observe plane.** *Shape: design.* Split out
   of the instrumented-CI design work. Settles the §6 shift-register
@@ -279,7 +302,7 @@ ______________________________________________________________________
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
-  CI-platform integration is a later card. **Blocked by:** T10, T11d,
+  CI-platform integration is a later card. **Blocked by:** T10, T11d3,
   T32 ·
   **Unblocks:** —
 - **T15 — Cable reach: bench confirmation and §2 adoption.** *Shape:
@@ -313,9 +336,9 @@ ______________________________________________________________________
   flap-latch semantics on subsequent faults, flap contagion between
   adjacent nodes, escalation-command delivery over the flapping
   fabric, and ring-level convergence as a proof obligation. Direction
-  to design for in T11d: **protocol-level keepalive** — a healthy line
+  to design for in T11d3: **protocol-level keepalive** — a healthy line
   is never silent longer than ~1 s — so silence is an unambiguous
   fault signal and flip policy keys on edge presence, not decode
   quality. T5's detection hooks: supervisor frame-echo comparison,
   illegal-cell detection, and the pull-down-parked idle-low segment
-  (§2 measured block). **Blocked by:** T11d · **Unblocks:** —
+  (§2 measured block). **Blocked by:** T11d3 · **Unblocks:** —
