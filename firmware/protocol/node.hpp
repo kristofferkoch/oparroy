@@ -44,17 +44,43 @@ struct NodeConfig {
     uint16_t slot_bits;
 };
 
+// The §2 vsync double buffer (DESIGN.md §2 global shutter): two values
+// swapped at the frame gap. The node reads `front` for the whole frame —
+// telemetry stamped from the sampled snapshot, command outputs applied —
+// while the glue writes `back` (sample inputs, decode commands). latch()
+// is the single swap point, so neither face changes mid-frame: the §2
+// "LED/buzzer state never changes mid-frame" and "every telemetry slot
+// holds values from the same latch instant" properties. Two assignments,
+// not std::swap — freestanding, constexpr, and no <utility> in the core.
+template <typename T> struct DoubleBuffer {
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes) — a value, not encapsulation
+    T front;
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes)
+    T back;
+
+    constexpr void latch() {
+        const T stale = front;
+        front = back;
+        back = stale;
+    }
+};
+
 class Node {
 public:
     // The invariant is established here, not in a later init()
     // (code-std-cpp.md#3-types-and-arithmetic,
     // code-std-cpp.md#4-memory-and-ownership): config_valid() is the
-    // check; callers and harnesses VERIFY it at setup.
-    constexpr Node(NodeConfig config, BitSlice telemetry)
+    // check; callers and harnesses VERIFY it at setup. The telemetry is
+    // double-buffered — the node stamps `front`, the glue samples into
+    // `back`, and on_break latches (§2 vsync).
+    constexpr Node(NodeConfig config, DoubleBuffer<BitSlice> telemetry)
         : m_config(config), m_telemetry(telemetry) {}
 
-    [[nodiscard]] static constexpr bool config_valid(NodeConfig config, BitSlice telemetry) {
-        return config.slot_bits > 0 && config.slot_bits <= telemetry.bit_count && valid(telemetry);
+    [[nodiscard]] static constexpr bool config_valid(NodeConfig config,
+                                                     DoubleBuffer<BitSlice> telemetry) {
+        return config.slot_bits > 0 && config.slot_bits <= telemetry.front.bit_count &&
+               config.slot_bits <= telemetry.back.bit_count && valid(telemetry.front) &&
+               valid(telemetry.back);
     }
 
     // One decoded upstream bit. Forwarded snapped to nominal, except
@@ -85,13 +111,14 @@ public:
     }
 
     // Frame gap (line low ≥ break_min_ticks): the ring-wide vsync latch
-    // (DESIGN.md §2) — apply the previous frame's outputs, sample
-    // inputs — and the bit counter's reset: position = address starts
-    // here. Breaks propagate as line idle.
+    // (DESIGN.md §2) — swap the double buffer (apply the previous frame's
+    // outputs, sample this frame's inputs) — and the bit counter's reset:
+    // position = address starts here. Breaks propagate as line idle.
     constexpr TxAction on_break() {
         if (m_state == NodeState::Forward) {
             m_latch_count += 1;
         }
+        m_telemetry.latch();
         m_state = NodeState::Forward;
         m_bit_count = 0;
         m_slot_bit = 0;
@@ -124,7 +151,9 @@ private:
                              m_bit_count - m_config.slot_index < m_config.slot_bits;
         Bit outgoing = incoming;
         if (in_slot) {
-            outgoing = bit_at(m_telemetry, m_slot_bit);
+            // The front face — the sampled snapshot, frozen for the whole
+            // frame by the §2 vsync latch (on_break swaps, never mid-frame).
+            outgoing = bit_at(m_telemetry.front, m_slot_bit);
             m_slot_bit += 1;
         }
         m_bit_count += 1;
@@ -132,7 +161,7 @@ private:
     }
 
     NodeConfig m_config;
-    BitSlice m_telemetry;
+    DoubleBuffer<BitSlice> m_telemetry;
     NodeState m_state = NodeState::Hunt;
     uint16_t m_bit_count = 0;
     uint16_t m_slot_bit = 0;

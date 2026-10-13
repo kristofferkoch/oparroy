@@ -149,7 +149,9 @@ extern "C" int klee_rx() {
     uint8_t stamp[1];
     klee_make_symbolic(&stamp, sizeof stamp, "stamp");
     const oparroy::NodeConfig config{.slot_index = 2, .slot_bits = 4};
-    const oparroy::BitSlice telemetry{.bytes = stamp, .bit_count = 8};
+    const oparroy::DoubleBuffer<oparroy::BitSlice> telemetry{
+        .front = oparroy::BitSlice{.bytes = stamp, .bit_count = 8},
+        .back = oparroy::BitSlice{.bytes = stamp, .bit_count = 8}};
     // node declared before the decoder that references it; the shadow
     // side runs its own identical node.
     Rig rig{.node = oparroy::Node{config, telemetry},

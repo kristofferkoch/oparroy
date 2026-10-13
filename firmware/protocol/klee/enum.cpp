@@ -42,17 +42,29 @@ extern "C" int klee_enum() {
     uint8_t frame[2]; // 16 bits: two pre-sized slots
     uint8_t stamp0[1];
     uint8_t stamp1[1];
+    uint8_t stale0[1]; // a distinct face — stamped only if the latch is wrong
     klee_make_symbolic(&frame, sizeof frame, "frame");
     klee_make_symbolic(&stamp0, sizeof stamp0, "stamp0");
     klee_make_symbolic(&stamp1, sizeof stamp1, "stamp1");
+    klee_make_symbolic(&stale0, sizeof stale0, "stale0");
 
+    // The glue sampled stamp0 into node0's back face; the first break
+    // latches it to the front, so the frame stamps stamp0 — never the
+    // stale front. This is the §2 double-buffer coherence: a distinct
+    // symbolic front makes "stamps the wrong face" a proof failure.
     oparroy::Node node0{oparroy::NodeConfig{.slot_index = 0, .slot_bits = slot_bits},
-                        oparroy::BitSlice{.bytes = stamp0, .bit_count = slot_bits}};
+                        oparroy::DoubleBuffer<oparroy::BitSlice>{
+                            .front = oparroy::BitSlice{.bytes = stale0, .bit_count = slot_bits},
+                            .back = oparroy::BitSlice{.bytes = stamp0, .bit_count = slot_bits}}};
     oparroy::Node node1{oparroy::NodeConfig{.slot_index = slot_bits, .slot_bits = slot_bits},
-                        oparroy::BitSlice{.bytes = stamp1, .bit_count = slot_bits}};
-    KLEE_PROVE(
-        oparroy::Node::config_valid(oparroy::NodeConfig{.slot_index = 0, .slot_bits = slot_bits},
-                                    oparroy::BitSlice{.bytes = stamp0, .bit_count = slot_bits}));
+                        oparroy::DoubleBuffer<oparroy::BitSlice>{
+                            .front = oparroy::BitSlice{.bytes = stamp1, .bit_count = slot_bits},
+                            .back = oparroy::BitSlice{.bytes = stamp1, .bit_count = slot_bits}}};
+    KLEE_PROVE(oparroy::Node::config_valid(
+        oparroy::NodeConfig{.slot_index = 0, .slot_bits = slot_bits},
+        oparroy::DoubleBuffer<oparroy::BitSlice>{
+            .front = oparroy::BitSlice{.bytes = stale0, .bit_count = slot_bits},
+            .back = oparroy::BitSlice{.bytes = stamp0, .bit_count = slot_bits}}));
 
     KLEE_PROVE(node0.on_break() == oparroy::TxAction::Idle);
     KLEE_PROVE(node1.on_break() == oparroy::TxAction::Idle);

@@ -103,7 +103,7 @@ struct Event {
 // an over-long frame, resync on break.
 class Shadow {
 public:
-    constexpr Shadow(NodeConfig config, BitSlice telemetry)
+    constexpr Shadow(NodeConfig config, DoubleBuffer<BitSlice> telemetry)
         : m_config(config), m_telemetry(telemetry) {}
 
     // The TxAction the contract requires for one decoded cell.
@@ -120,18 +120,19 @@ public:
                              m_bit_count - m_config.slot_index < m_config.slot_bits;
         if (in_slot) {
             outgoing =
-                bit_at(m_telemetry, static_cast<uint16_t>(m_bit_count - m_config.slot_index));
+                bit_at(m_telemetry.front, static_cast<uint16_t>(m_bit_count - m_config.slot_index));
         }
         m_bit_count += 1;
         return outgoing == Bit::One ? TxAction::EmitOne : TxAction::EmitZero;
     }
 
     constexpr void on_break() {
-        // The vsync latch fires only when breaking out of a frame in
-        // progress — Hunt and Mute don't latch (node.hpp).
+        // The vsync latch (swap) fires at every gap; the count fires only
+        // when breaking out of a frame in progress (node.hpp).
         if (m_seen_break && !m_muted) {
             m_latch_count += 1;
         }
+        m_telemetry.latch();
         m_seen_break = true;
         m_muted = false;
         m_bit_count = 0;
@@ -150,7 +151,7 @@ public:
 
 private:
     NodeConfig m_config;
-    BitSlice m_telemetry;
+    DoubleBuffer<BitSlice> m_telemetry;
     bool m_seen_break = false;
     bool m_muted = false;
     uint32_t m_bit_count = 0;

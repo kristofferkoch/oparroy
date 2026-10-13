@@ -28,14 +28,29 @@ static_assert(decode_cell(CapturedCell{.period_ticks = 60, .high_ticks = 61}) ==
 constexpr lib::Span<const uint8_t> empty_bytes{nullptr, 0};
 static_assert(!valid(BitSlice{.bytes = empty_bytes, .bit_count = 1}));
 static_assert(valid(BitSlice{.bytes = empty_bytes, .bit_count = 0}));
+
+namespace {
+
+    // A vsync double buffer over two faces, for the constexpr walks below.
+    constexpr DoubleBuffer<BitSlice> double_buffered(BitSlice front, BitSlice back) {
+        return DoubleBuffer<BitSlice>{.front = front, .back = back};
+    }
+
+    constexpr BitSlice one_byte{.bytes = lib::Span<const uint8_t>{nullptr, 1}, .bit_count = 8};
+    constexpr BitSlice empty_slice{.bytes = empty_bytes, .bit_count = 8};
+
+} // namespace
+
 static_assert(Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 8},
-                                 BitSlice{.bytes = lib::Span<const uint8_t>{nullptr, 1},
-                                          .bit_count = 8}));
+                                 double_buffered(one_byte, one_byte)));
 static_assert(!Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 0},
-                                  BitSlice{.bytes = lib::Span<const uint8_t>{nullptr, 1},
-                                           .bit_count = 8}));
+                                  double_buffered(one_byte, one_byte)));
+// Both faces must carry the slot: the front is stamped this frame, the
+// back becomes the front at the next latch.
 static_assert(!Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 8},
-                                  BitSlice{.bytes = empty_bytes, .bit_count = 8}));
+                                  double_buffered(empty_slice, one_byte)));
+static_assert(!Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 8},
+                                  double_buffered(one_byte, empty_slice)));
 
 // Over-long frame containment (node.hpp, frame_max_bits): a legal
 // stream past the cap is contained like an illegal cell — Mute until
@@ -44,8 +59,8 @@ namespace {
 
     constexpr bool frame_cap_mutes() {
         const uint8_t telemetry_byte = 0;
-        Node node{NodeConfig{.slot_index = 60000, .slot_bits = 1},
-                  BitSlice{.bytes = lib::Span<const uint8_t>{&telemetry_byte, 1}, .bit_count = 8}};
+        const BitSlice face{.bytes = lib::Span<const uint8_t>{&telemetry_byte, 1}, .bit_count = 8};
+        Node node{NodeConfig{.slot_index = 60000, .slot_bits = 1}, double_buffered(face, face)};
         if (node.on_break() != TxAction::Idle) {
             return false;
         }
@@ -73,8 +88,8 @@ namespace {
 
     constexpr bool rx_decode_phases() {
         const uint8_t telemetry_byte = 0;
-        Node node{NodeConfig{.slot_index = 0xFFFF, .slot_bits = 1},
-                  BitSlice{.bytes = lib::Span<const uint8_t>{&telemetry_byte, 1}, .bit_count = 8}};
+        const BitSlice face{.bytes = lib::Span<const uint8_t>{&telemetry_byte, 1}, .bit_count = 8};
+        Node node{NodeConfig{.slot_index = 0xFFFF, .slot_bits = 1}, double_buffered(face, face)};
         RxDecoder decoder{node};
 
         // Hunt: captures before the first marker never reach the node.
@@ -138,6 +153,48 @@ namespace {
 } // namespace
 
 static_assert(rx_decode_phases());
+
+// §2 vsync double buffer (node.hpp): the node stamps the front face for
+// a whole frame, and the latch at the frame gap swaps it with the back —
+// the "global shutter" that keeps a frame's telemetry one sampled
+// snapshot. A two-frame walk with distinct faces proves both halves:
+// frame 1 stamps front, the break latches, frame 2 stamps the old back.
+namespace {
+
+    constexpr bool vsync_double_buffer() {
+        const uint8_t front_byte = 0b10101010;
+        const uint8_t back_byte = 0b01010101;
+        const BitSlice front{.bytes = lib::Span<const uint8_t>{&front_byte, 1}, .bit_count = 8};
+        const BitSlice back{.bytes = lib::Span<const uint8_t>{&back_byte, 1}, .bit_count = 8};
+        Node node{NodeConfig{.slot_index = 0, .slot_bits = 8}, double_buffered(front, back)};
+
+        // The first break latches: the sampled back becomes the front
+        // this frame stamps, bit for bit.
+        node.on_break();
+        for (const uint8_t i : lib::irange(uint8_t{8})) {
+            const TxAction expected =
+                bit_at(back, i) == Bit::One ? TxAction::EmitOne : TxAction::EmitZero;
+            if (node.on_bit(Bit::Zero) != expected) {
+                return false;
+            }
+        }
+        // The next gap latches again: the faces swap back, so frame 2
+        // stamps the original front. A node that stamped a stale face, or
+        // never swapped, fails here.
+        node.on_break();
+        for (const uint8_t i : lib::irange(uint8_t{8})) {
+            const TxAction expected =
+                bit_at(front, i) == Bit::One ? TxAction::EmitOne : TxAction::EmitZero;
+            if (node.on_bit(Bit::Zero) != expected) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+} // namespace
+
+static_assert(vsync_double_buffer());
 
 // TX store-and-forward (tx.hpp): a scripted walk over the sequencer's
 // stream contract — nothing plays before the first closed frame, frames
