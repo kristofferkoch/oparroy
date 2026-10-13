@@ -241,6 +241,37 @@ against silicon are marked **unverified**.
 - **TIM2 CH1 doubles as ETR** — the TIM2CH1/ETR pin serves both capture
   channel 1 and the external trigger input; using ETR costs you CH1
   ([openwch/ch32v003#10](https://github.com/openwch/ch32v003/issues/10)).
+- **RM §10.3.7 references a BDE (brake DMA) bit that doesn't exist** —
+  the brake-signal action list says "if the BDE bit is set, a DMA
+  request is generated", but DMAINTENR (RM v1.9 §10.4.4) defines no
+  brake DMA enable, and the SDK's `TIM_DMA_*` source list has no brake
+  entry either
+  ([ch32v00x_tim.h](https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x_tim.h)).
+  STM32 heritage; brake signaling is interrupt-only (BIE, DMAINTENR
+  bit 7).
+- **RM §10.3.5 inverts the PWM mode 1 semantics of §10.4.7** — the
+  edge-aligned bullet says OCxREF is high when CNT > CHxCVR; the OCxM
+  field description (RM v1.9 §10.4.7, 110 = PWM mode 1: active while
+  CNT < CHxCVR up-counting) and STM32 semantics say the opposite.
+  Trust the register description.
+- **SDK PWM examples disable OCxPE against the RM's own caution** —
+  RM v1.9 §10.4.7 (OCxPE note) rates PWM without the preload register
+  as determined only in one-pulse mode (OPM=1), yet EVT/EXAM/TIM/
+  PWM_Output and ComplementaryOutput_DeadTime both call
+  `TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Disable)` with OPM=0
+  ([ch32v00x_tim.c](https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/src/ch32v00x_tim.c),
+  [PWM_Output main.c](https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/TIM/PWM_Output/User/main.c)).
+  Enable OCxPE when streaming compare values — the preload costs one
+  update event of latency but is the documented-good path.
+- **OSSI/OSSR descriptions are garbled in translation** — RM v1.9
+  §10.4.18 describes both as acting "when the timer is not working",
+  and §10.3.7 cites a "SOOI bit". The SDK header names them
+  `OSSI_Off_State_Selection_for_Idle_mode_state` /
+  `OSSR_Off_State_Selection_for_Run_mode_state`
+  ([ch32v00x_tim.h](https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Peripheral/inc/ch32v00x_tim.h)),
+  matching STM32 semantics: OSSI picks idle-level drive vs disabled
+  outputs when MOE=0 (e.g. after a brake); OSSR does the same while
+  MOE=1 with the channel output off.
 
 ## EXTI / interrupts
 
