@@ -75,9 +75,9 @@ PollState poll_state;
 // values), circular, memory-increment, very-high priority (a starved
 // channel loses a capture to CCxOF — the decoder's containment case,
 // not a silent corruption).
-inline constexpr uint32_t dma_cfgr_capture = dma_cfgr_pl_very_high | dma_cfgr_msize_16 |
-                                             dma_cfgr_psize_16 | dma_cfgr_minc | dma_cfgr_circ |
-                                             dma_cfgr_en;
+inline constexpr DmaCfgr dma_cfgr_capture = dma_cfgr_pl_very_high | dma_cfgr_msize_16 |
+                                            dma_cfgr_psize_16 | dma_cfgr_minc | dma_cfgr_circ |
+                                            dma_cfgr_en;
 
 // One capture stream → ring channel. The address cast is the reverse
 // of regs.hpp's accessor casts — the DMA's view of the same MMIO
@@ -87,7 +87,7 @@ void dma_config(uint32_t channel, const volatile uint32_t& source, const volatil
     dma.cntr = ring_cells;
     dma.paddr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&source));
     dma.maddr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(dest));
-    dma.cfgr = dma_cfgr_capture;
+    dma.cfgr.write(dma_cfgr_capture);
 }
 
 // Restart both channels at ring base after a sync point (overcapture,
@@ -96,8 +96,8 @@ void dma_config(uint32_t channel, const volatile uint32_t& source, const volatil
 // construction (the break gap holds no falling edge, so post-marker
 // writes alternate period, high, … on matching indices).
 void dma_resync() {
-    dma_channel(pins::rx_a_period_dma).cfgr = 0;
-    dma_channel(pins::rx_a_high_dma).cfgr = 0;
+    dma_channel(pins::rx_a_period_dma).cfgr.write({}); // all-zero: channel disabled
+    dma_channel(pins::rx_a_high_dma).cfgr.write({});
     dma_config(pins::rx_a_period_dma, tim2().ch1cvr, period_ring);
     dma_config(pins::rx_a_high_dma, tim2().ch2cvr, high_ring);
     // Captures during the disabled window set the overcapture flags;

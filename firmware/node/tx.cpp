@@ -74,9 +74,9 @@ PollState poll_state;
 // writes the compare register's low half), circular, memory-increment,
 // very-high priority (a starved channel plays a stale cell — a wrong
 // bit on the wire, the one failure worse than silence).
-inline constexpr uint32_t dma_cfgr_compare = dma_cfgr_pl_very_high | dma_cfgr_msize_16 |
-                                             dma_cfgr_psize_16 | dma_cfgr_minc | dma_cfgr_dir |
-                                             dma_cfgr_circ | dma_cfgr_en;
+inline constexpr DmaCfgr dma_cfgr_compare = dma_cfgr_pl_very_high | dma_cfgr_msize_16 |
+                                            dma_cfgr_psize_16 | dma_cfgr_minc | dma_cfgr_dir |
+                                            dma_cfgr_circ | dma_cfgr_en;
 
 // One compare stream ← ring channel. The address cast is the reverse
 // of regs.hpp's accessor casts — the DMA's view of the same MMIO
@@ -86,7 +86,7 @@ void dma_config(uint32_t channel, const volatile uint32_t& dest, const volatile 
     dma.cntr = ring_cells;
     dma.paddr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&dest));
     dma.maddr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(source));
-    dma.cfgr = dma_cfgr_compare;
+    dma.cfgr.write(dma_cfgr_compare);
 }
 
 } // namespace
