@@ -70,7 +70,9 @@ extern "C" int klee_garbage() {
     uint8_t stamp[1];
     klee_make_symbolic(&stamp, sizeof stamp, "stamp");
     oparroy::Node node{oparroy::NodeConfig{.slot_index = 2, .slot_bits = 4},
-                       oparroy::BitSlice{.bytes = stamp, .bit_count = 8}};
+                       oparroy::DoubleBuffer<oparroy::BitSlice>{
+                           .front = oparroy::BitSlice{.bytes = stamp, .bit_count = 8},
+                           .back = oparroy::BitSlice{.bytes = stamp, .bit_count = 8}}};
 
     // Hunt: whatever arrives before the first break is never forwarded
     // (position unknown ⇒ forwarding could stamp the wrong slot).

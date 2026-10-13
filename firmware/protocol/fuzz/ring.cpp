@@ -25,14 +25,17 @@ constexpr uint16_t slot_bits = 8;
 struct NodeRig {
     // The defaults are placeholders — make_rig designates every member.
     oparroy::NodeConfig config{};
-    oparroy::BitSlice telemetry{.bytes = lib::Span<const uint8_t>{nullptr, 0}, .bit_count = 0};
+    oparroy::DoubleBuffer<oparroy::BitSlice> telemetry{
+        .front = oparroy::BitSlice{.bytes = lib::Span<const uint8_t>{nullptr, 0}, .bit_count = 0},
+        .back = oparroy::BitSlice{.bytes = lib::Span<const uint8_t>{nullptr, 0}, .bit_count = 0}};
     oparroy::Node node;
     oparroy::fuzz::Shadow shadow;
 };
 
 NodeRig make_rig(uint8_t slot_index, lib::Span<const uint8_t> telemetry_byte) {
     const oparroy::NodeConfig config{.slot_index = slot_index, .slot_bits = slot_bits};
-    const oparroy::BitSlice telemetry{.bytes = telemetry_byte, .bit_count = slot_bits};
+    const oparroy::BitSlice face{.bytes = telemetry_byte, .bit_count = slot_bits};
+    const oparroy::DoubleBuffer<oparroy::BitSlice> telemetry{.front = face, .back = face};
     return NodeRig{.config = config,
                    .telemetry = telemetry,
                    .node = oparroy::Node{config, telemetry},

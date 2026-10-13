@@ -118,7 +118,9 @@ struct HopRig {
     oparroy::fuzz::Shadow shadow;
     ShadowCut shadow_cut;
     oparroy::NodeConfig config{};
-    oparroy::BitSlice telemetry{.bytes = lib::Span<const uint8_t>{nullptr, 0}, .bit_count = 0};
+    oparroy::DoubleBuffer<oparroy::BitSlice> telemetry{
+        .front = oparroy::BitSlice{.bytes = lib::Span<const uint8_t>{nullptr, 0}, .bit_count = 0},
+        .back = oparroy::BitSlice{.bytes = lib::Span<const uint8_t>{nullptr, 0}, .bit_count = 0}};
 };
 
 // The wire into a hop: rising-edge bookkeeping for the capture stream
@@ -237,7 +239,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         return oparroy::NodeConfig{.slot_index = slot_index, .slot_bits = slot_bits};
     };
     const auto telemetry_of = [&telemetry_span](size_t index) {
-        return oparroy::BitSlice{.bytes = telemetry_span.subspan(index, 1), .bit_count = slot_bits};
+        const oparroy::BitSlice face{.bytes = telemetry_span.subspan(index, 1),
+                                     .bit_count = slot_bits};
+        return oparroy::DoubleBuffer<oparroy::BitSlice>{.front = face, .back = face};
     };
     // node declared before the decoder that references it; each rig is
     // initialized in place so the reference binds to the member.

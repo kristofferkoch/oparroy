@@ -28,13 +28,16 @@ extern "C" int klee_echo() {
         byte = 0;
     }
     const lib::Span<const uint8_t> telemetry_span{telemetry};
+    // Parked slots: both faces of the vsync double buffer are the same
+    // 1-bit telemetry — nothing is sampled, nothing stamps.
+    const auto telemetry_of = [&](size_t index) {
+        const oparroy::BitSlice face{.bytes = telemetry_span.subspan(index, 1), .bit_count = 1};
+        return oparroy::DoubleBuffer<oparroy::BitSlice>{.front = face, .back = face};
+    };
     oparroy::Node nodes[] = {
-        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1},
-                      oparroy::BitSlice{.bytes = telemetry_span.subspan(0, 1), .bit_count = 1}},
-        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1},
-                      oparroy::BitSlice{.bytes = telemetry_span.subspan(1, 1), .bit_count = 1}},
-        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1},
-                      oparroy::BitSlice{.bytes = telemetry_span.subspan(2, 1), .bit_count = 1}},
+        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1}, telemetry_of(0)},
+        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1}, telemetry_of(1)},
+        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1}, telemetry_of(2)},
     };
 
     for (oparroy::Node& node : nodes) {

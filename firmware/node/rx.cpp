@@ -43,16 +43,20 @@ volatile uint16_t high_ring[ring_cells];
 
 // Parked until the ENUM/personality slice lands: a slot index no legal
 // frame reaches, one telemetry bit. Decode still runs — the node just
-// never stamps. BitSlice adopts a C array (span.hpp).
+// never stamps. BitSlice adopts a C array (span.hpp). The telemetry is
+// the §2 vsync double buffer; both faces are the parked bit until input
+// sampling lands with the app-I/O slice.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 constexpr uint8_t parked_telemetry[] = {0};
 constexpr oparroy::NodeConfig parked_config{.slot_index = 0xFFFF, .slot_bits = 1};
 constexpr oparroy::BitSlice parked_bits{.bytes = lib::Span<const uint8_t>{parked_telemetry},
                                         .bit_count = 1};
-static_assert(oparroy::Node::config_valid(parked_config, parked_bits));
+constexpr oparroy::DoubleBuffer<oparroy::BitSlice> parked_latch{.front = parked_bits,
+                                                                .back = parked_bits};
+static_assert(oparroy::Node::config_valid(parked_config, parked_latch));
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) — the one node instance
-oparroy::Node node{parked_config, parked_bits};
+oparroy::Node node{parked_config, parked_latch};
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) — the node's decoder
 oparroy::RxDecoder decoder{node};
 

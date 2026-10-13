@@ -55,8 +55,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
         .slot_index = cursor.take_u16(),
         .slot_bits = static_cast<uint16_t>(1 + (cursor.take_u8() % 16)),
     };
-    const oparroy::BitSlice telemetry{.bytes = lib::Span<const uint8_t>{telemetry_storage},
-                                      .bit_count = 16};
+    const oparroy::BitSlice face{.bytes = lib::Span<const uint8_t>{telemetry_storage},
+                                 .bit_count = 16};
+    const oparroy::DoubleBuffer<oparroy::BitSlice> telemetry{.front = face, .back = face};
     FUZZ_PROVE(oparroy::Node::config_valid(config, telemetry));
 
     Rig rig{.node = oparroy::Node{config, telemetry},
