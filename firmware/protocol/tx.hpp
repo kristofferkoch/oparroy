@@ -1,26 +1,19 @@
 #pragma once
 
-// TX store-and-forward sequencer (DESIGN.md §2 — the §2 fallback rung
-// made real: per-bit cut-through forwarding is the endpoint; this is
-// the correctness rung under it). Consumes the Node's TxAction stream and
-// produces the compare-value stream the TIM1 DMA glue plays onto the
-// wire (the MMIO half is firmware/node/tx.cpp). Pure symbol logic with
-// no time inside, host-testable and harness-proved like the rest of the
-// protocol core (§8).
-//
-// Store-and-forward by whole frame: bits accumulate until the frame's
-// break closes the frame; only closed frames play. Playback is
-// therefore gap-free at the nominal cell rate by construction — no
-// RX↔TX rate-matching is needed (upstream faster just grows the pending
-// frame; upstream slower just idles the line between frames). The cost
-// is ~one frame of latency per hop, which this rung accepts.
+// TX streamers (DESIGN.md §2): the Node's TxAction stream becomes the
+// compare-value stream the TIM1 DMA glue plays onto the wire (the MMIO
+// half is firmware/node/tx.cpp). Pure symbol logic with no time inside,
+// host-testable and harness-proved like the rest of the protocol core
+// (§8). Two rungs share the pop() contract below — the glue drives the
+// cut-through endpoint (TxCutThrough), and the store-and-forward
+// fallback (TxSequencer) stays in the tree for the timing-closure
+// escape hatch.
 //
 // The played stream, pop() per cell:
-// - a closed frame's bits, snapped to nominal (t0h_ticks/t1h_ticks —
+// - a re-emitted bit, snapped to nominal (t0h_ticks/t1h_ticks —
 //   encode_cell's compare half; ATRLR holds the 60-tick period),
-// - then tx_break_cells idle cells (tx_idle_compare) before any later
-//   frame, so every frame on the wire is preceded by an idle run the
-//   downstream break detector must see,
+// - tx_break_cells idle cells (tx_idle_compare) after every frame, so
+//   the downstream break detector always sees ≥ break_min_ticks of low,
 // - tx_idle_compare whenever nothing is queued (pop-or-idle: the glue
 //   can always refill the DMA rings; the line just idles).
 //
@@ -34,12 +27,12 @@
 // Whether a CVR=0 (or CVR ≥ ATRLR) corner even generates the match is
 // undocumented (notes/timers.md), so the stream never depends on it.
 //
-// Containment (§2): an Idle action while a frame is accumulating means
-// the node went Mute (in Forward on_bit never returns Idle), and an
-// over-full ring is the same shape — the accumulating frame is
-// *discarded*, never regenerated, and nothing accumulates until the
-// next break. on_break() closes the accumulating frame and clears the
-// discard.
+// Containment (§2): an Idle action means the node stopped regenerating
+// (Hunt or Mute). Cut-through mutes and lets its FIFO drain to idle;
+// store-and-forward discards the accumulating frame. A full FIFO/ring
+// is the same shape for both — drop, never regenerate a partial frame.
+// on_break() resyncs: cut-through drops its backlog and re-arms the
+// re-emitted break's idle run; store-and-forward closes the frame.
 
 #include "../lib/span.hpp"
 #include "bits.hpp"
@@ -64,6 +57,117 @@ inline constexpr uint16_t tx_break_cells = 48;
 // still fires mid-cell (the header comment gives the full argument).
 inline constexpr uint16_t tx_idle_compare = 1;
 
+// Cut-through FIFO capacity, in cells. Sized by the worst-case fill the
+// re-emitted break forces: the idle run delays the next frame, whose
+// bits accumulate while the idles play (~50 for a pre-sized ENUM at the
+// ±4.4 % relative HSI drift), then the rest of the frame drifts (~35) —
+// ~85 cells steady-state plus the ≤ 16-cell RX burst, so 128 (256 B)
+// with margin. Full derivation in docs/size-estimate.md.
+inline constexpr uint16_t tx_cut_through_cells = 128;
+
+// Per-bit cut-through forwarding (DESIGN.md §2 — the endpoint): each
+// decoded bit is re-emitted snapped to nominal after a bounded pipeline
+// delay, so decode jitter is per-hop, never cumulative (§2 re-timing). A
+// bounded compare FIFO absorbs the RX↔TX rate mismatch — upstream and
+// local HSI drift ≤ ±2.2 % each, so a pre-sized ENUM frame drifts ≤ ~37
+// cells — plus the ≤ 16-cell RX burst. The break is re-emitted, never
+// merely inherited: the drift backlog would compress the output gap
+// below break_min_ticks, so on_break() drops the backlog and re-arms a
+// full tx_break_cells idle run (m_idle_remaining, drained before the
+// FIFO so the next frame's bits wait out the break).
+template <uint16_t CapacityCells = tx_cut_through_cells> class TxCutThrough {
+public:
+    static_assert(CapacityCells > 0, "a cut-through FIFO must hold at least one cell");
+
+    // One Node output. Emit* enqueues the nominal compare; Idle is
+    // containment (Hunt or Mute) — stop regenerating and let the FIFO
+    // drain to idle until the next break. Enqueueing past capacity is
+    // the same shape: mute, never corrupt a cell mid-frame.
+    constexpr void push(TxAction action) {
+        if (m_muted) {
+            return;
+        }
+        switch (action) {
+        case TxAction::EmitZero:
+            enqueue(t0h_ticks);
+            break;
+        case TxAction::EmitOne:
+            enqueue(t1h_ticks);
+            break;
+        case TxAction::Idle:
+            m_muted = true;
+            break;
+        }
+    }
+
+    // The frame gap: resync — drop any backlog (mute containment), clear
+    // the mute, and re-arm the re-emitted break's idle run so the output
+    // gap stays ≥ break_min_ticks regardless of the drained drift.
+    constexpr void on_break() {
+        m_head = 0;
+        m_queued = 0;
+        m_muted = false;
+        m_idle_remaining = tx_break_cells;
+    }
+
+    // The next cell's compare value: the re-armed break's idle run
+    // first, then the FIFO, then idle when nothing is queued.
+    [[nodiscard]] constexpr uint16_t pop() {
+        if (m_idle_remaining > 0) {
+            m_idle_remaining -= 1;
+            return tx_idle_compare;
+        }
+        if (m_queued == 0) {
+            return tx_idle_compare;
+        }
+        const uint16_t compare = m_compare[m_head];
+        m_head = static_cast<uint16_t>((m_head + 1) % CapacityCells);
+        m_queued -= 1;
+        return compare;
+    }
+
+    [[nodiscard]] constexpr uint16_t queued() const {
+        return m_queued;
+    }
+    [[nodiscard]] constexpr uint16_t idle_remaining() const {
+        return m_idle_remaining;
+    }
+    [[nodiscard]] constexpr bool muted() const {
+        return m_muted;
+    }
+
+private:
+    constexpr void enqueue(uint16_t compare) {
+        if (m_queued >= CapacityCells) {
+            m_muted = true;
+            return;
+        }
+        const uint32_t pos = (static_cast<uint32_t>(m_head) + m_queued) % CapacityCells;
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+        m_compare[static_cast<uint16_t>(pos)] = compare;
+        m_queued += 1;
+    }
+
+    // The DMA refill runs ahead of the wire, but the storage is only
+    // ever written by the sequencer itself — a plain array. Value-init
+    // like TxSequencer's m_bits: cells are read only below m_queued, so
+    // the init is defensive, and the target's gcc lowers the 256 B
+    // default to a memset the freestanding runtime provides (the
+    // store-and-forward's 256 B frame queue already does the same).
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+    uint16_t m_compare[CapacityCells] = {};
+    uint16_t m_head = 0;           // next cell to play
+    uint16_t m_queued = 0;         // cells at [m_head, …)
+    uint16_t m_idle_remaining = 0; // re-armed break idle cells still owed
+    bool m_muted = false;
+};
+
+// Store-and-forward by whole frame (DESIGN.md §2 — the fallback rung
+// made real): bits accumulate until the frame's break closes it; only
+// closed frames play, gap-free at the nominal cell rate by construction
+// — no RX↔TX rate-matching (upstream faster grows the pending frame,
+// slower idles between frames) — at ~one frame of latency per hop.
+//
 // CapacityBits is a template parameter so the KLEE/fuzz harnesses can
 // prove the ring wraparound and overflow paths at tiny capacities
 // (runtime.hpp's width-generic proof pattern); the target uses the

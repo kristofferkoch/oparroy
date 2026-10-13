@@ -204,6 +204,93 @@ namespace {
 
 static_assert(tx_sequencer_phases());
 
+// TX cut-through (tx.hpp): a scripted walk over the FIFO's stream
+// contract — idle before the first frame, bits re-emit snapped to
+// nominal in order, on_break resyncs and re-arms the idle run (drained
+// first), containment (Idle) mutes and the FIFO drains to idle, and a
+// full FIFO mutes rather than corrupting. Capacity 16 like the
+// store-and-forward walk, so the overflow path is in reach via a second,
+// tiny instance.
+namespace {
+
+    template <uint16_t C> constexpr bool cut_pops_idle(TxCutThrough<C>& cut, uint16_t count) {
+        for ([[maybe_unused]] const uint16_t i : lib::irange(count)) {
+            if (cut.pop() != tx_idle_compare) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    constexpr bool cut_through_phases() {
+        TxCutThrough<16> cut;
+
+        // Nothing plays before the first frame.
+        if (!cut_pops_idle(cut, 4)) {
+            return false;
+        }
+
+        // Bits re-emit snapped to nominal, in order.
+        cut.push(TxAction::EmitOne);
+        cut.push(TxAction::EmitZero);
+        if (cut.queued() != 2 || cut.pop() != t1h_ticks || cut.pop() != t0h_ticks) {
+            return false;
+        }
+
+        // The break resyncs (dropping any backlog) and re-arms the idle
+        // run, which drains before the next frame's bits.
+        cut.push(TxAction::EmitOne);
+        cut.on_break();
+        if (cut.queued() != 0 || cut.idle_remaining() != tx_break_cells) {
+            return false;
+        }
+        cut.push(TxAction::EmitZero);
+        for ([[maybe_unused]] const uint16_t i : lib::irange(tx_break_cells)) {
+            if (cut.pop() != tx_idle_compare) {
+                return false;
+            }
+        }
+        if (cut.pop() != t0h_ticks || !cut_pops_idle(cut, 4)) {
+            return false;
+        }
+
+        // Containment: an Idle mutes, the forwarded prefix drains, and
+        // no further pushes land until the break resyncs.
+        cut.push(TxAction::EmitOne);
+        cut.push(TxAction::Idle);
+        cut.push(TxAction::EmitOne);
+        if (!cut.muted() || cut.queued() != 1 || cut.pop() != t1h_ticks) {
+            return false;
+        }
+        if (!cut_pops_idle(cut, 4)) {
+            return false;
+        }
+        cut.on_break();
+        if (cut.muted() || cut.idle_remaining() != tx_break_cells) {
+            return false;
+        }
+
+        // Overflow: a full FIFO mutes rather than corrupting a cell.
+        TxCutThrough<4> small;
+        for ([[maybe_unused]] const uint16_t i : lib::irange(uint16_t{4})) {
+            small.push(TxAction::EmitOne);
+        }
+        small.push(TxAction::EmitOne);
+        if (!small.muted() || small.queued() != 4) {
+            return false;
+        }
+        for ([[maybe_unused]] const uint16_t i : lib::irange(uint16_t{4})) {
+            if (small.pop() != t1h_ticks) {
+                return false;
+            }
+        }
+        return cut_pops_idle(small, 4);
+    }
+
+} // namespace
+
+static_assert(cut_through_phases());
+
 // Foundation-library cells (firmware/lib/range.hpp, static_vector.hpp):
 // constexpr-proved here, the same TU that hosts Span's asserts.
 namespace {

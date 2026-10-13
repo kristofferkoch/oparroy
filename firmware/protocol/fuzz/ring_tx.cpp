@@ -1,6 +1,6 @@
-// Fuzz: the store-and-forward ring end-to-end — the card's rung. A
-// 3-hop chain where each hop is the full node stack: RxDecoder → Node →
-// TxSequencer, and each hop's played compare stream feeds the next
+// Fuzz: the cut-through ring end-to-end — the card's rung. A 3-hop
+// chain where each hop is the full node stack: RxDecoder → Node →
+// TxCutThrough, and each hop's played compare stream feeds the next
 // hop's capture path through a wire model. Originated cells enter hop0;
 // whatever the fuzzer injects, every hop must match its shadows step
 // for step: the decoder's TxActions against the node-level shadow
@@ -8,7 +8,7 @@
 // equality is transitive — hop k+1's shadow expects exactly what
 // hop k's shadow emitted — so bit-exact forwarding from origin to
 // drain holds for the chain (fuzz/ring.cpp's argument), now through
-// the real RX/TX path with a frame of store-and-forward latency per
+// the real RX/TX path with a bounded cut-through pipeline delay per
 // hop.
 //
 // The wire model turns a pop stream back into capture pairs: a compare
@@ -47,78 +47,63 @@ constexpr uint16_t slot_bits = 8;
 constexpr uint32_t wire_gap_cap_ticks = 4800;
 
 // The queue shadow, written from the contract (tx.hpp's header
-// comment) — the fuzz/tx.cpp model, instantiated per hop.
-struct ShadowTx {
-    // 2× capacity: up to capacity unconsumed playable bits plus the
-    // capacity-bit pending frame a break can close onto them.
+// comment) — the fuzz/cut_through.cpp model, instantiated per hop. A
+// ring mirroring the implementation's indexing: the checked semantics
+// are the idle-run-first ordering, the mute containment, and the break
+// resync (a linear queue here would need a compaction loop).
+struct ShadowCut {
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint8_t playable[2 * capacity] = {};
-    uint16_t playable_count = 0;
-    uint16_t play_pos = 0;
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint8_t pending[capacity] = {};
-    uint16_t pending_count = 0;
+    uint16_t cells[capacity] = {};
+    uint16_t head = 0;
+    uint16_t count = 0;
     uint16_t idle = 0;
-    bool dropped = false;
+    bool muted = false;
 };
 
-void shadow_push(ShadowTx& shadow, oparroy::TxAction action) {
+void shadow_push(ShadowCut& shadow, oparroy::TxAction action) {
+    if (shadow.muted) {
+        return;
+    }
     if (action == oparroy::TxAction::Idle) {
-        shadow.pending_count = 0;
-        shadow.dropped = true;
+        shadow.muted = true;
         return;
     }
-    if (shadow.dropped) {
-        return;
-    }
-    if ((shadow.playable_count - shadow.play_pos) + shadow.pending_count >= capacity) {
-        shadow.pending_count = 0;
-        shadow.dropped = true;
+    if (shadow.count >= capacity) {
+        shadow.muted = true;
         return;
     }
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-    shadow.pending[shadow.pending_count] = action == oparroy::TxAction::EmitOne ? 1 : 0;
-    shadow.pending_count += 1;
+    shadow.cells[(shadow.head + shadow.count) % capacity] =
+        action == oparroy::TxAction::EmitOne ? oparroy::t1h_ticks : oparroy::t0h_ticks;
+    shadow.count += 1;
 }
 
-void shadow_break(ShadowTx& shadow) {
-    // Compact first: the consumed prefix is dead, and without this the
-    // linear queue grows past the array over a long fuzz run.
-    for (const uint16_t i : lib::irange(shadow.play_pos, shadow.playable_count)) {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-        shadow.playable[i - shadow.play_pos] = shadow.playable[i];
-    }
-    shadow.playable_count -= shadow.play_pos;
-    shadow.play_pos = 0;
-    for (const uint16_t i : lib::irange(shadow.pending_count)) {
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-        shadow.playable[shadow.playable_count] = shadow.pending[i];
-        shadow.playable_count += 1;
-    }
-    shadow.pending_count = 0;
-    shadow.dropped = false;
+void shadow_break(ShadowCut& shadow) {
+    shadow.head = 0;
+    shadow.count = 0;
+    shadow.muted = false;
+    shadow.idle = oparroy::tx_break_cells;
 }
 
-uint16_t shadow_pop(ShadowTx& shadow) {
+uint16_t shadow_pop(ShadowCut& shadow) {
     if (shadow.idle > 0) {
         shadow.idle -= 1;
         return oparroy::tx_idle_compare;
     }
-    if (shadow.play_pos == shadow.playable_count) {
+    if (shadow.count == 0) {
         return oparroy::tx_idle_compare;
     }
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-    const uint8_t bit = shadow.playable[shadow.play_pos];
-    shadow.play_pos += 1;
-    if (shadow.play_pos == shadow.playable_count) {
-        shadow.idle = oparroy::tx_break_cells;
-    }
-    return bit != 0 ? oparroy::t1h_ticks : oparroy::t0h_ticks;
+    const uint16_t compare = shadow.cells[shadow.head];
+    shadow.head = static_cast<uint16_t>((shadow.head + 1) % capacity);
+    shadow.count -= 1;
+    return compare;
 }
 
-void prove_counts(const oparroy::TxSequencer<capacity>& sequencer, const ShadowTx& shadow) {
-    FUZZ_PROVE(sequencer.playable_bits() == shadow.playable_count - shadow.play_pos);
-    FUZZ_PROVE(sequencer.pending_bits() == shadow.pending_count);
+void prove_counts(const oparroy::TxCutThrough<capacity>& cut, const ShadowCut& shadow) {
+    FUZZ_PROVE(cut.queued() == shadow.count);
+    FUZZ_PROVE(cut.idle_remaining() == shadow.idle);
+    FUZZ_PROVE(cut.muted() == shadow.muted);
 }
 
 // One hop: the node stack, its shadows, and the run-constant setup a
@@ -129,9 +114,9 @@ struct HopRig {
     // designate every member (fuzz/ring.cpp's NodeRig pattern).
     oparroy::Node node;
     oparroy::RxDecoder decoder;
-    oparroy::TxSequencer<capacity> sequencer;
+    oparroy::TxCutThrough<capacity> cut;
     oparroy::fuzz::Shadow shadow;
-    ShadowTx shadow_tx;
+    ShadowCut shadow_cut;
     oparroy::NodeConfig config{};
     oparroy::BitSlice telemetry{.bytes = lib::Span<const uint8_t>{nullptr, 0}, .bit_count = 0};
 };
@@ -170,8 +155,8 @@ void wire_cell(Wire& wire, HopRig& hop, uint16_t high_ticks) {
         const oparroy::TxAction action = hop.decoder.on_period(gap);
         if (gap >= oparroy::break_min_ticks) {
             FUZZ_PROVE(action == oparroy::TxAction::Idle);
-            hop.sequencer.on_break();
-            shadow_break(hop.shadow_tx);
+            hop.cut.on_break();
+            shadow_break(hop.shadow_cut);
             hop.shadow.on_break();
             FUZZ_PROVE(hop.node.latch_count() == hop.shadow.latch_count());
         } else {
@@ -181,8 +166,8 @@ void wire_cell(Wire& wire, HopRig& hop, uint16_t high_ticks) {
             const oparroy::Bit bit =
                 decode == oparroy::CellDecode::One ? oparroy::Bit::One : oparroy::Bit::Zero;
             FUZZ_PROVE(action == hop.shadow.expect(decode, bit));
-            hop.sequencer.push(action);
-            shadow_push(hop.shadow_tx, action);
+            hop.cut.push(action);
+            shadow_push(hop.shadow_cut, action);
         }
         wire.pending = false;
     }
@@ -190,22 +175,22 @@ void wire_cell(Wire& wire, HopRig& hop, uint16_t high_ticks) {
     wire.pending = true;
     wire.pending_high = high_ticks;
     wire.have_edge = true;
-    prove_counts(hop.sequencer, hop.shadow_tx);
+    prove_counts(hop.cut, hop.shadow_cut);
 }
 
 // One sequencer pop onto the wire into the hop's downstream neighbor.
 void drain(HopRig& hop, Wire& out_wire, HopRig& downstream, uint8_t pops) {
     for (const uint8_t i : lib::irange(pops)) {
         (void)i;
-        const uint16_t compare = hop.sequencer.pop();
-        FUZZ_PROVE(compare == shadow_pop(hop.shadow_tx));
+        const uint16_t compare = hop.cut.pop();
+        FUZZ_PROVE(compare == shadow_pop(hop.shadow_cut));
         if (compare == oparroy::tx_idle_compare) {
             wire_idle(out_wire);
         } else {
             wire_cell(out_wire, downstream, compare);
         }
     }
-    prove_counts(hop.sequencer, hop.shadow_tx);
+    prove_counts(hop.cut, hop.shadow_cut);
 }
 
 // The drain line: the last hop's played cells go to the supervisor's
@@ -213,9 +198,9 @@ void drain(HopRig& hop, Wire& out_wire, HopRig& downstream, uint8_t pops) {
 void drain_end(HopRig& hop, uint8_t pops) {
     for (const uint8_t i : lib::irange(pops)) {
         (void)i;
-        FUZZ_PROVE(hop.sequencer.pop() == shadow_pop(hop.shadow_tx));
+        FUZZ_PROVE(hop.cut.pop() == shadow_pop(hop.shadow_cut));
     }
-    prove_counts(hop.sequencer, hop.shadow_tx);
+    prove_counts(hop.cut, hop.shadow_cut);
 }
 
 // Brown-out: the hop reboots mid-stream (node, sequencer) and its
@@ -225,9 +210,9 @@ void drain_end(HopRig& hop, uint8_t pops) {
 void reset_rig(HopRig& rig, Wire& in_wire) {
     rig.node = oparroy::Node{rig.config, rig.telemetry};
     rig.decoder.resync();
-    rig.sequencer = oparroy::TxSequencer<capacity>{};
+    rig.cut = oparroy::TxCutThrough<capacity>{};
     rig.shadow.on_reset();
-    rig.shadow_tx = ShadowTx{};
+    rig.shadow_cut = ShadowCut{};
     in_wire = Wire{};
 }
 
@@ -258,23 +243,23 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     // initialized in place so the reference binds to the member.
     HopRig rig0{.node = oparroy::Node{config_of(slot_storage[0]), telemetry_of(0)},
                 .decoder = oparroy::RxDecoder{rig0.node},
-                .sequencer = oparroy::TxSequencer<capacity>{},
+                .cut = oparroy::TxCutThrough<capacity>{},
                 .shadow = oparroy::fuzz::Shadow{config_of(slot_storage[0]), telemetry_of(0)},
-                .shadow_tx = ShadowTx{},
+                .shadow_cut = ShadowCut{},
                 .config = config_of(slot_storage[0]),
                 .telemetry = telemetry_of(0)};
     HopRig rig1{.node = oparroy::Node{config_of(slot_storage[1]), telemetry_of(1)},
                 .decoder = oparroy::RxDecoder{rig1.node},
-                .sequencer = oparroy::TxSequencer<capacity>{},
+                .cut = oparroy::TxCutThrough<capacity>{},
                 .shadow = oparroy::fuzz::Shadow{config_of(slot_storage[1]), telemetry_of(1)},
-                .shadow_tx = ShadowTx{},
+                .shadow_cut = ShadowCut{},
                 .config = config_of(slot_storage[1]),
                 .telemetry = telemetry_of(1)};
     HopRig rig2{.node = oparroy::Node{config_of(slot_storage[2]), telemetry_of(2)},
                 .decoder = oparroy::RxDecoder{rig2.node},
-                .sequencer = oparroy::TxSequencer<capacity>{},
+                .cut = oparroy::TxCutThrough<capacity>{},
                 .shadow = oparroy::fuzz::Shadow{config_of(slot_storage[2]), telemetry_of(2)},
-                .shadow_tx = ShadowTx{},
+                .shadow_cut = ShadowCut{},
                 .config = config_of(slot_storage[2]),
                 .telemetry = telemetry_of(2)};
 
