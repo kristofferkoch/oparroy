@@ -28,14 +28,17 @@ namespace lib {
     // (verify.hpp spells out the mechanism).
     (void)location;
 
-    // Stop the capture timer, then pin PD3 low: the strobe is
-    // software-toggled (main.cpp), so parking the loop already starves
-    // the charge pump — driving the pin low just keeps a frozen-high
-    // output from looking alive. The watchdog engages bypass ~0.5 ms
-    // after the last edge (DESIGN.md §4) — the deliberate
-    // bypass-engage the hook contract asks for, not a hung loop
-    // masquerading as life.
+    // Stop the capture timer and brake the TX stream, then pin PD3
+    // low: the strobe is software-toggled (main.cpp), so parking the
+    // loop already starves the charge pump — driving the pin low just
+    // keeps a frozen-high output from looking alive. Clearing MOE drops
+    // both TX channels to their OIS idle levels (low) immediately —
+    // the line sees the break downstream should see — and the watchdog
+    // engages bypass ~0.5 ms after the last strobe edge (DESIGN.md §4),
+    // holding BKIN low from there. The deliberate bypass-engage the
+    // hook contract asks for, not a hung loop masquerading as life.
     tim2().ctlr1 = 0;
+    tim1().bdtr &= ~tim1_bdtr_moe;
     gpio(pins::keepalive.port_base).bcr = 1u << pins::keepalive.bit;
 
     // Interrupts off, then park deliberately: by the time anything

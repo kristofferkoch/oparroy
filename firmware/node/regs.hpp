@@ -44,6 +44,7 @@ inline constexpr uint32_t rcc_apb2pcenr_afioen = 1u << 0;
 inline constexpr uint32_t rcc_apb2pcenr_iopaen = 1u << 2;
 inline constexpr uint32_t rcc_apb2pcenr_iopcen = 1u << 4;
 inline constexpr uint32_t rcc_apb2pcenr_iopden = 1u << 5;
+inline constexpr uint32_t rcc_apb2pcenr_tim1en = 1u << 11;
 inline constexpr uint32_t rcc_apb1pcenr_tim2en = 1u << 0;
 
 // Flash interface, base 0x40022000 (RM §16.3); only ACTLR is modeled —
@@ -73,6 +74,7 @@ struct Gpio {
 // vs down (0); output: 00 push-pull, 01 open-drain, 10 AF push-pull,
 // 11 AF open-drain).
 inline constexpr uint32_t gpio_cfglr_in_pulled = 0x8;
+inline constexpr uint32_t gpio_cfglr_in_floating = 0x4;
 inline constexpr uint32_t gpio_cfglr_out_pp_10mhz = 0x1;
 inline constexpr uint32_t gpio_cfglr_out_af_pp_10mhz = 0x9;
 
@@ -130,6 +132,73 @@ inline constexpr uint32_t tim2_dmaintenr_cc2de = 1u << 10;
 inline constexpr uint32_t tim2_intfr_cc1of = 1u << 9;
 inline constexpr uint32_t tim2_intfr_cc2of = 1u << 10;
 
+// TIM1, base 0x40012C00 (RM §10.4): the TIM2 layout through CH4CVR
+// plus the advanced-control registers (notes/timers.md).
+struct Tim1 {
+    uint32_t ctlr1;     // 0x00
+    uint32_t ctlr2;     // 0x04
+    uint32_t smcfgr;    // 0x08
+    uint32_t dmaintenr; // 0x0C
+    uint32_t intfr;     // 0x10
+    uint32_t swevgr;    // 0x14
+    uint32_t chctlr1;   // 0x18 — channels 1/2
+    uint32_t chctlr2;   // 0x1C — channels 3/4
+    uint32_t ccer;      // 0x20
+    uint32_t cnt;       // 0x24
+    uint32_t psc;       // 0x28 — real divider = psc + 1
+    uint32_t atrlr;     // 0x2C — auto-reload
+    uint32_t rptcr;     // 0x30 — repetition counter
+    uint32_t ch1cvr;    // 0x34
+    uint32_t ch2cvr;    // 0x38
+    uint32_t ch3cvr;    // 0x3C
+    uint32_t ch4cvr;    // 0x40
+    uint32_t bdtr;      // 0x44 — break and dead-time
+    uint32_t dmacfgr;   // 0x48 — burst DMA base/length
+    uint32_t dmaadr;    // 0x4C — burst DMA address
+};
+
+// TIM1_CTLR1 (RM §10.4.1).
+inline constexpr uint32_t tim1_ctlr1_cen = 1u << 0;
+
+// TIM1_CTLR2 (RM §10.4.2): output idle states — the level the channel
+// drives when MOE=0 (after a brake), used with BDTR OSSI.
+inline constexpr uint32_t tim1_ctlr2_ois1 = 1u << 8;
+inline constexpr uint32_t tim1_ctlr2_ois3 = 1u << 12;
+
+// TIM1_SWEVGR (RM §10.4.6): software event generation, self-clearing.
+inline constexpr uint32_t tim1_swevgr_ug = 1u << 0;
+
+// TIM1_CHCTLR1/CHCTLR2 output-mode fields (RM §10.4.7/§10.4.8): CCxS=00
+// (output) is the zero encoding; OCxM=110 is PWM mode 1 (active while
+// CNT < CVR up-counting — §10.3.5's inverted prose is a quirk,
+// quirks.md §Timers); OCxPE latches writes into the shadow register at
+// the update event. Channel 1's fields sit at [7:0] of CHCTLR1,
+// channel 3's at [15:8] of CHCTLR2.
+inline constexpr uint32_t tim1_chctlr1_oc1m_pwm1 = 0b110u << 4;
+inline constexpr uint32_t tim1_chctlr1_oc1pe = 1u << 3;
+inline constexpr uint32_t tim1_chctlr2_oc3m_pwm1 = 0b110u << 12;
+inline constexpr uint32_t tim1_chctlr2_oc3pe = 1u << 11;
+
+// TIM1_CCER (RM §10.4.9): output enables; CCxP=0 (active high) is the
+// zero encoding, so the line idles low.
+inline constexpr uint32_t tim1_ccer_cc1e = 1u << 0;
+inline constexpr uint32_t tim1_ccer_cc3e = 1u << 8;
+
+// TIM1_DMAINTENR (RM §10.4.4): compare DMA request enables — each
+// compare match streams the channel's next value (notes/timers.md).
+inline constexpr uint32_t tim1_dmaintenr_cc1de = 1u << 9;
+inline constexpr uint32_t tim1_dmaintenr_cc3de = 1u << 11;
+
+// TIM1_BDTR (RM §10.4.18): OSSI drives the OISx idle levels while
+// MOE=0; BKE arms the BKIN brake; BKP=0 makes the brake active-low —
+// the watchdog's sel sits low when bypass is engaged (DESIGN.md §4), so
+// bypass engaging brakes both TX channels. AOE stays off: MOE re-arms
+// are deliberate firmware acts, never an auto-resume into stale DMA
+// rings. An active brake clears MOE asynchronously (RM §10.3.7).
+inline constexpr uint32_t tim1_bdtr_ossi = 1u << 10;
+inline constexpr uint32_t tim1_bdtr_bke = 1u << 12;
+inline constexpr uint32_t tim1_bdtr_moe = 1u << 15;
+
 // SysTick, base 0xE000F000 (PM §4 Table 4-1) — a core peripheral, hence
 // not in the RM (quirks.md §Clock).
 struct SysTick {
@@ -160,6 +229,7 @@ struct DmaChannel {
 // DMA_CFGRx (RM §8.3.3): peripheral-to-memory is DIR=0, 8-bit
 // PSIZE/MSIZE the zero encoding.
 inline constexpr uint32_t dma_cfgr_en = 1u << 0;
+inline constexpr uint32_t dma_cfgr_dir = 1u << 4; // 1 = memory-to-peripheral
 inline constexpr uint32_t dma_cfgr_circ = 1u << 5;
 inline constexpr uint32_t dma_cfgr_minc = 1u << 7;
 inline constexpr uint32_t dma_cfgr_psize_16 = 0b01u << 8;
@@ -208,6 +278,12 @@ inline void configure_pin(Gpio volatile& port, uint8_t bit, uint32_t nibble) {
     // MMIO boundary: the TIM2 register block (RM §11.4).
     // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
     return *reinterpret_cast<Tim2 volatile*>(0x40000000u);
+}
+
+[[nodiscard]] inline Tim1 volatile& tim1() {
+    // MMIO boundary: the TIM1 register block (RM §10.4).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
+    return *reinterpret_cast<Tim1 volatile*>(0x40012C00u);
 }
 
 [[nodiscard]] inline SysTick volatile& systick() {
