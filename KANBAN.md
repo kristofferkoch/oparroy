@@ -40,8 +40,6 @@ graph TD
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
-    T11d1[T11d1 cut-through forwarding] --> T11d3
-    T11d2[T11d2 vsync double-buffer] --> T11d3
     T11d3[T11d3 personality + ENUM] --> T12
     T32[T32 supervisor firmware] --> T12
 ```
@@ -50,27 +48,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T11d1 — Cut-through forwarding.** Split out of T11d. Switch the
-  store-and-forward TX path (`firmware/protocol/tx.hpp` `TxSequencer`,
-  DESIGN.md §2's fallback rung made real) to **per-bit cut-through**: a
-  bounded compare FIFO — each decoded bit maps straight to its nominal
-  compare value, a break appends the re-emitted idle run, and the
-  store-and-forward sequencer stays as the §2 fallback rung. Delivers
-  the **timing-closure measurement**: cycle-count the per-bit loop and
-  derive the worst-case FIFO fill (the 832-bit pre-sized ENUM × ±4.4 %
-  HSI relative drift ≈ 37 cells + the 16-cell RX burst ⇒ ~48–64 cells
-  ≈ 128 B, inside §2's 256 B ring-DMA cap), recorded in
-  `docs/size-estimate.md`. Proofs re-targeted to the cut-through
-  contract (shadow models in `klee/tx.cpp`, `fuzz/tx.cpp`,
-  `fuzz/ring_tx.cpp`). **Blocked by:** — ·
-  **Unblocks:** T11d3
-- **T11d2 — vsync double-buffer.** Split out of T11d. `Node::on_break()`
-  gains the §2 global-shutter apply/sample: pending command outputs
-  apply and inputs sample atomically at the frame gap, from a double
-  buffer — today it only bumps `latch_count`. Extends the Node contract
-  and its proofs (`klee/echo.cpp` asserts the once-per-frame latch; add
-  double-buffer coherence). **Blocked by:** — ·
-  **Unblocks:** T11d3
 - **T11d3 — Personality + ENUM.** Split out of T11d. The Trill pattern
   (docs/bela-lessons.md §2): **one firmware image, personality by
   node-type ID** — a single HIL target. Read the 96-bit ESIG UNIID
@@ -83,7 +60,7 @@ ______________________________________________________________________
   replaces the fixed `slot_index`. `lib::verify_failed`'s
   debug-transport reporting stays deferred (T33); the strobe-stop half
   already landed with the bring-up. Settles the §9 -O2/-Os ship-flavor
-  question against real image size. **Blocked by:** T11d1, T11d2 ·
+  question against real image size. **Blocked by:** — ·
   **Unblocks:** T12, T13
 - **T31 — CI scan control/observe plane.** *Shape: design.* Split out
   of the instrumented-CI design work. Settles the §6 shift-register
