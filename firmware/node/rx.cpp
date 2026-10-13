@@ -19,10 +19,12 @@
 
 #include "../lib/span.hpp"
 #include "../protocol/bits.hpp"
+#include "../protocol/cell.hpp"
 #include "../protocol/node.hpp"
 #include "../protocol/rx.hpp"
 #include "regs.hpp"
 #include "rx.hpp" // this directory's glue declarations, not the protocol's rx.hpp
+#include "tx.hpp" // this directory's glue declarations, not the protocol's tx.hpp
 
 #include <cstdint>
 
@@ -165,7 +167,7 @@ void rx_poll() {
     // — the decoder contains (drops to Hunt) and the streams restart
     // aligned.
     if ((tim.intfr & (tim2_intfr_cc1of | tim2_intfr_cc2of)) != 0) {
-        (void)decoder.on_overrun();
+        tx_push(decoder.on_overrun());
         dma_resync();
         return;
     }
@@ -177,13 +179,27 @@ void rx_poll() {
         // in-stream break marker may have aliased away, so the
         // decoder's backstop delivers the break first (rx.hpp).
         if (now - poll_state.last_progress_ticks >= oparroy::rx_counter_wrap_ticks) {
+            // The backstop delivers the break; the sequencer hears it
+            // as a frame close like the in-stream marker's.
             (void)decoder.on_silence();
+            tx_break();
         }
         while (poll_state.read_idx != write_idx) {
-            // The TxActions drop on the floor — TX streaming is a
-            // later slice. The read index runs modulo ring_cells.
+            // The TX mapping (firmware/node/tx.hpp): cell boundaries
+            // push the decoder's action; a marker is a frame close
+            // (tx_break), never an Idle push — that would discard the
+            // frame it closes. on_high's return is always Idle in
+            // lockstep (its lockstep-loss containment surfaces at the
+            // next period), so there is nothing to push from it. The
+            // read index runs modulo ring_cells.
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-            (void)decoder.on_period(period_ring[poll_state.read_idx]);
+            const uint16_t period = period_ring[poll_state.read_idx];
+            if (period >= oparroy::break_min_ticks) {
+                (void)decoder.on_period(period);
+                tx_break();
+            } else {
+                tx_push(decoder.on_period(period));
+            }
             // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
             (void)decoder.on_high(high_ring[poll_state.read_idx]);
             poll_state.read_idx = (poll_state.read_idx + 1) % ring_cells;

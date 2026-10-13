@@ -1,6 +1,7 @@
 // Node firmware: 48 MHz clock init, the §2 RX burst-decode capture
-// path (rx.cpp), the §4 keep-alive strobe on PD3, and the working-LED
-// heartbeat on PD0 — one polled loop, no interrupts anywhere.
+// path (rx.cpp), the §2 TX compare-streaming path (tx.cpp), the §4
+// keep-alive strobe on PD3, and the working-LED heartbeat on PD0 — one
+// polled loop, no interrupts anywhere.
 //
 // The strobe is a software-toggled plain GPIO paced off SysTick. The
 // bring-up image used TIM2_CH2 hardware PWM, but the RX capture claims
@@ -20,6 +21,7 @@
 
 #include "regs.hpp"
 #include "rx.hpp"
+#include "tx.hpp"
 
 #include <cstdint>
 
@@ -47,8 +49,9 @@ void clock_init() {
 
 void gpio_init() {
     // Port clocks for the pins this image drives: A (RX source A), D
-    // (RX source B, strobe, heartbeat). No AFIO gate: no alternate-
-    // function path is in use — the strobe is a plain GPIO now and the
+    // (RX source B, strobe, heartbeat, TX A). TX's port C clock and
+    // pins are tx_init's. No AFIO gate: the alternate functions in use
+    // (TIM1's TX channels, tx.cpp) are default pin mappings, and the
     // OPA→TIM2_CH1 route is internal (notes/opa.md).
     rcc().apb2pcenr |= rcc_apb2pcenr_iopaen | rcc_apb2pcenr_iopden;
     Gpio volatile& gpiod = gpio(pins::gpio_d_base);
@@ -70,6 +73,7 @@ extern "C" [[noreturn]] void node_main() {
     gpio_init();
     tick_init();
     rx_init();
+    tx_init();
 
     Gpio volatile& gpiod = gpio(pins::gpio_d_base);
     // ~1 Hz heartbeat: toggle every half second of HCLK ticks.
@@ -80,6 +84,7 @@ extern "C" [[noreturn]] void node_main() {
     uint32_t last_strobe = last_heartbeat;
     for (;;) {
         rx_poll();
+        tx_poll();
         const uint32_t now = systick().cntr;
         if (now - last_strobe >= strobe_ticks) {
             last_strobe = now;
