@@ -1,7 +1,7 @@
 #pragma once
 
 // The TX streaming path's MMIO glue (tx.cpp, DESIGN.md §2) — distinct
-// from firmware/protocol/tx.hpp, the host-testable store-and-forward
+// from firmware/protocol/tx.hpp, the host-testable cut-through
 // sequencer this glue drains.
 
 #include "../protocol/node.hpp" // TxAction
@@ -15,7 +15,7 @@ void tx_init();
 void tx_push(oparroy::TxAction action);
 
 // The decoder delivered a break (the in-stream marker or the on_silence
-// backstop): close the sequencer's accumulating frame.
+// backstop): resync the cut-through sequencer and re-arm its idle run.
 void tx_break();
 
 // Drain the sequencer into the DMA rings, keeping both channels'

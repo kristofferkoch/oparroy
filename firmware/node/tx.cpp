@@ -2,10 +2,11 @@
 // PD2) and CH3 (tx_b, PC3) run PWM mode 1 at the 60-tick cell period,
 // and DMA channels 2/6 stream one compare value per cell into CH1CVR/
 // CH3CVR — identical values onto both directions (§3). The stream is
-// the store-and-forward sequencer's pop() output (firmware/protocol/
-// tx.hpp owns all symbol semantics); this file owns registers and time
-// only. tx_poll() — called from node_main's loop; the image arms no
-// interrupts — refills the rings ahead of the wire.
+// the cut-through sequencer's pop() output (firmware/protocol/tx.hpp
+// owns all symbol semantics — TxCutThrough is the endpoint, the
+// store-and-forward TxSequencer the fallback rung); this file owns
+// registers and time only. tx_poll() — called from node_main's loop;
+// the image arms no interrupts — refills the rings ahead of the wire.
 //
 // Brake (§4): PC2 is TIM1_BKIN, wired to the watchdog's sel — low when
 // bypass is engaged — so BKP=0 (active low) and BKE brakes both
@@ -41,7 +42,7 @@ namespace {
 
 // 16 cells per ring, 64 B of SRAM for the pair — with the RX rings at
 // 64 B, the DMA rings hold at half of §2's 256 B buffer budget. The
-// sequencer's frame queue is separate storage (tx.hpp).
+// cut-through FIFO is separate storage (tx.hpp).
 inline constexpr uint32_t ring_cells = 16;
 
 // DMA sources, hardware-read between polls — writable C arrays by
@@ -52,7 +53,7 @@ volatile uint16_t compare_ring_a[ring_cells];
 volatile uint16_t compare_ring_b[ring_cells];
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) — the one sequencer instance
-oparroy::TxSequencer<> sequencer;
+oparroy::TxCutThrough<> cut_through;
 
 struct PollState {
     uint32_t prod_idx = 0;   // next ring slot to fill
@@ -143,11 +144,11 @@ void tx_init() {
 }
 
 void tx_push(oparroy::TxAction action) {
-    sequencer.push(action);
+    cut_through.push(action);
 }
 
 void tx_break() {
-    sequencer.on_break();
+    cut_through.on_break();
 }
 
 void tx_poll() {
@@ -169,7 +170,7 @@ void tx_poll() {
     poll_state.queued -= (read_a - poll_state.last_read) % ring_cells;
     poll_state.last_read = read_a;
     while (poll_state.queued < ring_cells) {
-        const uint16_t compare = sequencer.pop();
+        const uint16_t compare = cut_through.pop();
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
         compare_ring_a[poll_state.prod_idx] = compare;
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
