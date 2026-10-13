@@ -9,8 +9,8 @@
 // a transcription slip is a build error, not a wrong register. Bit
 // constants keep the RM's field names, lowercase per
 // code-std-cpp.md#7-naming-and-layout. Registers with non-plain access
-// semantics are wrapper members (W0cReg below; WoReg further down), so
-// misuse is a compile error rather than a wrong-register write.
+// semantics are wrapper members (W0cReg, WoReg), so misuse is a
+// compile error rather than a wrong-register write.
 
 #include <cstddef>
 #include <cstdint>
@@ -33,6 +33,25 @@ struct W0cReg {
     W0cReg(W0cReg&&) = delete;
     W0cReg& operator=(W0cReg&&) = delete;
     ~W0cReg() = default;
+
+private:
+    volatile uint32_t bits;
+};
+
+// Write-only register cell over a strongly-typed value V (an aggregate
+// { uint32_t bits; } with its own composition constants): the member
+// accepts only V's compositions, so a foreign register's constant or a
+// raw integer can't compile into the write. One word of storage, so
+// the block layouts are unchanged.
+template <typename V> struct WoReg {
+    void write(V value) volatile {
+        bits = value.bits;
+    }
+    WoReg(const WoReg&) = delete;
+    WoReg& operator=(const WoReg&) = delete;
+    WoReg(WoReg&&) = delete;
+    WoReg& operator=(WoReg&&) = delete;
+    ~WoReg() = default;
 
 private:
     volatile uint32_t bits;
@@ -307,15 +326,28 @@ inline constexpr uint32_t stk_ctlr_stie = 1u << 1;       // interrupt enable
 inline constexpr uint32_t stk_ctlr_stclk_hclk = 1u << 2; // 1 = HCLK, 0 = HCLK/8
 inline constexpr uint32_t stk_ctlr_stre = 1u << 3;       // auto-reload at CMPR
 
+// A composed DMA_CFGRx value (RM §8.3.3): built only from the
+// dma_cfgr_* constants via operator|, and the only thing a channel's
+// cfgr member accepts. `{}` is the all-zero encoding — channel
+// disabled — used to stop a channel before reconfiguration.
+struct DmaCfgr {
+    // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes) — a value, not encapsulation
+    uint32_t bits;
+
+    [[nodiscard]] constexpr DmaCfgr operator|(DmaCfgr rhs) const {
+        return {bits | rhs.bits};
+    }
+};
+
 // One DMA channel's register block, at 0x40020008 + (channel−1)×0x14
 // (RM §8.3.3). The shared DMA_INTFR/DMA_INTFCR at the block base are
 // not modeled: the RX path polls CNTR and TIM2's CCxOF instead
 // (firmware/node/rx.cpp).
 struct DmaChannel {
-    uint32_t cfgr;  // 0x00
-    uint32_t cntr;  // 0x04 — transfers remaining; reloads in CIRC mode
-    uint32_t paddr; // 0x08
-    uint32_t maddr; // 0x0C
+    WoReg<DmaCfgr> cfgr; // 0x00
+    uint32_t cntr;       // 0x04 — transfers remaining; reloads in CIRC mode
+    uint32_t paddr;      // 0x08
+    uint32_t maddr;      // 0x0C
 };
 
 static_assert(offsetof(DmaChannel, cntr) == 0x04);
@@ -327,13 +359,13 @@ static_assert(sizeof(DmaChannel) == 0x10);
 
 // DMA_CFGRx (RM §8.3.3): peripheral-to-memory is DIR=0, 8-bit
 // PSIZE/MSIZE the zero encoding.
-inline constexpr uint32_t dma_cfgr_en = 1u << 0;
-inline constexpr uint32_t dma_cfgr_dir = 1u << 4; // 1 = memory-to-peripheral
-inline constexpr uint32_t dma_cfgr_circ = 1u << 5;
-inline constexpr uint32_t dma_cfgr_minc = 1u << 7;
-inline constexpr uint32_t dma_cfgr_psize_16 = 0b01u << 8;
-inline constexpr uint32_t dma_cfgr_msize_16 = 0b01u << 10;
-inline constexpr uint32_t dma_cfgr_pl_very_high = 0b11u << 12;
+inline constexpr DmaCfgr dma_cfgr_en{1u << 0};
+inline constexpr DmaCfgr dma_cfgr_dir{1u << 4}; // 1 = memory-to-peripheral
+inline constexpr DmaCfgr dma_cfgr_circ{1u << 5};
+inline constexpr DmaCfgr dma_cfgr_minc{1u << 7};
+inline constexpr DmaCfgr dma_cfgr_psize_16{0b01u << 8};
+inline constexpr DmaCfgr dma_cfgr_msize_16{0b01u << 10};
+inline constexpr DmaCfgr dma_cfgr_pl_very_high{0b11u << 12};
 
 // Extended configuration unit, base 0x40023800 (RM ch.17 Table 17-1).
 struct Exten {
