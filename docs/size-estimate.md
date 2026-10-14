@@ -57,7 +57,8 @@ re-emitted break forces, not by the CPU burst alone:
 - **Rate drift**: upstream and local HSI each span ±2.2 % over
   −40–85 °C (facts.md, DS0 §3.3.6), so a node measures the upstream cell
   period at 60 × (1 ± 4.4 %) local ticks — a pre-sized ENUM frame
-  (832 bits) drifts ≈ 37 cells.
+  (840 bits — 8 × 105: occupancy marker + 96-bit UNIID + type byte,
+  DESIGN.md §2) drifts ≈ 37 cells.
 - **Break overlap**: on_break re-arms a tx_break_cells = 48 idle run
   before the next frame's bits play, so those bits accumulate while the
   idles drain (~50 cells for an ENUM at the worst skew), then the rest
@@ -68,7 +69,7 @@ re-emitted break forces, not by the CPU burst alone:
 128 cells (256 B) covers ≈ 100 cells of worst case with margin — the
 same footprint the store-and-forward frame queue occupied. Overflow is
 reachable only for over-long frames (≳1.8 kbit at the extreme skew, well
-past the 832-bit pre-sized ENUM; the 2048-bit cap mutes the node either
+past the 840-bit pre-sized ENUM; the 2048-bit cap mutes the node either
 way) and mutes like the store-and-forward rung: drop, never corrupt a
 cell mid-frame. The per-bit loop's CPU cost is strictly below the
 store-and-forward rung's — cut-through enqueues a compare where

@@ -40,7 +40,7 @@ graph TD
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
-    T11d3[T11d3 personality + ENUM] --> T12
+    T11d3b[T11d3b personality firmware] --> T12
     T32[T32 supervisor firmware] --> T12
 ```
 
@@ -48,20 +48,27 @@ ______________________________________________________________________
 
 ## Next
 
-- **T11d3 — Personality + ENUM.** Split out of T11d. The Trill pattern
-  (docs/bela-lessons.md §2): **one firmware image, personality by
-  node-type ID** — a single HIL target. Read the 96-bit ESIG UNIID
-  (0x1FFFF7E8/EC/F0, flash-option-bytes.md) plus the flash type byte
-  (option-byte Data0 or a flash data page, docs/phy-analysis.md §6)
-  into the 104-bit ENUM stamp and wire it as the Node's telemetry.
-  **Slot location is find-first-empty-slot discovery** (settled): the
-  node streams the ENUM frame and stamps the first still-all-zero
-  104-bit slot, so position stays provision-free; the empty-slot scan
-  replaces the fixed `slot_index`. `lib::verify_failed`'s
-  debug-transport reporting stays deferred (T33); the strobe-stop half
-  already landed with the bring-up. Settles the §9 -O2/-Os ship-flavor
-  question against real image size. **Blocked by:** — ·
-  **Unblocks:** T12, T13
+- **T11d3b — Personality firmware: ESIG UNIID + Data0 type byte.**
+  Split out of T11d3; the marker-bit discovery core (105-bit slot =
+  occupancy marker + 104-bit stamp, find-first-empty-slot in
+  `firmware/protocol/node.hpp`, the wire format in
+  `firmware/protocol/enum.hpp`) landed with T11d3a. Remaining — wire
+  the real stamp into the node image, replacing rx.cpp's placeholder:
+  read the 96-bit ESIG UNIID (0x1FFFF7E8/EC/F0,
+  flash-option-bytes.md) and the personality type byte —
+  **option-byte Data0** (settled, docs/phy-analysis.md §6;
+  inverse-mismatch or unprogrammed reads as 0x00 "plain node") — and
+  `pack_stamp` it at boot. Includes: the option-byte layout extraction
+  (RM §16.5 per-field offsets + SDK cross-check →
+  `datasheets/CH32V003/notes/flash-option-bytes.md`, quirks as found);
+  `regs.hpp` `Esig`/`OptionBytes` blocks; a personality TU building
+  the stamp with a runtime `VERIFY(Node::config_valid)`; the meson
+  source-list update. Settles the §9 -O2/-Os ship-flavor question
+  against real image size: append the docs/size-estimate.md
+  laughter-log entry with the measured -Os image (and reconcile the
+  stale "642 B" in firmware/node/meson.build against the doc's
+  604 B). `lib::verify_failed`'s debug-transport reporting stays
+  deferred (T33). **Blocked by:** — · **Unblocks:** T12, T13
 - **T31 — CI scan control/observe plane.** *Shape: design.* Split out
   of the instrumented-CI design work. Settles the §6 shift-register
   plane as its own design: 74HC595-class control stages and
@@ -279,7 +286,7 @@ ______________________________________________________________________
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
-  CI-platform integration is a later card. **Blocked by:** T10, T11d3,
+  CI-platform integration is a later card. **Blocked by:** T10, T11d3b,
   T32 ·
   **Unblocks:** —
 - **T15 — Cable reach: bench confirmation and §2 adoption.** *Shape:
@@ -313,9 +320,10 @@ ______________________________________________________________________
   flap-latch semantics on subsequent faults, flap contagion between
   adjacent nodes, escalation-command delivery over the flapping
   fabric, and ring-level convergence as a proof obligation. Direction
-  to design for in T11d3: **protocol-level keepalive** — a healthy line
+  to design for, landed with the ENUM slice: **protocol-level
+  keepalive** — a healthy line
   is never silent longer than ~1 s — so silence is an unambiguous
   fault signal and flip policy keys on edge presence, not decode
   quality. T5's detection hooks: supervisor frame-echo comparison,
   illegal-cell detection, and the pull-down-parked idle-low segment
-  (§2 measured block). **Blocked by:** T11d3 · **Unblocks:** —
+  (§2 measured block). **Blocked by:** T11d3b · **Unblocks:** —

@@ -120,9 +120,10 @@ construction; the tunable trades latency against CPU slack, and the
 
 What this changes elsewhere:
 
-- **Slot location by bit count.** The node knows its position
-  (addressing, §6) and counts bits from the frame gap; no field
-  parsing is needed during transit, just boundary counting.
+- **Slot location by marker scan.** The node claims the first empty
+  slot of the frame (addressing, §6) — a slot's leading occupancy
+  marker bit decides, so no field parsing is needed during transit,
+  just slot-boundary counting.
 - **ENUM frames are pre-sized** with empty slots; stamping = slot
   rewrite, never insertion. Insertion would stretch the frame
   mid-transit and break every downstream node's bit count.
@@ -207,15 +208,25 @@ bridges, no provisioning step.**
   byte. One circulation builds the position ↔ UNIID map. Replacing a
   node just changes the map; re-enumeration is cheap and can be
   triggered on any supervisor-seen inconsistency.
+- **Empty = marker 0**: an ENUM slot is 105 bits — a leading occupancy
+  marker bit, then the 104-bit stamp (96-bit UNIID + type byte) — and
+  the supervisor originates them all-zero. Each node claims the first
+  marker-0 slot streaming past (find-first-empty-slot discovery). The
+  marker keeps discovery compatible with per-bit cut-through:
+  emptiness of a whole slot is decidable only at its last bit, but the
+  first bit must be emitted in real time — the marker moves the
+  decision to the slot's first bit, zero lookahead.
 - Trill-style tri-state solder bridges (bela-lessons §2) lose here on
   two counts: ≥2 GPIO on an 18-GPIO part whose pin budget is already
   spoken for (OPA pair, TX, 3 status LEDs, SWIO, I2C, ADC, button,
   buzzer — §5), and extra per-node parts against the §1 cost driver.
   The bridges solve "which of N identical sensors am I on a bus" — a
   problem the ring topology doesn't have.
-- **Node personality**: one firmware image, type byte from a
-  flash config location (option-byte Data0 or a flash data page), with
-  auto-detect from populated peripherals where cheap. The type byte
+- **Node personality**: one firmware image, type byte from option-byte
+  **Data0** (settled — personality is provisioning, not code: option
+  bytes survive image reflashes and cost no flash; a flash data page
+  loses on both). Auto-detect from populated peripherals stays
+  available where cheap. The type byte
   rides in the ENUM stamp, so the supervisor's auto-detect mirrors
   Trill's host-library behavior without any node-side strapping.
 
