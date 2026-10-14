@@ -148,7 +148,9 @@ void prove_step(Rig& rig, Step step) {
 extern "C" int klee_rx() {
     uint8_t stamp[1];
     klee_make_symbolic(&stamp, sizeof stamp, "stamp");
-    const oparroy::NodeConfig config{.slot_index = 2, .slot_bits = 4};
+    // A stamp's first wire bit is the occupancy marker (enum.hpp).
+    klee_assume(stamp[0] & 0x80u);
+    const oparroy::NodeConfig config{.slot_bits = 4};
     const oparroy::DoubleBuffer<oparroy::BitSlice> telemetry{
         .front = oparroy::BitSlice{.bytes = stamp, .bit_count = 8},
         .back = oparroy::BitSlice{.bytes = stamp, .bit_count = 8}};

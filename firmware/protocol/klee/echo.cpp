@@ -20,7 +20,13 @@ extern "C" int klee_echo() {
     uint8_t frame[frame_bits / 8];
     klee_make_symbolic(&frame, sizeof frame, "frame");
 
-    // Slots parked beyond the frame: pure forwarding, nothing stamped.
+    // The echo invariant holds for frames with no empty slot: constrain
+    // every slot marker (wire bits 0, 8, 16 — MSB-first, bits.hpp) to
+    // occupied, and discovery passes the frame through untouched.
+    klee_assume(frame[0] & 0x80u);
+    klee_assume(frame[1] & 0x80u);
+    klee_assume(frame[2] & 0x80u);
+
     // Loop-init, not = {}: the memset intrinsic is unimplemented in klee
     // 3.2's partial LLVM 19 build (flake.nix).
     uint8_t telemetry[node_count];
@@ -28,16 +34,16 @@ extern "C" int klee_echo() {
         byte = 0;
     }
     const lib::Span<const uint8_t> telemetry_span{telemetry};
-    // Parked slots: both faces of the vsync double buffer are the same
-    // 1-bit telemetry — nothing is sampled, nothing stamps.
+    // Both faces of the vsync double buffer are the same 8-bit
+    // telemetry — never stamped here: every slot reads occupied.
     const auto telemetry_of = [&](size_t index) {
-        const oparroy::BitSlice face{.bytes = telemetry_span.subspan(index, 1), .bit_count = 1};
+        const oparroy::BitSlice face{.bytes = telemetry_span.subspan(index, 1), .bit_count = 8};
         return oparroy::DoubleBuffer<oparroy::BitSlice>{.front = face, .back = face};
     };
     oparroy::Node nodes[] = {
-        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1}, telemetry_of(0)},
-        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1}, telemetry_of(1)},
-        oparroy::Node{oparroy::NodeConfig{.slot_index = 60000, .slot_bits = 1}, telemetry_of(2)},
+        oparroy::Node{oparroy::NodeConfig{.slot_bits = 8}, telemetry_of(0)},
+        oparroy::Node{oparroy::NodeConfig{.slot_bits = 8}, telemetry_of(1)},
+        oparroy::Node{oparroy::NodeConfig{.slot_bits = 8}, telemetry_of(2)},
     };
 
     for (oparroy::Node& node : nodes) {

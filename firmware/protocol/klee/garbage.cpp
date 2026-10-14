@@ -69,7 +69,9 @@ void prove_break_step(oparroy::Node& node, Shadow& shadow) {
 extern "C" int klee_garbage() {
     uint8_t stamp[1];
     klee_make_symbolic(&stamp, sizeof stamp, "stamp");
-    oparroy::Node node{oparroy::NodeConfig{.slot_index = 2, .slot_bits = 4},
+    // A stamp's first wire bit is the occupancy marker (enum.hpp).
+    klee_assume(stamp[0] & 0x80u);
+    oparroy::Node node{oparroy::NodeConfig{.slot_bits = 4},
                        oparroy::DoubleBuffer<oparroy::BitSlice>{
                            .front = oparroy::BitSlice{.bytes = stamp, .bit_count = 8},
                            .back = oparroy::BitSlice{.bytes = stamp, .bit_count = 8}}};

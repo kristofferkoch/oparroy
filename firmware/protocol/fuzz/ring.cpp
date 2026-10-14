@@ -32,8 +32,8 @@ struct NodeRig {
     oparroy::fuzz::Shadow shadow;
 };
 
-NodeRig make_rig(uint8_t slot_index, lib::Span<const uint8_t> telemetry_byte) {
-    const oparroy::NodeConfig config{.slot_index = slot_index, .slot_bits = slot_bits};
+NodeRig make_rig(lib::Span<const uint8_t> telemetry_byte) {
+    const oparroy::NodeConfig config{.slot_bits = slot_bits};
     const oparroy::BitSlice face{.bytes = telemetry_byte, .bit_count = slot_bits};
     const oparroy::DoubleBuffer<oparroy::BitSlice> telemetry{.front = face, .back = face};
     return NodeRig{.config = config,
@@ -94,20 +94,17 @@ void reset_rig(NodeRig& rig) {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     oparroy::fuzz::Cursor cursor{lib::Span<const uint8_t>{data, size}};
 
-    // One telemetry byte and one slot index per node; slots land in
-    // 0–255, inside short frames so stamping is exercised.
+    // One telemetry byte per node (the occupancy marker — enum.hpp — is
+    // forced set); slots are discovered, not configured — the chain's
+    // stamping falls out of the marker scan.
     uint8_t telemetry_storage[node_count];
     for (uint8_t& byte : telemetry_storage) {
-        byte = cursor.take_u8();
-    }
-    uint8_t slot_storage[node_count];
-    for (uint8_t& byte : slot_storage) {
-        byte = cursor.take_u8();
+        byte = static_cast<uint8_t>(cursor.take_u8() | 0x80u);
     }
     const lib::Span<const uint8_t> telemetry_span{telemetry_storage};
-    NodeRig rig0 = make_rig(slot_storage[0], telemetry_span.subspan(0, 1));
-    NodeRig rig1 = make_rig(slot_storage[1], telemetry_span.subspan(1, 1));
-    NodeRig rig2 = make_rig(slot_storage[2], telemetry_span.subspan(2, 1));
+    NodeRig rig0 = make_rig(telemetry_span.subspan(0, 1));
+    NodeRig rig1 = make_rig(telemetry_span.subspan(1, 1));
+    NodeRig rig2 = make_rig(telemetry_span.subspan(2, 1));
 
     while (cursor.remaining() > 0) {
         const oparroy::fuzz::Event event = oparroy::fuzz::next_event(cursor);

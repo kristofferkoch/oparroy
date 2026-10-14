@@ -46,13 +46,13 @@ void prove_break_step(Rig& rig) {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     oparroy::fuzz::Cursor cursor{lib::Span<const uint8_t>{data, size}};
 
-    // Config and telemetry from the leading bytes: 2 telemetry bytes,
-    // slot index anywhere in u16 (parked slots are the echo case), slot
-    // width biased into the valid range so the fuzzer spends cycles in
-    // the state machine, not bounced off config_valid.
-    const uint8_t telemetry_storage[2] = {cursor.take_u8(), cursor.take_u8()};
+    // Config and telemetry from the leading bytes: 2 telemetry bytes
+    // (the occupancy marker — enum.hpp — is forced set, so the fuzzer
+    // spends cycles in the slot walk, not bounced off config_valid),
+    // slot width biased into the valid range.
+    const uint8_t telemetry_storage[2] = {static_cast<uint8_t>(cursor.take_u8() | 0x80u),
+                                          cursor.take_u8()};
     const oparroy::NodeConfig config{
-        .slot_index = cursor.take_u16(),
         .slot_bits = static_cast<uint16_t>(1 + (cursor.take_u8() % 16)),
     };
     const oparroy::BitSlice face{.bytes = lib::Span<const uint8_t>{telemetry_storage},
