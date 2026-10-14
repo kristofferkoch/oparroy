@@ -128,8 +128,8 @@ owes only fast, chatter-free settling to idle, which tb_fault shows.
   hard-bounded so ring DMA buffers stay **≤ 256 B of the 2 KB SRAM**,
   statically allocated (≈8 B/cell RX + 2 B/cell TX): some buffering to
   buy CPU slack, never enough to become a RAM problem. The node
-  locates its slot by counting bits from the frame gap (position =
-  address, below); ENUM frames are pre-sized so stamping is a slot
+  locates its slot by discovery (addressing, below); ENUM frames are
+  pre-sized so stamping is a slot
   rewrite, never an insertion. The trade: per-hop frame filtering is
   lost — a corrupt frame is already downstream before a CRC could
   reject it — so containment moves to illegal-cell detection (period
@@ -151,10 +151,19 @@ owes only fast, chatter-free settling to idle, which tb_fault shows.
   [flash-option-bytes.md](datasheets/CH32V003/notes/flash-option-bytes.md))
   plus a type byte; the position ↔ UNIID map rebuilds automatically
   when a node is
-  replaced. Solder-bridge IDs (Trill-style, bela-lessons §2) lose on
+  replaced. Slot location is **find-first-empty-slot discovery**: an
+  ENUM slot is 105 bits — a leading **occupancy marker** bit, then the
+  104-bit stamp (96-bit UNIID + type byte) — the supervisor originates
+  all-zero slots (marker 0 = empty), and each node claims the first
+  marker-0 slot streaming past. The marker is what keeps discovery
+  inside the 1:1 per-bit cut-through contract: emptiness of a whole
+  slot is only known at its last bit, but the slot's first bit must be
+  emitted in real time — the marker decides with zero lookahead, so
+  stamping stays a slot rewrite with no added latency or buffering.
+  Solder-bridge IDs (Trill-style, bela-lessons §2) lose on
   pin budget (≥2 GPIO on an 18-GPIO part) and per-node parts — the §1
   cost driver. One firmware image, personality by type byte in flash
-  (node firmware).
+  (option-byte Data0 — node firmware).
 - **Telemetry: slotted in the circulating frame, not polled.** Each
   node writes its own slot as the frame passes, with inputs sampled at
   the vsync latch (below) — synchronous sampling in the ring's
