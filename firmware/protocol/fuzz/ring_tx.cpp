@@ -19,8 +19,9 @@
 // are capped at 4800 ticks — any longer silence is the same break to the decoder, and the ≥
 // CNT-wrap alias path is klee/rx.cpp and fuzz/rx.cpp's proved territory, not this harness's.
 //
-// Input grammar: 3 telemetry bytes and 3 slot-index bytes (one per
-// node), then steps of 5 bytes: origin selector, origin payload, then
+// Input grammar: 3 telemetry bytes (one per node; the occupancy marker
+// — enum.hpp — is forced set; slots are discovered, not configured),
+// then steps of 5 bytes: origin selector, origin payload, then
 // one pop count (0–3) per hop. Origin selector % 8 — 0–2 originate a
 // bit cell (payload % 2), 3 originate an illegal cell (high > period),
 // 4 idle one cell, 5 originate a break (tx_break_cells of idle),
@@ -224,20 +225,15 @@ void reset_rig(HopRig& rig, Wire& in_wire) {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     oparroy::fuzz::Cursor cursor{lib::Span<const uint8_t>{data, size}};
 
-    // One telemetry byte and one slot index per node, fuzz/ring.cpp's
-    // setup: slots land in 0–255, inside short frames.
+    // One telemetry byte per node (the occupancy marker — enum.hpp — is
+    // forced set); slots are discovered, not configured (fuzz/ring.cpp's
+    // setup).
     uint8_t telemetry_storage[node_count];
     for (uint8_t& byte : telemetry_storage) {
-        byte = cursor.take_u8();
-    }
-    uint8_t slot_storage[node_count];
-    for (uint8_t& byte : slot_storage) {
-        byte = cursor.take_u8();
+        byte = static_cast<uint8_t>(cursor.take_u8() | 0x80u);
     }
     const lib::Span<const uint8_t> telemetry_span{telemetry_storage};
-    const auto config_of = [](uint8_t slot_index) {
-        return oparroy::NodeConfig{.slot_index = slot_index, .slot_bits = slot_bits};
-    };
+    const oparroy::NodeConfig config{.slot_bits = slot_bits};
     const auto telemetry_of = [&telemetry_span](size_t index) {
         const oparroy::BitSlice face{.bytes = telemetry_span.subspan(index, 1),
                                      .bit_count = slot_bits};
@@ -245,26 +241,26 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     };
     // node declared before the decoder that references it; each rig is
     // initialized in place so the reference binds to the member.
-    HopRig rig0{.node = oparroy::Node{config_of(slot_storage[0]), telemetry_of(0)},
+    HopRig rig0{.node = oparroy::Node{config, telemetry_of(0)},
                 .decoder = oparroy::RxDecoder{rig0.node},
                 .cut = oparroy::TxCutThrough<capacity>{},
-                .shadow = oparroy::fuzz::Shadow{config_of(slot_storage[0]), telemetry_of(0)},
+                .shadow = oparroy::fuzz::Shadow{config, telemetry_of(0)},
                 .shadow_cut = ShadowCut{},
-                .config = config_of(slot_storage[0]),
+                .config = config,
                 .telemetry = telemetry_of(0)};
-    HopRig rig1{.node = oparroy::Node{config_of(slot_storage[1]), telemetry_of(1)},
+    HopRig rig1{.node = oparroy::Node{config, telemetry_of(1)},
                 .decoder = oparroy::RxDecoder{rig1.node},
                 .cut = oparroy::TxCutThrough<capacity>{},
-                .shadow = oparroy::fuzz::Shadow{config_of(slot_storage[1]), telemetry_of(1)},
+                .shadow = oparroy::fuzz::Shadow{config, telemetry_of(1)},
                 .shadow_cut = ShadowCut{},
-                .config = config_of(slot_storage[1]),
+                .config = config,
                 .telemetry = telemetry_of(1)};
-    HopRig rig2{.node = oparroy::Node{config_of(slot_storage[2]), telemetry_of(2)},
+    HopRig rig2{.node = oparroy::Node{config, telemetry_of(2)},
                 .decoder = oparroy::RxDecoder{rig2.node},
                 .cut = oparroy::TxCutThrough<capacity>{},
-                .shadow = oparroy::fuzz::Shadow{config_of(slot_storage[2]), telemetry_of(2)},
+                .shadow = oparroy::fuzz::Shadow{config, telemetry_of(2)},
                 .shadow_cut = ShadowCut{},
-                .config = config_of(slot_storage[2]),
+                .config = config,
                 .telemetry = telemetry_of(2)};
 
     Wire wire0{}; // the origin's line into hop0

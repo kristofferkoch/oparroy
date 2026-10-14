@@ -17,9 +17,9 @@
 
 #include <pins.hpp>
 
-#include "../lib/span.hpp"
 #include "../protocol/bits.hpp"
 #include "../protocol/cell.hpp"
+#include "../protocol/enum.hpp"
 #include "../protocol/node.hpp"
 #include "../protocol/rx.hpp"
 #include "regs.hpp"
@@ -41,22 +41,22 @@ volatile uint16_t period_ring[ring_cells];
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 volatile uint16_t high_ring[ring_cells];
 
-// Parked until the ENUM/personality slice lands: a slot index no legal
-// frame reaches, one telemetry bit. Decode still runs — the node just
-// never stamps. BitSlice adopts a C array (span.hpp). The telemetry is
-// the §2 vsync double buffer; both faces are the parked bit until input
-// sampling lands with the app-I/O slice.
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-constexpr uint8_t parked_telemetry[] = {0};
-constexpr oparroy::NodeConfig parked_config{.slot_index = 0xFFFF, .slot_bits = 1};
-constexpr oparroy::BitSlice parked_bits{.bytes = lib::Span<const uint8_t>{parked_telemetry},
-                                        .bit_count = 1};
-constexpr oparroy::DoubleBuffer<oparroy::BitSlice> parked_latch{.front = parked_bits,
-                                                                .back = parked_bits};
-static_assert(oparroy::Node::config_valid(parked_config, parked_latch));
+// The node's telemetry is its ENUM stamp (enum.hpp, DESIGN.md §2): the
+// slot walk claims each frame's first empty slot and stamps it — the
+// find-first-empty-slot discovery that keeps position provision-free.
+// The stamp is a placeholder until the personality firmware slice wires
+// the real ESIG UNIID and option-byte type byte: zero UNIID, type 0
+// ("plain node"). BitSlice adopts a C array (span.hpp); both vsync
+// faces are the one stamp — it never changes after boot.
+constexpr oparroy::EnumStamp placeholder_stamp = oparroy::pack_stamp(0, 0, 0, 0);
+constexpr oparroy::NodeConfig node_config{.slot_bits = oparroy::enum_slot_bits};
+constexpr oparroy::DoubleBuffer<oparroy::BitSlice> stamp_latch{
+    .front = oparroy::stamp_slice(placeholder_stamp),
+    .back = oparroy::stamp_slice(placeholder_stamp)};
+static_assert(oparroy::Node::config_valid(node_config, stamp_latch));
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) — the one node instance
-oparroy::Node node{parked_config, parked_latch};
+oparroy::Node node{node_config, stamp_latch};
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) — the node's decoder
 oparroy::RxDecoder decoder{node};
 

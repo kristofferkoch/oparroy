@@ -19,8 +19,8 @@ Raw `(period u16 LE, high u16 LE)` pairs, fed straight to
 
 ## node/
 
-Prefix: `tele0 tele1 slot_index(u16) slot_bits(u8, mapped to 1+x%16)`,
-then events.
+Prefix: `tele0 tele1 slot_bits(u8, mapped to 1+x%16)`; the telemetry
+occupancy marker (enum.hpp) is forced set by the harness. Then events.
 
 - `frame-over-cap` — break, then 2100 nominal cells: past the 2048-bit
   frame cap, the bounded-frame containment case (node.hpp)
@@ -29,8 +29,9 @@ then events.
 
 ## ring/
 
-Prefix: `tele0 tele1 tele2 slot0 slot1 slot2` (slots 0–255, 8 bits
-each), then events; a reset event takes one extra node-index byte.
+Prefix: `tele0 tele1 tele2` (one per node, occupancy markers forced set
+by the harness — slots are discovered, not configured), then events; a
+reset event takes one extra node-index byte.
 
 - `three-node-frames` — two clean frames through the chain (echo +
   stamping)
@@ -38,8 +39,9 @@ each), then events; a reset event takes one extra node-index byte.
 
 ## rx/
 
-Prefix: `tele0 tele1 slot_index(u16) slot_bits(u8, mapped to 1+x%16)`,
-then 3-byte events: selector + payload u16 LE. Selector % 8: 0–3
+Prefix: `tele0 tele1 slot_bits(u8, mapped to 1+x%16)`; the telemetry
+occupancy marker (enum.hpp) is forced set by the harness. Then 3-byte
+events: selector + payload u16 LE. Selector % 8: 0–3
 period capture, 4–5 high capture, 6 control (payload % 3: silence /
 overrun / resync), 7 brown-out reset.
 

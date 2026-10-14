@@ -5,8 +5,10 @@
 // into the klee package; KLEE intercepts each by name, no linking.
 
 #include <cstddef>
+#include <cstdint>
 
 extern "C" void klee_make_symbolic(void* address, size_t size, const char* name);
+extern "C" void klee_assume(uintptr_t condition);
 extern "C" [[noreturn]] void klee_report_error(const char* file, int line, const char* message,
                                                const char* suffix);
 

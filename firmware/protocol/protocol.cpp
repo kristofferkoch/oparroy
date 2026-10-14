@@ -8,6 +8,7 @@
 #include "../lib/static_vector.hpp"
 #include "bits.hpp"
 #include "cell.hpp"
+#include "enum.hpp"
 #include "node.hpp"
 #include "rx.hpp"
 #include "tx.hpp"
@@ -36,21 +37,31 @@ namespace {
         return DoubleBuffer<BitSlice>{.front = front, .back = back};
     }
 
-    constexpr BitSlice one_byte{.bytes = lib::Span<const uint8_t>{nullptr, 1}, .bit_count = 8};
+    // A stamp face always carries the occupancy marker (enum.hpp) at wire
+    // bit 0 — MSB-first, so byte 0's top bit is set.
+    constexpr uint8_t stamp_byte = 0x80;
+    constexpr BitSlice stamp_face{.bytes = lib::Span<const uint8_t>{&stamp_byte, 1},
+                                  .bit_count = 8};
+    constexpr uint8_t zero_byte = 0x00;
+    constexpr BitSlice zero_face{.bytes = lib::Span<const uint8_t>{&zero_byte, 1}, .bit_count = 8};
     constexpr BitSlice empty_slice{.bytes = empty_bytes, .bit_count = 8};
 
 } // namespace
 
-static_assert(Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 8},
-                                 double_buffered(one_byte, one_byte)));
-static_assert(!Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 0},
-                                  double_buffered(one_byte, one_byte)));
+static_assert(Node::config_valid(NodeConfig{.slot_bits = 8},
+                                 double_buffered(stamp_face, stamp_face)));
+static_assert(!Node::config_valid(NodeConfig{.slot_bits = 0},
+                                  double_buffered(stamp_face, stamp_face)));
 // Both faces must carry the slot: the front is stamped this frame, the
 // back becomes the front at the next latch.
-static_assert(!Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 8},
-                                  double_buffered(empty_slice, one_byte)));
-static_assert(!Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 8},
-                                  double_buffered(one_byte, empty_slice)));
+static_assert(!Node::config_valid(NodeConfig{.slot_bits = 8},
+                                  double_buffered(empty_slice, stamp_face)));
+static_assert(!Node::config_valid(NodeConfig{.slot_bits = 8},
+                                  double_buffered(stamp_face, empty_slice)));
+// The marker invariant: a marker-0 stamp would re-mark its slot empty
+// for the next node downstream.
+static_assert(!Node::config_valid(NodeConfig{.slot_bits = 8},
+                                  double_buffered(zero_face, zero_face)));
 
 // Over-long frame containment (node.hpp, frame_max_bits): a legal
 // stream past the cap is contained like an illegal cell — Mute until
@@ -58,9 +69,9 @@ static_assert(!Node::config_valid(NodeConfig{.slot_index = 0, .slot_bits = 8},
 namespace {
 
     constexpr bool frame_cap_mutes() {
-        const uint8_t telemetry_byte = 0;
+        const uint8_t telemetry_byte = 0x80; // the occupancy marker (enum.hpp)
         const BitSlice face{.bytes = lib::Span<const uint8_t>{&telemetry_byte, 1}, .bit_count = 8};
-        Node node{NodeConfig{.slot_index = 60000, .slot_bits = 1}, double_buffered(face, face)};
+        Node node{NodeConfig{.slot_bits = 1}, double_buffered(face, face)};
         if (node.on_break() != TxAction::Idle) {
             return false;
         }
@@ -87,9 +98,14 @@ static_assert(frame_cap_mutes());
 namespace {
 
     constexpr bool rx_decode_phases() {
-        const uint8_t telemetry_byte = 0;
-        const BitSlice face{.bytes = lib::Span<const uint8_t>{&telemetry_byte, 1}, .bit_count = 8};
-        Node node{NodeConfig{.slot_index = 0xFFFF, .slot_bits = 1}, double_buffered(face, face)};
+        // A 16-bit slot with the occupancy marker set: every frame's
+        // first decoded bit below is a 1 (an occupied marker), so the
+        // node echoes the whole stream — this walk is the decoder's,
+        // not the slot walk's. BitSlice adopts the array (span.hpp).
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+        const uint8_t telemetry_bytes[2] = {0x80, 0x00};
+        const BitSlice face{.bytes = lib::Span<const uint8_t>{telemetry_bytes}, .bit_count = 16};
+        Node node{NodeConfig{.slot_bits = 16}, double_buffered(face, face)};
         RxDecoder decoder{node};
 
         // Hunt: captures before the first marker never reach the node.
@@ -162,11 +178,14 @@ static_assert(rx_decode_phases());
 namespace {
 
     constexpr bool vsync_double_buffer() {
+        // Distinct faces, both with the occupancy marker set (enum.hpp).
+        // The node stamps its first frame's slot — the walk feeds an
+        // all-zero (empty) slot, so discovery claims it.
         const uint8_t front_byte = 0b10101010;
-        const uint8_t back_byte = 0b01010101;
+        const uint8_t back_byte = 0b11010101;
         const BitSlice front{.bytes = lib::Span<const uint8_t>{&front_byte, 1}, .bit_count = 8};
         const BitSlice back{.bytes = lib::Span<const uint8_t>{&back_byte, 1}, .bit_count = 8};
-        Node node{NodeConfig{.slot_index = 0, .slot_bits = 8}, double_buffered(front, back)};
+        Node node{NodeConfig{.slot_bits = 8}, double_buffered(front, back)};
 
         // The first break latches: the sampled back becomes the front
         // this frame stamps, bit for bit.
@@ -195,6 +214,75 @@ namespace {
 } // namespace
 
 static_assert(vsync_double_buffer());
+
+// Find-first-empty-slot discovery (node.hpp, enum.hpp — DESIGN.md §2):
+// the node claims the first marker-0 slot of every frame with its
+// telemetry face and echoes everything else bit-exact — occupied slots
+// (marker 1), and every slot once it has stamped.
+namespace {
+
+    constexpr bool expect_echo(Node& node, Bit incoming) {
+        const TxAction expected = incoming == Bit::One ? TxAction::EmitOne : TxAction::EmitZero;
+        return node.on_bit(incoming) == expected;
+    }
+
+    constexpr bool discovery_walk() {
+        // 4-bit slots; the face's wire bits are 1,0,1,1 (marker + payload).
+        const uint8_t stamp = 0b10110000;
+        const BitSlice face{.bytes = lib::Span<const uint8_t>{&stamp, 1}, .bit_count = 4};
+        Node node{NodeConfig{.slot_bits = 4}, double_buffered(face, face)};
+        node.on_break();
+
+        // Slot 0 occupied (marker 1): echoes 1,0,0,1 untouched.
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+        const Bit occupied[4] = {Bit::One, Bit::Zero, Bit::Zero, Bit::One};
+        for (const uint8_t i : lib::irange(uint8_t{4})) {
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+            if (!expect_echo(node, occupied[i])) {
+                return false;
+            }
+        }
+        // Slot 1 empty (all zero): claimed, stamps the face bit for bit.
+        for (const uint8_t i : lib::irange(uint8_t{4})) {
+            const TxAction expected =
+                bit_at(face, i) == Bit::One ? TxAction::EmitOne : TxAction::EmitZero;
+            if (node.on_bit(Bit::Zero) != expected) {
+                return false;
+            }
+        }
+        // Slot 2 also empty: already stamped — echoes the zeros.
+        for ([[maybe_unused]] const uint8_t i : lib::irange(uint8_t{4})) {
+            if (!expect_echo(node, Bit::Zero)) {
+                return false;
+            }
+        }
+
+        // The next frame restarts discovery; a frame with no empty slot
+        // (both slots occupied) passes through entirely unstamped.
+        node.on_break();
+        for ([[maybe_unused]] const uint8_t slot : lib::irange(uint8_t{2})) {
+            for (const uint8_t i : lib::irange(uint8_t{4})) {
+                // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+                if (!expect_echo(node, occupied[i])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+} // namespace
+
+static_assert(discovery_walk());
+
+// The ENUM wire format (enum.hpp): pack/unpack round-trips and the
+// occupancy marker leads the slot.
+static_assert(enum_slot_bits == 105 && enum_frame_bits == 840);
+constexpr EnumStamp packed_sample = pack_stamp(0xDEADBEEF, 0x12345678, 0xA5A5A5A5, 0x3C);
+constexpr UnpackedStamp unpacked_sample = unpack_stamp(stamp_slice(packed_sample));
+static_assert(bit_at(stamp_slice(packed_sample), 0) == Bit::One);
+static_assert(unpacked_sample.uniid1 == 0xDEADBEEF && unpacked_sample.uniid2 == 0x12345678 &&
+              unpacked_sample.uniid3 == 0xA5A5A5A5 && unpacked_sample.type == 0x3C);
 
 // TX store-and-forward (tx.hpp): a scripted walk over the sequencer's
 // stream contract — nothing plays before the first closed frame, frames

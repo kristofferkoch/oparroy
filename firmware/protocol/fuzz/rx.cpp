@@ -7,7 +7,7 @@
 // exactly: nothing decoded before the first marker, breaks resync,
 // lost lockstep contains.
 //
-// Input grammar: 2 telemetry bytes, slot index (u16), slot width byte
+// Input grammar: 2 telemetry bytes, slot width byte
 // (mapped to 1 + x % 16), then events. An event is a selector byte
 // plus a u16 (LE) payload: selector % 8 — 0–3 period capture, 4–5
 // high capture, 6 control (payload % 3: silence / overrun / resync),
@@ -171,11 +171,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     oparroy::fuzz::Cursor cursor{lib::Span<const uint8_t>{data, size}};
 
     // Config and telemetry from the leading bytes — the node.cpp
-    // prefix: parked and live slots alike are fair game, slot width
+    // prefix: the occupancy marker (enum.hpp) is forced set, slot width
     // biased into the valid range.
-    const uint8_t telemetry_storage[2] = {cursor.take_u8(), cursor.take_u8()};
+    const uint8_t telemetry_storage[2] = {static_cast<uint8_t>(cursor.take_u8() | 0x80u),
+                                          cursor.take_u8()};
     const oparroy::NodeConfig config{
-        .slot_index = cursor.take_u16(),
         .slot_bits = static_cast<uint16_t>(1 + (cursor.take_u8() % 16)),
     };
     const oparroy::BitSlice face{.bytes = lib::Span<const uint8_t>{telemetry_storage},

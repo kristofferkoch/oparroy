@@ -99,8 +99,9 @@ struct Event {
 // check this independent model, never the implementation under test
 // (code-std.md#4-tests; the klee/garbage.cpp pattern). Written from the
 // contract (node.hpp, DESIGN.md §2): Hunt until the first break,
-// Forward with on-the-fly slot stamping, Mute after an illegal cell or
-// an over-long frame, resync on break.
+// Forward with find-first-empty-slot stamping (enum.hpp's occupancy
+// marker), Mute after an illegal cell or an over-long frame, resync on
+// break.
 class Shadow {
 public:
     constexpr Shadow(NodeConfig config, DoubleBuffer<BitSlice> telemetry)
@@ -116,11 +117,20 @@ public:
             return TxAction::Idle;
         }
         Bit outgoing = incoming;
-        const bool in_slot = m_bit_count >= m_config.slot_index &&
-                             m_bit_count - m_config.slot_index < m_config.slot_bits;
-        if (in_slot) {
-            outgoing =
-                bit_at(m_telemetry.front, static_cast<uint16_t>(m_bit_count - m_config.slot_index));
+        if (!m_stamped) {
+            // The slot's first bit is its occupancy marker: 0 = empty,
+            // stamp it; 1 = occupied, pass it through (node.hpp).
+            if (m_slot_bit == 0) {
+                m_stamping = incoming == Bit::Zero;
+            }
+            if (m_stamping) {
+                outgoing = bit_at(m_telemetry.front, m_slot_bit);
+            }
+            m_slot_bit += 1;
+            if (m_slot_bit == m_config.slot_bits) {
+                m_slot_bit = 0;
+                m_stamped = m_stamping;
+            }
         }
         m_bit_count += 1;
         return outgoing == Bit::One ? TxAction::EmitOne : TxAction::EmitZero;
@@ -136,12 +146,18 @@ public:
         m_seen_break = true;
         m_muted = false;
         m_bit_count = 0;
+        m_slot_bit = 0;
+        m_stamping = false;
+        m_stamped = false;
     }
 
     constexpr void on_reset() {
         m_seen_break = false;
         m_muted = false;
         m_bit_count = 0;
+        m_slot_bit = 0;
+        m_stamping = false;
+        m_stamped = false;
         m_latch_count = 0;
     }
 
@@ -156,6 +172,9 @@ private:
     bool m_muted = false;
     uint32_t m_bit_count = 0;
     uint32_t m_latch_count = 0;
+    uint16_t m_slot_bit = 0;
+    bool m_stamping = false;
+    bool m_stamped = false;
 };
 
 } // namespace oparroy::fuzz
