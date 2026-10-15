@@ -3,10 +3,46 @@
 # refuses an existing --output-dir, so clear the stale one first — it
 # holds only generated explorer state under the build dir.
 # Usage: klee-prove <output-dir> [klee args...] <harness.bc>
+#
+# klee exits 0 even when the proof failed or never ran — a reachable
+# klee_report_error (a KLEE_PROVE counterexample) terminates a state,
+# not the process, and an unimplemented intrinsic kills the entry state
+# so the run explores 0 paths. Gate on the output, not the exit code:
+# any KLEE: ERROR or "unimplemented intrinsic" line fails the run, as
+# does a completed-path count of 0 (a proof that explores nothing
+# proves nothing).
 set -eu
 
 out=$1
 shift
 
 rm -rf "$out"
-klee --output-dir="$out" "$@"
+
+log="$out.log"
+rm -f "$log"
+
+status=0
+klee --output-dir="$out" "$@" >"$log" 2>&1 || status=$?
+cat "$log"
+
+fail() {
+    echo "klee-prove: FAIL: $1 (full log: $log)" >&2
+    exit 1
+}
+
+if [ "$status" -ne 0 ]; then
+    fail "klee exited with status $status"
+fi
+if grep -q 'KLEE: ERROR' "$log"; then
+    fail "klee reported an error"
+fi
+if grep -q 'unimplemented intrinsic' "$log"; then
+    fail "unimplemented intrinsic in the bitcode"
+fi
+completed=$(sed -n 's/^KLEE: done: completed paths = \([0-9][0-9]*\)$/\1/p' "$log")
+if [ -z "$completed" ]; then
+    fail "no completed-paths line in klee output"
+fi
+if [ "$completed" -eq 0 ]; then
+    fail "0 completed paths — the proof explored nothing"
+fi
