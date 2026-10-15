@@ -84,6 +84,18 @@ real work — **move**, don't copy. Reference, don't duplicate.
 
 ## Firmware library
 
+- **Static-extent `Span<T, N>`** (std::span's fixed-extent form) for
+  function signatures whose size is a protocol constant: a wrong-sized
+  argument becomes a compile error, and KLEE gets constant bounds and
+  trip counts from the type. Deferred when `Array` landed: `const Array<T, N>&` already *is* the sized argument (and converts
+  implicitly to `Span`), and the tree had ~one fixed-size Span
+  signature site — the telemetry byte in `fuzz/ring.cpp`'s `make_rig`,
+  where the name said one byte, the protocol said two, and the type
+  said nothing. That's below the threshold for doubling Span's API
+  surface (extent parameter, static→dynamic conversion, `subspan`
+  return-type arithmetic). Revisit when three concrete signature sites
+  exist; the likely sources are the protocol constants (enum.hpp's
+  stamp bytes, the 2-byte telemetry).
 - `zip` / `enumerate` views over `lib::irange`
   (`firmware/lib/range.hpp`), deferred — add when a consumer appears.
 - Narrow size fields (`uint8_t`/`uint16_t` vs `std::size_t`) in

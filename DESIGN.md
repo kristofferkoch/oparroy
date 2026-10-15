@@ -1381,7 +1381,9 @@ have modern C++ ergonomics without exceptions:
 Not copied from AK: anything POSIX-flavored, hidden allocation,
 infinite growth. The node library's spine is fixed-capacity containers
 with explicit `try_` growth. Landed in `firmware/lib/`: `Span`,
-`irange`, `StaticVector`, `VERIFY`; `Error`/`ErrorOr<T>`/
+`irange`, `Array` (std::array's stand-in — the fixed-size owner, an
+aggregate whose layout is exactly the array's, with the same implicit
+`operator Span` as StaticVector), `StaticVector`, `VERIFY`; `Error`/`ErrorOr<T>`/
 `ErrorOr<void>` + `TRY` (`GrowthResult` subsumed — `try_*` now returns
 `ErrorOr<void>`), `StaticArena` + `ArenaPtr` ownership over static
 slot pools, `UNREACHABLE`, VERIFY's target personality
