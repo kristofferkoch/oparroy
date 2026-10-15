@@ -1,7 +1,8 @@
-// Node firmware: 48 MHz clock init, the §2 RX burst-decode capture
-// path (rx.cpp), the §2 TX compare-streaming path (tx.cpp), the §4
-// keep-alive strobe on PD3, and the working-LED heartbeat on PD0 — one
-// polled loop, no interrupts anywhere.
+// Node firmware: the boot-time personality stamp (personality.cpp —
+// ESIG UNIID + option-byte type byte), 48 MHz clock init, the §2 RX
+// burst-decode capture path (rx.cpp), the §2 TX compare-streaming path
+// (tx.cpp), the §4 keep-alive strobe on PD3, and the working-LED
+// heartbeat on PD0 — one polled loop, no interrupts anywhere.
 //
 // The strobe is a software-toggled plain GPIO paced off SysTick. The
 // bring-up image used TIM2_CH2 hardware PWM, but the RX capture claims
@@ -19,6 +20,7 @@
 
 #include <pins.hpp>
 
+#include "personality.hpp"
 #include "regs.hpp"
 #include "rx.hpp"
 #include "tx.hpp"
@@ -69,6 +71,7 @@ void tick_init() {
 } // namespace
 
 extern "C" [[noreturn]] void node_main() {
+    personality_init();
     clock_init();
     gpio_init();
     tick_init();
