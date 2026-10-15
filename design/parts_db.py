@@ -265,6 +265,66 @@ PARTS = PartsDb(
                 "distinguishable)"
             ),
         ),
+        PartRecord(
+            name="usb-c-receptacle-16p",
+            kind="connector",
+            lcsc="C2894897",
+            symbol="Connector:USB_C_Receptacle_USB2.0_16P",
+            footprint="Connector_USB:USB_C_Receptacle_HCTL_HC-TYPE-C-16P-01A",
+            value="HC-TYPE-C-16P-01A",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                38_895,
+                date(2026, 10, 15),
+                "LCSC product-page JSON, fetched live 2026-10-15",
+            ),
+            area_mm2=65.7,
+            datasheet="datasheets/HC-TYPE-C-16P-01A",
+            note=(
+                "HCTL HC-TYPE-C-16P-01A, $0.0848 @5 — the §6 CI-board "
+                "power inlet and host link: USB 2.0-only 16P receptacle "
+                "(5 A VBUS, 20 V max; the drawing's pin table matches "
+                "the KiCad symbol/footprint pair pad for pad — "
+                "datasheets/HC-TYPE-C-16P-01A/notes/facts.md). "
+                "Extended tier — no Basic USB-C receptacle exists. "
+                "Rejected: Korean Hroparts TYPE-C-31-M-12 (C165948 — "
+                "362,485 in stock but $0.1879 @5, 2.2x the price; its "
+                "KiCad-lib footprint USB_C_Receptacle_HRO_TYPE-C-31-M-12 "
+                "makes it a drop-in fallback if the HCTL runs out), "
+                "SHOU HAN TYPE-C 16PIN 2MD(073) (C2765186 — $0.0753 "
+                "@20 and 931,560 in stock, but no KiCad-lib footprint: "
+                "a project footprint plus decal verification for "
+                "~$0.01 saved is not worth it)"
+            ),
+        ),
+        PartRecord(
+            name="ldo-ams1117-3v3",
+            kind="voltage-regulator",
+            lcsc="C6186",
+            symbol="Regulator_Linear:AMS1117-3.3",
+            footprint="Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+            value="AMS1117-3.3",
+            tier=Tier.BASIC,
+            stock=Stock(
+                668_750,
+                date(2026, 10, 15),
+                "LCSC product-page JSON, fetched live 2026-10-15; LCSC "
+                "does not expose the JLCPCB tier — human-verify Basic "
+                "at jlcpcb.com",
+            ),
+            area_mm2=22.75,
+            datasheet="datasheets/AMS1117",
+            note=(
+                "Advanced Monolithic Systems AMS1117-3.3, $0.2103 @5 — "
+                "the §6 5 V → 3.3 V rail LDO: 1 A, dropout 1.1 V typ / "
+                "1.3 V max @0.8 A, ±3 % output over temp, SOT-223 tab "
+                "is VOUT (datasheets/AMS1117/notes/facts.md). "
+                "Stability spec calls for a 22 µF tantalum output cap; "
+                "the capture fits 0603 ceramics instead — the mismatch "
+                "and its bench-verify obligation live in "
+                "datasheets/AMS1117/notes/quirks.md"
+            ),
+        ),
     ]
 )
 
