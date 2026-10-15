@@ -193,7 +193,8 @@ recorded here with the decision):
   resistor away (above); analog observability (impedance probing,
   capacitance survey — IDEAS.md §Fault tolerance) needs a quantitative
   line view a binary buffer can't give. The Schmitt's one advantage —
-  documented 150 mV hysteresis — is small, fixed, and off-center.
+  documented 150 mV minimum hysteresis — is small, fixed, and
+  off-center.
 
 ## 6. Addressing / node ID
 
