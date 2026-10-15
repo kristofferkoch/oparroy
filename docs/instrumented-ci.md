@@ -272,21 +272,30 @@ GND) — an addition, no transform, no control bits.
 F1–F6 set on its two ring wires — 6 switches, 6 bits. The drain port
 needs none: tile 7's J2 injector covers that segment.
 
+**Control-line pull-downs:** every scan-plane control line carries a
+47 kΩ pull-down to GND ([docs/scan-plane.md](scan-plane.md) §4) — the
+FET-gate pull-downs in the parts columns above double as their lines';
+the 68 switch-select lines (F1–F7's selects, the supervisor port's,
+`WD_DEFEAT`, the pot muxes, the SWIO tree) gain one each from the same
+47 kΩ / 0603 bin.
+
 ## 8. Control/observe demands on the scan plane
 
-Bit inventory the shift-register control plane must provide:
+Settled as its own design: [docs/scan-plane.md](scan-plane.md) — one
+daisy chain of 10 × 74HC595 (control) + 2 × 74HC165 (observe) under a
+shared latch/capture net, per-tile control slices, the constructed-zero
+POR discipline, and the SWIO mux pick. What this doc still owns is the
+demand side the plane was sized against:
 
 - **Control: 77 bits** — 8 per tile × 8 (F1–F8) = 64, boundary
-  `WD_DEFEAT` = 1, input tiles 3 × 2 = 6, supervisor port = 6. Fits 10 ×
-  74HC595 (80 bits, 3 spare). The SWIO flash mux select comes on top
-  (3 bits encoded via a 4051-class mux, or 7 for a 3157 tree — the tree
-  keeps the single stocked BOM line and SWIO tolerates the stacked
-  R on ; the scan-plane design picks).
+  `WD_DEFEAT` = 1, input tiles 3 × 2 = 6, supervisor port = 6 — plus
+  the SWIO flash-mux select on top, settled at 3 ganged bits for a
+  3157 binary tree (scan-plane.md §5): 80 bits = 10 × 74HC595 exactly.
 - **POR invariant: bit 0 = plain-board state on every control bit.**
-  The reset-state load is therefore all-zeros. FET gates carry 47 kΩ
-  pull-downs (POR = pass/released); the 595 stages hold /OE until the
-  reset-state load has been shifted, so no transient output state can
-  inject a fault at power-up. These levels are the equivalence proof's
+  The reset-state load is therefore all-zeros. The 595's storage
+  register has no silicon POR state — the invariant is constructed by
+  the /OE + pull-down discipline and zero-load boot sequence
+  (scan-plane.md §4), and those levels are the equivalence proof's
   inputs.
 - **All patterns safe** (this doc §2): the 470 Ω shunt legs bound
   every bit combination, so the chain needs no hardware interlocks — a

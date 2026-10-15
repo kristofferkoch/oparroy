@@ -33,10 +33,8 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T31[T31 scan control/observe plane] --> T10
     T35[T35 CI power: USB-C + 3V3] --> T10
     T30[T30 RP2040 supervisor subcircuit] --> T10
-    T31 --> T10
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
@@ -47,27 +45,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T31 — CI scan control/observe plane.** *Shape: design.* Split out
-  of the instrumented-CI design work. Settles the §6 shift-register
-  plane as its own design: 74HC595-class control stages and
-  74HC165-class observe stages in one daisy chain under a global
-  latch/capture clock; chain partitioning (per-tile slices vs
-  functional grouping, control/observe interleave); the bit inventory
-  by function — mux selects, per-node power switches, fault-injection
-  switches, human-I/O overrides, the boundary node's watchdog-defeat
-  bit (§6); and **power-on reset levels** — every control bit's POR
-  state must reduce the instrumented board to the plain board, and
-  these levels are the reset-state equivalence proof's inputs
-  (`src/oparroy/dsl/equivalence.py`). Also the analog-mux hierarchy
-  the chain drives: the fault-injection muxes, the SWIO flash mux
-  (§6), and the pot-wiper override muxes (§6 dual role).
-  The architecture stands alone — 595/165 classes, chain topology,
-  POR-level philosophy need nothing from the node design; the bit
-  inventory finalizes against the settled instrumented design
-  (`docs/instrumented-ci.md`: 77 control bits + SWIO mux
-  select, the bit-0-is-plain-board POR invariant, 16 observe bits
-  requested). **Blocked by:** — ·
-  **Unblocks:** T10
 - **T35 — CI board power: USB-C inlet and 3.3 V rail.** DSL capture of
   the board's power tree (§6): one USB-C receptacle is
   both power inlet and host link — CC sink pull-downs (5.1 kΩ Rd ×2,
@@ -88,7 +65,7 @@ ______________________________________________________________________
   power, §6). Carries the GPIO/PIO budget: the SWIO flash channel and
   its mux select (§6), the boundary node's
   four taps (RX, TX, comparator-out, working-LED — §6), scan-chain
-  clock/data/latch (T31), and whatever the debug-transport decision
+  clock/data/latch (docs/scan-plane.md), and whatever the debug-transport decision
   (§9) adds — capture proceeds with those pins reserved, the budget
   finalizes with the decision. Pin-scarcity-checked like the T9 node
   pin map; at 30 GPIO the IDEAS scarcity lint starts to apply.
@@ -112,7 +89,7 @@ ______________________________________________________________________
   the whole CI board as blocks and the wires between them: the USB-C
   inlet → 5 V → 3.3 V regulator power tree (T35), the RP2040
   supervisor and its PIO roles (T30), the scan control/observe chain
-  and the mux hierarchy it drives (T31), the eight node tiles with
+  and the mux hierarchy it drives (settled: docs/scan-plane.md), the eight node tiles with
   their fault-injection complement (settled:
   `docs/instrumented-ci.md`), the instrumented boundary
   node's tap set (§6), and the human-I/O override paths (§6 dual
@@ -172,7 +149,7 @@ ______________________________________________________________________
   T12 harness is its client); the PIO SWIO flash engine — pipelined
   round-robin through the flash mux, ≈1.6 s for all 8 nodes (§6); the
   scan-chain driver — shift/latch primitives plus the
-  reset-state load at boot (T31's POR levels); and PIO logic-analyzer
+  reset-state load at boot (docs/scan-plane.md §4); and PIO logic-analyzer
   capture + glitch stimulus on the boundary node's taps (§6).
   Developed against a stock Pico-class board from the first commit —
   the PIO programs and scan driver are board-agnostic — so it does not
@@ -288,10 +265,10 @@ ______________________________________________________________________
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
   Supervisor-side work splits out: power inlet and 3.3 V rail (T35),
-  RP2040 subcircuit (T30), scan control/observe plane
-  (T31), debug-transport decision (T33); the supervisor image itself
-  is T32.
-  **Blocked by:** T30, T31, T33, T35 ·
+  RP2040 subcircuit (T30), debug-transport decision (T33); the scan
+  control/observe plane is settled (docs/scan-plane.md) and the
+  supervisor image itself is T32.
+  **Blocked by:** T30, T33, T35 ·
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.

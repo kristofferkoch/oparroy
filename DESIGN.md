@@ -704,15 +704,22 @@ designated debug DUT below carries a defeat bit for exactly this.
 Programmer tooling (minichlink-class) joins the flake with the node
 firmware.
 
-CI control plane: **all slow control and observe on the CI board is
-one long daisy-chained shift register with a global latch/capture
-clock** — 74HC595-class stages for control (mux enables, per-node
-power switches, fault-injection switches, human-I/O overrides),
-74HC165-class stages for observe. A handful of RP2040 pins (clock,
-data out, data in, latch) drives the whole board; chain length scales
-with the fault-injection complement instead of consuming GPIO, and
-every actuator is one bit — no I2C addressing, no bus contention,
-fully deterministic.
+CI control plane ([docs/scan-plane.md](docs/scan-plane.md) — settled
+design: topology, bit maps, POR discipline, SWIO mux pick): **all slow
+control and observe on the CI board is one daisy-chained shift
+register with a global latch/capture clock** — 10 × 74HC595 control
+stages (one per-tile slice, two supervisor-side aux stages; 80 bits:
+mux selects, per-node power switches, fault-injection switches,
+human-I/O overrides, the SWIO tree select) plus 2 × 74HC165 observe
+stages (per-tile `sel` and `3V3N`). Five RP2040 pins (clock, data out,
+data in, commit, /OE) drive the whole board; chain length scales with
+the fault-injection complement instead of consuming GPIO, and every
+actuator is one bit — no I2C addressing, no bus contention, fully
+deterministic. Reset state is a **constructed all-zeros** (the 595
+storage register has no silicon POR state): /OE held high with
+pull-downs defining every control line until firmware shifts and
+latches the zero word — those levels are the reset-state equivalence
+proof's inputs.
 
 Fault-injection design
 ([docs/instrumented-ci.md](docs/instrumented-ci.md)
