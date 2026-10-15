@@ -1188,8 +1188,10 @@ either a layout-checker assertion or a subcircuit):
   TX/RX (470 Ω × 50 pF ≈ 24 ns edge softening, far inside the §2
   decode margins) and on user-facing outputs (7 mA into a shorted
   pin, inside the ±8 mA spec'd drive), 1 kΩ on buttons, ADC sources
-  ≤ 10 kΩ total including the series R
-  ([adc.md](datasheets/CH32V003/notes/adc.md), T3-24). The R also
+  ≤ 10 kΩ total including the series R with a sample time to match
+  (10 kΩ is the T3-25 accuracy-spec condition; 3-cycle sampling allows
+  only 8.5 kΩ —
+  [adc.md](datasheets/CH32V003/notes/adc.md), T3-24/T3-25). The R also
   caps phantom-power injection into a powered-down node (the §4/§6
   power-cut fault). Prefer FT pins (PC1/PC2/PC5/PC6) for any
   terminal that can see 5 V. Plus a **TVS footprint per external

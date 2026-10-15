@@ -72,8 +72,9 @@ PARTS = PartsDb(
                 "KEXIN C369929, $0.0158 @1 — verified on jlcpcb.com, "
                 "replacing the never-queried TWGMC C727126 "
                 "listing; same industry-standard series pair (30 V, "
-                "200 mA, SOT-23), so datasheets/BAT54S (the TWGMC doc) "
-                "still stands. Extended tier — the ~$3/line fee (§6) "
+                "200 mA, SOT-23) — datasheets/BAT54S/notes/facts.md "
+                "names which rating comes from which vendor. Extended "
+                "tier — the ~$3/line fee (§6) "
                 "applies; a Basic-tier BAT54S was not found but also "
                 "not hunted. Spice model is inline in "
                 "circuits/watchdog-chargepump/ until the DSL bench "
@@ -137,7 +138,8 @@ PARTS = PartsDb(
             note=(
                 "Residuals (SCES424O §5.5): Ron ≤ 25 Ω over the full "
                 "signal range (7 Ω typ / 9 Ω max at 3 V, 25 °C); "
-                "Cio(on) 17.3 pF, Cio(off) 5.2 pF; leakage ±1 µA max."
+                "Cio(on) 17.3 pF, Cio(off) 5.2 pF — typ at VCC = 5 V, "
+                "25 °C, no max specified; leakage ±1 µA max."
             ),
         ),
         PartRecord(
@@ -165,7 +167,8 @@ PARTS = PartsDb(
             ),
             note=(
                 "UMW clone of the TI part ($0.047 vs $0.072, facts.md); "
-                "residuals as the TI part (SCES424O §5.5)."
+                "residuals as the TI part (SCES424O §5.5 — capacitances "
+                "are typ, no max specified)."
             ),
         ),
         PartRecord(
