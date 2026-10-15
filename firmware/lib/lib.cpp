@@ -7,6 +7,7 @@
 // proved on the host test runner instead.
 
 #include "arena.hpp"
+#include "array.hpp"
 #include "error_or.hpp"
 #include "range.hpp"
 #include "source_location.hpp"
@@ -106,6 +107,30 @@ namespace {
         return sum;
     }
 
+    // The fixed-size owner (array.hpp): aggregate-initialized, mutated
+    // in place, and summed through the implicit Array → Span conversion
+    // (sum_of above) — the std::array → std::span analog of
+    // StaticVector's operator Span.
+    constexpr bool array_is_a_fixed_size_value() {
+        Array<uint8_t, 3> array{{1, 2, 3}};
+        if (array.size() != 3 || array[2] != 3) {
+            return false;
+        }
+        array[1] = 9;
+        // A const Array converts only to Span<const T> — the same
+        // const split as StaticVector.
+        const Array<uint8_t, 3>& const_view = array;
+        if (sum_of(const_view) != 1 + 9 + 3) {
+            return false;
+        }
+        // begin/end drive a range-for; data() is the boundary address.
+        uint32_t total = 0;
+        for (const uint8_t value : array) {
+            total += value;
+        }
+        return total == 13 && array.data() == array.begin();
+    }
+
     constexpr bool vector_collects_range() {
         StaticVector<uint8_t, 4> vec;
         for (const uint8_t i : irange(uint8_t{4})) {
@@ -199,6 +224,7 @@ static_assert(error_or_value_path());
 static_assert(error_or_error_path());
 static_assert(error_or_void_path());
 static_assert(arena_allocates_moves_and_reclaims());
+static_assert(array_is_a_fixed_size_value());
 static_assert(vector_collects_range());
 static_assert(move_transfers_the_handle());
 static_assert(arena_handle_arrow_access());

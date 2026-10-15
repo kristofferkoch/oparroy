@@ -1,11 +1,11 @@
 #pragma once
 
-// StaticVector<T, Capacity> — the std::array's variable-length sibling:
-// statically allocated, bounded at Capacity, with a live size in
-// [0, Capacity]. The fixed-capacity container spine of the foundation
-// library (DESIGN.md §8, code-std-cpp.md#4-memory-and-ownership).
+// StaticVector<T, Capacity> — Array's variable-length sibling
+// (array.hpp): statically allocated, bounded at Capacity, with a live
+// size in [0, Capacity]. The fixed-capacity container spine of the
+// foundation library (DESIGN.md §8, code-std-cpp.md#4-memory-and-ownership).
 //
-// Elements are stored as a plain T array, so T must be
+// Elements are stored as an Array of plain values, so T must be
 // default-constructible, copy-assignable, and trivially destructible —
 // the value types this project is made of. That keeps the type fully
 // constexpr-usable and cast-free: raw storage + placement new needs
@@ -23,6 +23,7 @@
 // Bounds are carried, not checked — same doctrine as
 // Span (span.hpp).
 
+#include "array.hpp"
 #include "error_or.hpp"
 #include "span.hpp"
 #include "verify.hpp"
@@ -36,7 +37,7 @@ template <typename T, std::size_t Capacity> class StaticVector {
     static_assert(Capacity > 0, "T[0] is not ISO C++");
     static_assert(std::is_default_constructible_v<T> && std::is_copy_assignable_v<T> &&
                       std::is_trivially_destructible_v<T>,
-                  "StaticVector stores a plain T array (see header comment)");
+                  "StaticVector stores an Array of plain values (see header comment)");
 
 public:
     constexpr StaticVector() = default;
@@ -80,10 +81,10 @@ public:
     // const split mirrors std::span: a const vector converts only to
     // Span<const T>.
     constexpr operator Span<T>() {
-        return Span<T>{m_storage, m_size};
+        return Span<T>{m_storage.data(), m_size};
     }
     constexpr operator Span<const T>() const {
-        return Span<const T>{m_storage, m_size};
+        return Span<const T>{m_storage.data(), m_size};
     }
     [[nodiscard]] constexpr std::size_t capacity() const {
         return Capacity;
@@ -93,24 +94,24 @@ public:
     }
 
     [[nodiscard]] constexpr T* begin() {
-        return m_storage;
+        return m_storage.begin();
     }
     [[nodiscard]] constexpr const T* begin() const {
-        return m_storage;
+        return m_storage.begin();
     }
     [[nodiscard]] constexpr T* end() {
-        return m_storage + m_size;
+        return m_storage.begin() + m_size;
     }
     [[nodiscard]] constexpr const T* end() const {
-        return m_storage + m_size;
+        return m_storage.begin() + m_size;
     }
 
 private:
     // Value-initialized so the constexpr story has no indeterminate
-    // bytes; m_size alone decides which elements are live. This array is
-    // the adoption point of the type, same role as Span's.
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    T m_storage[Capacity]{};
+    // bytes; m_size alone decides which elements are live. Array holds
+    // the storage — its member is the adoption point (array.hpp), so
+    // no suppression lives here.
+    Array<T, Capacity> m_storage{};
     std::size_t m_size = 0;
 };
 
