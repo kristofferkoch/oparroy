@@ -63,8 +63,9 @@ void gpio_init() {
 
 void tick_init() {
     // Free-running 32-bit counter at HCLK: STCLK selects HCLK, and with
-    // STRE=0 the counter keeps counting past CMPR (PM §4 Table 4-2), so
-    // `now - last` wraps cleanly at 2^32 (~89 s, quirks.md §Clock).
+    // STRE=0 the counter keeps counting past CMPR (RM §6.5.4.1; PM §4
+    // Table 4-2), so `now - last` wraps cleanly at 2^32 (~89 s,
+    // quirks.md §Clock).
     systick().ctlr = stk_ctlr_stclk_hclk | stk_ctlr_ste;
 }
 

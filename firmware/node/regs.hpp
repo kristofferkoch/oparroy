@@ -356,8 +356,10 @@ inline constexpr uint32_t tim1_bdtr_ossi = 1u << 10;
 inline constexpr uint32_t tim1_bdtr_bke = 1u << 12;
 inline constexpr uint32_t tim1_bdtr_moe = 1u << 15;
 
-// SysTick, base 0xE000F000 (PM §4 Table 4-1) — a core peripheral, hence
-// not in the RM (quirks.md §Clock).
+// SysTick, base 0xE000F000 (RM §6.5.4 Tables 6-5, §§6.5.4.1-6.5.4.4;
+// also PM §4 Table 4-1). A core peripheral — earlier RMs omitted it
+// (quirks.md §Clock); the RM names CNTL/CMPLR where the PM says
+// CNTR/CMPR, addresses and fields match.
 struct SysTick {
     uint32_t ctlr;       // 0x00
     uint32_t sr;         // 0x04
@@ -372,7 +374,7 @@ static_assert(offsetof(SysTick, reserved0c) == 0x0C);
 static_assert(offsetof(SysTick, cmpr) == 0x10);
 static_assert(sizeof(SysTick) == 0x14);
 
-// STK_CTLR (PM §4 Table 4-2).
+// STK_CTLR (RM §6.5.4.1; PM §4 Table 4-2).
 inline constexpr uint32_t stk_ctlr_ste = 1u << 0;        // counter enable
 inline constexpr uint32_t stk_ctlr_stie = 1u << 1;       // interrupt enable
 inline constexpr uint32_t stk_ctlr_stclk_hclk = 1u << 2; // 1 = HCLK, 0 = HCLK/8
@@ -484,7 +486,8 @@ inline void configure_pin(Gpio volatile& port, uint8_t bit, uint32_t nibble) {
 }
 
 [[nodiscard]] inline SysTick volatile& systick() {
-    // MMIO boundary: the core SysTick block (PM §4 Table 4-1).
+    // MMIO boundary: the core SysTick block (RM §6.5.4; PM §4
+    // Table 4-1).
     // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
     return *reinterpret_cast<SysTick volatile*>(0xE000F000u);
 }
