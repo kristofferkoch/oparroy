@@ -11,14 +11,14 @@
 // pool sized by construction is what StaticVector's push_back contract
 // is for.
 //
-// Elements live in a plain T array under the same contract as
-// StaticVector (static_vector.hpp): T must be default-constructible,
-// copy-assignable, and trivially destructible, so the type stays fully
-// constexpr-usable and cast-free. A slot's T object exists for the
-// arena's whole lifetime; allocate/reclaim moves *which slot is owned*
-// through the free list, not object lifetimes — reclaiming a
-// value-semantic slot needs no destructor run, the next owner
-// overwrite-assigns.
+// Elements live in an Array of plain values (array.hpp) under the same
+// contract as StaticVector (static_vector.hpp): T must be
+// default-constructible, copy-assignable, and trivially destructible,
+// so the type stays fully constexpr-usable and cast-free. A slot's T
+// object exists for the arena's whole lifetime; allocate/reclaim moves
+// *which slot is owned* through the free list, not object lifetimes —
+// reclaiming a value-semantic slot needs no destructor run, the next
+// owner overwrite-assigns.
 //
 // The free list is a parallel next-index array, not pointers threaded
 // through the slots: the plain-T-array constexpr story above forbids
@@ -35,6 +35,7 @@
 // moved-from) ArenaPtr is a contract violation — VERIFY, loud on
 // target through the §4 failure hook.
 
+#include "array.hpp"
 #include "error_or.hpp"
 #include "range.hpp"
 #include "verify.hpp"
@@ -105,7 +106,7 @@ template <typename T, std::size_t Capacity> class StaticArena {
     static_assert(Capacity > 0, "T[0] is not ISO C++");
     static_assert(std::is_default_constructible_v<T> && std::is_copy_assignable_v<T> &&
                       std::is_trivially_destructible_v<T>,
-                  "StaticArena stores a plain T array (same contract as StaticVector)");
+                  "StaticArena stores an Array of plain values (same contract as StaticVector)");
 
 public:
     constexpr StaticArena() {
@@ -147,12 +148,11 @@ private:
         ++m_free_count;
     }
 
-    // Value-initialized, same adoption-point role as StaticVector's
-    // array. Capacity doubles as the free-list end sentinel.
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    T m_storage[Capacity]{};
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    std::size_t m_next_free[Capacity]{};
+    // Value-initialized; Capacity doubles as the free-list end
+    // sentinel. Array holds both storages — its member is the adoption
+    // point (array.hpp), so no suppression lives here.
+    Array<T, Capacity> m_storage{};
+    Array<std::size_t, Capacity> m_next_free{};
     std::size_t m_free_head = 0;
     std::size_t m_free_count = Capacity;
 };
