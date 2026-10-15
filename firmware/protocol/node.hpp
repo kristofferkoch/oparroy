@@ -7,9 +7,11 @@
 // decode feeds on_bit / on_illegal_cell / on_break, and the TX half
 // streams whatever the returned TxAction asks for.
 
+#include "../lib/span.hpp"
 #include "../lib/verify.hpp"
 #include "bits.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace oparroy {
@@ -45,14 +47,38 @@ struct NodeConfig {
     uint16_t slot_bits;
 };
 
+// latch()'s swap must lower to scalar loads/stores: clang batches any
+// struct copy past scalar width into one llvm.memcpy, which klee 3.2's
+// partial LLVM 19 build (flake.nix) cannot execute — the proof dies at
+// the first instruction with 0 completed paths (the memset sibling case,
+// klee/tx.cpp's header comment). The swap survives intact where SROA
+// cannot promote the buffer — a Node behind a reference, like the
+// decoder's Node& (klee/rx.cpp's Rig). BitSlice faces swap field by
+// scalar field; other Ts keep the plain three-assign swap — not
+// std::swap: freestanding, constexpr, and no <utility> in the core.
+template <typename T> constexpr void swap_faces(T& a, T& b) {
+    const T stale = a;
+    a = b;
+    b = stale;
+}
+
+constexpr void swap_faces(BitSlice& a, BitSlice& b) {
+    const uint8_t* const data = a.bytes.begin();
+    const std::size_t size = a.bytes.size();
+    const uint16_t bits = a.bit_count;
+    a.bytes = lib::Span<const uint8_t>{b.bytes.begin(), b.bytes.size()};
+    a.bit_count = b.bit_count;
+    b.bytes = lib::Span<const uint8_t>{data, size};
+    b.bit_count = bits;
+}
+
 // The §2 vsync double buffer (DESIGN.md §2 global shutter): two values
 // swapped at the frame gap. The node reads `front` for the whole frame —
 // telemetry stamped from the sampled snapshot, command outputs applied —
 // while the glue writes `back` (sample inputs, decode commands). latch()
 // is the single swap point, so neither face changes mid-frame: the §2
 // "LED/buzzer state never changes mid-frame" and "every telemetry slot
-// holds values from the same latch instant" properties. Two assignments,
-// not std::swap — freestanding, constexpr, and no <utility> in the core.
+// holds values from the same latch instant" properties.
 template <typename T> struct DoubleBuffer {
     // NOLINTNEXTLINE(misc-non-private-member-variables-in-classes) — a value, not encapsulation
     T front;
@@ -60,9 +86,7 @@ template <typename T> struct DoubleBuffer {
     T back;
 
     constexpr void latch() {
-        const T stale = front;
-        front = back;
-        back = stale;
+        swap_faces(front, back);
     }
 };
 
@@ -73,9 +97,15 @@ public:
     // code-std-cpp.md#4-memory-and-ownership): config_valid() is the
     // check; callers and harnesses VERIFY it at setup. The telemetry is
     // double-buffered — the node stamps `front`, the glue samples into
-    // `back`, and on_break latches (§2 vsync).
+    // `back`, and on_break latches (§2 vsync). The telemetry member is
+    // built field by scalar field, never copied as an aggregate — the
+    // swap_faces comment above gives the llvm.memcpy reason.
     constexpr Node(NodeConfig config, DoubleBuffer<BitSlice> telemetry)
-        : m_config(config), m_telemetry(telemetry) {}
+        : m_config(config),
+          m_telemetry{.front = {.bytes{telemetry.front.bytes.begin(), telemetry.front.bytes.size()},
+                                .bit_count = telemetry.front.bit_count},
+                      .back = {.bytes{telemetry.back.bytes.begin(), telemetry.back.bytes.size()},
+                               .bit_count = telemetry.back.bit_count}} {}
 
     [[nodiscard]] static constexpr bool config_valid(NodeConfig config,
                                                      DoubleBuffer<BitSlice> telemetry) {

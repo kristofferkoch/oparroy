@@ -63,9 +63,13 @@ if not meson.is_cross_build()
   # proofs. The nix cc-wrapper appends its hardening bundle after these
   # flags, so the compile runs at -O2 whether we want it or not — the
   # vectorizers are the one -O2 pass klee 3.2 can't swallow
-  # (ShuffleVector, unimplemented), so they're off; the inliner's
-  # lifetime markers are dodged structurally (firmware/node/klee/
-  # runtime.cpp's prove_width comment).
+  # (ShuffleVector, unimplemented), so they're off. The inliner still
+  # plants lifetime markers and llvm.memcpy calls the flag doesn't
+  # govern; both are dodged structurally — values-in at the entry point
+  # (firmware/node/klee/runtime.cpp's prove_width comment) and
+  # scalar-only aggregate copies in the core (firmware/protocol/
+  # node.hpp's swap_faces comment). scripts/klee-prove gates on the
+  # completed-path count, so a proof that dodges nothing fails loud.
   klee_bitcode_flags = [
     '-std=c++23', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
   ] + freestanding_flags + repro_flags + [
