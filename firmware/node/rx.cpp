@@ -112,8 +112,9 @@ void dma_resync() {
 }
 
 // §3 source select: swap the comparator's positive input (OPP0/PA2 ↔
-// OPP1/PD7) and hunt for the new source's first marker. RMW on
-// EXTEN_CTR — LDOTRIM and the lock-up monitor share the register.
+// OPP1/PD7) and hunt for the new source's first marker. The ^= toggle
+// keeps the non-OPA fields rx_init wrote (LDOTRIM, the lock-up
+// monitor share the register).
 void flip_source() {
     exten().ctr ^= exten_ctr_opa_psel;
     decoder.resync();
@@ -140,9 +141,13 @@ void rx_init() {
     gpiod.bcr = 1u << pins::rx_b.bit;
 
     // Comparator on, source A selected: OPA_PSEL=0 (OPP0/PA2) and
-    // OPA_NSEL=0 (OPN0/PA1) are the zero encodings, so the enable bit
-    // is the only set.
-    exten().ctr |= exten_ctr_opa_en;
+    // OPA_NSEL=0 (OPN0/PA1) are the zero encodings. A full-word write,
+    // not RMW: RM v1.9 contradicts itself on EXTEN_CTR's reset value
+    // (Table 17-1 vs §17.2.1, quirks.md §OPA), so the non-OPA fields
+    // are set explicitly — LKUPEN=1 (the §17.2.1-documented default,
+    // lock-up monitor on), LDOTRIM=0. flip_source's ^= stays safe
+    // because this establishes the state.
+    exten().ctr = exten_ctr_lkupen | exten_ctr_opa_en;
 
     // PWM-input capture (RM §11.3.4). PSC=0 puts CNT on the 48 MHz
     // tick grid of cell.hpp; ATRLR full range so CNT is reset only by

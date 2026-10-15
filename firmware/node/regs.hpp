@@ -428,9 +428,13 @@ struct Exten {
 
 static_assert(sizeof(Exten) == 0x04);
 
-// EXTEN_CTR OPA fields (RM §17.2.1). The register also carries LDOTRIM
-// and the lock-up monitor (LKUPEN resets to 1, notes/opa.md) — access
-// is always read-modify-write.
+// EXTEN_CTR OPA fields (RM §17.2.1). RM v1.9 contradicts itself on the
+// register's reset value: Table 17-1 says 0x00000400 (LDOTRIM set)
+// while the §17.2.1 bit table says LDOTRIM resets 0 and LKUPEN resets
+// 1 (0x00000040) — notes/opa.md, quirks.md §OPA. rx_init therefore
+// writes a known word rather than RMW-ing the non-OPA fields from an
+// unknown reset state.
+inline constexpr uint32_t exten_ctr_lkupen = 1u << 6;
 inline constexpr uint32_t exten_ctr_opa_en = 1u << 16;
 inline constexpr uint32_t exten_ctr_opa_nsel = 1u << 17;
 inline constexpr uint32_t exten_ctr_opa_psel = 1u << 18;
