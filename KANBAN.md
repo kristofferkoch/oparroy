@@ -48,6 +48,34 @@ ______________________________________________________________________
 
 ## Next
 
+- **T36 — KLEE proofs must gate on completed paths.** *Shape: bug.*
+  `klee-echo` and `klee-rx` currently complete **0 paths** and CI is
+  green anyway: `llvm.lifetime.start.p0` leaks into the bitcode
+  despite `-Xclang -disable-lifetime-markers` in `klee_bitcode_flags`
+  (root `meson.build`), klee 3.2 reports `KLEE: WARNING: unimplemented intrinsic: llvm.lifetime.start.p0` and then `KLEE: ERROR: (location information missing) unimplemented intrinsic` at the
+  entry state, and `scripts/klee-prove` never checks the
+  completed-path count — so a proof that explores nothing still
+  passes. Two parts: (1) make `klee-prove` fail loud on 0 completed
+  paths (and on any "unimplemented intrinsic" in the klee output) so
+  proof liveness is CI-enforced; (2) repair the echo/rx bitcode so
+  the lifetime markers are actually gone and the proofs explore real
+  paths again — `firmware/node/klee/runtime.cpp`'s `prove_width`
+  comment already documents dodging lifetime markers structurally,
+  extend that approach or fix the flag. **Blocked by:** — ·
+  **Unblocks:** —
+- **T37 — Bitcode-intrinsic lint for KLEE inputs.** *Shape: tooling.*
+  clang's front-end batches a constructor's zero-init into one
+  `llvm.memset.p0.i64` once any member is class-typed — a
+  `lib::Array` member flips the whole struct — and klee 3.2 (partial
+  LLVM 19 build, flake.nix) cannot execute it, so the proof dies at
+  the first instruction. This bit `klee-cut_through` during the
+  `lib::Array` sweep (0 paths vs 16384) and was fixed by
+  `TxCutThrough`'s elementwise-zeroing constructor
+  (`firmware/protocol/tx.hpp`), but nothing keeps the class from
+  recurring. Add a static bitcode lint — `llvm-dis` the klee `.bc`
+  products and reject `llvm.memset` / `llvm.memcpy` / `llvm.lifetime`
+  intrinsics — as a pre-flight in the firmware gate, complementing
+  T36's runtime gating. **Blocked by:** — · **Unblocks:** —
 - **T11d3b — Personality firmware: ESIG UNIID + Data0 type byte.**
   Split out of T11d3; the marker-bit discovery core (105-bit slot =
   occupancy marker + 104-bit stamp, find-first-empty-slot in
