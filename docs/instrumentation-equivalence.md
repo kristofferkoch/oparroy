@@ -74,8 +74,8 @@ which escaped port is a control, which a tap) and proves:
    the reset-state netlist reduction by provenance: each such part's
    `#a`/`#b` sides merge back onto the base net; each shunt branch
    is absent. Reset state is
-   read from the control plane's power-on state (74HC595 output
-   registers power up low/high per datasheet — the shift-register
+   read from the control plane's power-on state (the scan plane's
+   constructed all-zeros, docs/scan-plane.md §4 — the shift-register
    reset levels are part of the proof's inputs, not assumed).
 1. **Taps are high-impedance.** Every `add_tap` part's attached pin
    is an input-class pin (KiCad `PinType`, or a declared impedance
@@ -122,11 +122,18 @@ Decided (four calls taken before the card was re-blocked):
   tiles; the proof runs on the flattened result. Tiles that
   diverge (the instrumented boundary node, §6) carry their own
   per-instance declarations on top.
-- **Q2 — Reset-state source of truth: shift-register power-on
-  state.** Control-line reset levels derive from the 74HC595-class
-  stage's actual silicon power-on behavior, not from declarations on
-  the transform or the switch part. The datasheet fact lives in the
-  parts DB / datasheet notes; the checker consumes it as proof input.
+- **Q2 — Reset-state source of truth: the scan plane's constructed
+  zero state.** Control-line reset levels come from the scan-plane
+  POR discipline, not from declarations on the transform or the switch
+  part. Amended mechanism on scan-plane settlement: the 74HC595
+  storage register has **no datasheet power-on state** (SCLS041J —
+  [datasheets/SN74HC595/notes/facts.md](../datasheets/SN74HC595/notes/facts.md)),
+  so "power up low/high per datasheet" does not exist on silicon; the
+  reset state is constructed — /OE held high, 47 kΩ pull-downs defining
+  every control line, firmware shifting and latching all-zeros before
+  releasing /OE ([docs/scan-plane.md](scan-plane.md) §4). The proof's
+  `reset_levels` input is that all-zeros word; the discipline is the
+  hardware argument that the nets see it.
 - **Q4 — Overrides: a transform kind, `substitute`.** The §6
   human-I/O overrides (pot-wiper mux, button parallel) replace who
   drives a net; the plain capture stays exactly the node board — no
