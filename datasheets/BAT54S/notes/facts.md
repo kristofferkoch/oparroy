@@ -22,18 +22,23 @@ BAT54S is the **series pair**: pin 3 is the shared midpoint.
 | 2   | cathode (diode 2)                                     | K                             |
 | 3   | cathode (diode 1) + anode (diode 2) — series midpoint | COM                           |
 
-Charge-pump mapping (verified 2026-09-27 after the DSL capture swapped
-pins 2/3): **pin 1 = GND** (pump-input diode anode), **pin 3 = net `x`**
+Charge-pump mapping: **pin 1 = GND** (pump-input diode anode), **pin 3 = net `x`**
 (series midpoint), **pin 2 = net `sel`** (pump output cathode). Sibling
 variants for reference: BAT54 = single (1 A, 2 n.c., 3 K); BAT54A =
 common-anode pair (3 = common anode); BAT54C = common-cathode pair
 (3 = common cathode).
 
-## Ratings quick table (BAT54SER Rev.5 §1.4/§5)
+## Ratings quick table
 
-- VRRM / VRWM / VR: **30 V** max
-- IF continuous: **200 mA**; PD 200 mW (TWGMC doc agrees)
-- VF: 0.24 V typ @ 0.1 mA … 0.8 V max @ 100 mA (BAT54SER Rev.5 §7,
-  pulse test tp ≤ 300 µs, δ ≤ 0.02)
-- IR: 2 µA max @ VR = 25 V
-- TSTG −55…+150 °C; marking KL4 (BAT54S)
+Vendors differ on some ratings; values below name their source.
+
+- VRRM / VRWM / VR: **30 V** max (Nexperia §1.4/§5; TWGMC agrees)
+- IF continuous: **200 mA** (both); PD: **250 mW** Nexperia (Ptot,
+  §5 Table 5) / **200 mW** TWGMC
+- VF (Nexperia §7, pulse test tp ≤ 300 µs, δ ≤ 0.02): 0.24 V **max** @
+  0.1 mA … 0.8 V max @ 100 mA (no typ column given). TWGMC VF max @
+  100 mA is 1 V.
+- IR: 2 µA max @ VR = 25 V (both)
+- TSTG: **−65…+150 °C** Nexperia; **−55…+150 °C** TWGMC
+- Marking: KL4 (TWGMC BAT54S); Nexperia marks BAT54S as `*V4`
+  (`*` = assembly-site code, §4 Table 4)
