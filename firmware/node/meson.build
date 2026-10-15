@@ -99,11 +99,11 @@ if meson.is_cross_build()
   # -march/-mabi must be repeated in link_args — built-in cpp_args are
   # compile-time only. No -Wl,-Map: the ELF is a §8 reproducible
   # artifact. -Os is the settled image optimization (DESIGN.md §8, the
-  # 16 KB flash budget): the bring-up image measures 1228 B at the
-  # buildtype=plain default -O0, 642 B at -Os. gcc then lowers struct
-  # copies to memcpy calls even though the source names none (first
-  # seen: the SourceLocation pass-by-value in the verify_failed path) —
-  # runtime.cpp provides the freestanding four.
+  # 16 KB flash budget); measured sizes live in docs/size-estimate.md's
+  # laughter log. gcc then lowers struct copies to memcpy calls even
+  # though the source names none (first seen: the SourceLocation
+  # pass-by-value in the verify_failed path) — runtime.cpp provides the
+  # freestanding four.
   ch32v003_ld = files('ch32v003.ld')
   node_elf = executable('node.elf',
     ['runtime.cpp', 'startup.cpp', 'main.cpp', 'rx.cpp', 'tx.cpp', 'personality.cpp', 'platform.cpp', pins_hpp],
