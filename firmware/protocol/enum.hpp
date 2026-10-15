@@ -14,6 +14,7 @@
 // uniid1 (the low-address ESIG word) MSB-first, uniid2, uniid3, and
 // the type byte closes the slot.
 
+#include "../lib/array.hpp"
 #include "../lib/span.hpp"
 #include "bits.hpp"
 
@@ -32,25 +33,25 @@ inline constexpr uint32_t enum_frame_bits = static_cast<uint32_t>(enum_max_nodes
 // 105 bits = 13.125 bytes — the packed stamp rounds up (tail bits zero).
 inline constexpr uint16_t enum_stamp_bytes = (enum_slot_bits + 7) / 8;
 
-// The packed slot content a node stamps. A struct so pack_stamp stays
-// constexpr-returnable; Span adopts the array at the BitSlice boundary.
+// The packed slot content a node stamps. The stamp is a fixed-size
+// value — an Array (array.hpp), so pack_stamp stays constexpr-returnable
+// by value and the size rides in the type; the implicit Span conversion
+// adopts it at the BitSlice boundary (stamp_slice).
 struct EnumStamp {
-    // A fixed-size value; Span adoption happens in stamp_slice.
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint8_t bytes[enum_stamp_bytes];
+    lib::Array<uint8_t, enum_stamp_bytes> bytes;
 };
 
 // The BitSlice view of a packed stamp — what the node stamps into its
 // slot (the DoubleBuffer faces in the glue).
 [[nodiscard]] constexpr BitSlice stamp_slice(const EnumStamp& stamp) {
-    return BitSlice{.bytes = lib::Span<const uint8_t>{stamp.bytes}, .bit_count = enum_slot_bits};
+    return BitSlice{.bytes = stamp.bytes, .bit_count = enum_slot_bits};
 }
 
 // Bytewise assembly along the layout in the header comment — every
 // subscript is a constant expression, and constexpr all the way down.
 [[nodiscard]] constexpr EnumStamp pack_stamp(uint32_t uniid1, uint32_t uniid2, uint32_t uniid3,
                                              uint8_t type) {
-    return EnumStamp{.bytes = {
+    return EnumStamp{.bytes = {{
                          static_cast<uint8_t>(0x80u | ((uniid1 >> 25) & 0x7Fu)), // marker
                          static_cast<uint8_t>(uniid1 >> 17),
                          static_cast<uint8_t>(uniid1 >> 9),
@@ -65,7 +66,7 @@ struct EnumStamp {
                          static_cast<uint8_t>(uniid3 >> 1),
                          static_cast<uint8_t>((uniid3 << 7) | ((type >> 1) & 0x7Fu)),
                          static_cast<uint8_t>(type << 7),
-                     }};
+                     }}};
 }
 
 struct UnpackedStamp {

@@ -20,12 +20,14 @@
 // The members' own initializers cover everything but the log, and the
 // log is read only below its indices.
 
+#include "../../lib/array.hpp"
 #include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../cell.hpp"
 #include "../node.hpp"
 #include "../tx.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace {
@@ -45,8 +47,7 @@ constexpr uint16_t capacity = 8;
 // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
 struct ShadowCut {
     // Sized for the proof's step count; every enqueue writes one entry.
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint16_t cells[2 * capacity];
+    lib::Array<uint16_t, 2 * static_cast<std::size_t>(capacity)> cells;
     uint16_t head = 0;
     uint16_t count = 0;
     uint16_t idle = 0;

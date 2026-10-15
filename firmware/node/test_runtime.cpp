@@ -173,10 +173,11 @@ TEST_CASE(divdi3_moddi3_edges) {
     EXPECT(__moddi3(-42, 0) == -42);
 }
 
-// Mem functions: raw buffers are the interface under test — std::array
-// stays out (startup.cpp's vector_table comment gives the freestanding
-// reasoning), and include-cleaner's libc-name misfire (runtime.cpp's
-// suppression block explains) hits every call site.
+// Mem functions: raw buffers are the interface under test — the
+// freestanding mem* speak void*/size, so the fixtures stay raw C arrays
+// (lib::Array would only costume the same .data() pointers), and
+// include-cleaner's libc-name misfire (runtime.cpp's suppression block
+// explains) hits every call site.
 // NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays, modernize-avoid-c-arrays, misc-include-cleaner)
 TEST_CASE(memcpy_copies_and_returns_dst) {
     const uint8_t src[] = {0, 1, 2, 0xFF, 0x80};

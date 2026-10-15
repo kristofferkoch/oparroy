@@ -17,6 +17,7 @@
 
 #include <pins.hpp>
 
+#include "../lib/array.hpp"
 #include "../protocol/bits.hpp"
 #include "../protocol/cell.hpp"
 #include "../protocol/enum.hpp"
@@ -34,20 +35,22 @@ namespace {
 // budget.
 inline constexpr uint32_t ring_cells = 16;
 
-// DMA targets, hardware-written between polls — writable C arrays by
-// definition.
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-volatile uint16_t period_ring[ring_cells];
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-volatile uint16_t high_ring[ring_cells];
+// DMA targets, hardware-written between polls — volatile elements; the
+// address crosses to the DMA through data() at the MMIO boundary
+// (dma_config).
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+lib::Array<volatile uint16_t, ring_cells> period_ring;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+lib::Array<volatile uint16_t, ring_cells> high_ring;
 
 // The node's telemetry is its ENUM stamp (enum.hpp, DESIGN.md §2): the
 // slot walk claims each frame's first empty slot and stamps it — the
 // find-first-empty-slot discovery that keeps position provision-free.
 // The stamp is a placeholder until the personality firmware slice wires
 // the real ESIG UNIID and option-byte type byte: zero UNIID, type 0
-// ("plain node"). BitSlice adopts a C array (span.hpp); both vsync
-// faces are the one stamp — it never changes after boot.
+// ("plain node"). The stamp's Array converts to Span at the BitSlice
+// boundary (enum.hpp's stamp_slice); both vsync faces are the one
+// stamp — it never changes after boot.
 constexpr oparroy::EnumStamp placeholder_stamp = oparroy::pack_stamp(0, 0, 0, 0);
 constexpr oparroy::NodeConfig node_config{.slot_bits = oparroy::enum_slot_bits};
 constexpr oparroy::DoubleBuffer<oparroy::BitSlice> stamp_latch{
@@ -102,8 +105,8 @@ void dma_config(uint32_t channel, const volatile uint32_t& source, const volatil
 void dma_resync() {
     dma_channel(pins::rx_a_period_dma).cfgr.write({}); // all-zero: channel disabled
     dma_channel(pins::rx_a_high_dma).cfgr.write({});
-    dma_config(pins::rx_a_period_dma, tim2().ch1cvr, period_ring);
-    dma_config(pins::rx_a_high_dma, tim2().ch2cvr, high_ring);
+    dma_config(pins::rx_a_period_dma, tim2().ch1cvr, period_ring.data());
+    dma_config(pins::rx_a_high_dma, tim2().ch2cvr, high_ring.data());
     // Captures during the disabled window set the overcapture flags;
     // they belong to the discarded stream.
     tim2().intfr.clear(tim2_intfr_cc1of | tim2_intfr_cc2of);
@@ -158,8 +161,8 @@ void rx_init() {
 
     // DMA before the counter starts: the streams are aligned from the
     // first capture.
-    dma_config(pins::rx_a_period_dma, tim.ch1cvr, period_ring);
-    dma_config(pins::rx_a_high_dma, tim.ch2cvr, high_ring);
+    dma_config(pins::rx_a_period_dma, tim.ch1cvr, period_ring.data());
+    dma_config(pins::rx_a_high_dma, tim.ch2cvr, high_ring.data());
     tim.ctlr1 = tim2_ctlr1_cen;
 }
 

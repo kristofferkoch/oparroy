@@ -34,7 +34,7 @@
 // on_break() resyncs: cut-through drops its backlog and re-arms the
 // re-emitted break's idle run; store-and-forward closes the frame.
 
-#include "../lib/span.hpp"
+#include "../lib/array.hpp"
 #include "bits.hpp"
 #include "cell.hpp"
 #include "node.hpp"
@@ -78,6 +78,20 @@ inline constexpr uint16_t tx_cut_through_cells = 128;
 template <uint16_t CapacityCells = tx_cut_through_cells> class TxCutThrough {
 public:
     static_assert(CapacityCells > 0, "a cut-through FIFO must hold at least one cell");
+
+    // The compare ring zeroes elementwise, not by a whole-member {}:
+    // value-initializing the class-typed Array makes clang's front-end
+    // batch the ctor's zero-init into one llvm.memset, which klee 3.2
+    // doesn't implement (klee/tx.cpp's ShadowTx comment) — the proof
+    // harness would die at the first instruction. On target gcc lowers
+    // the loop to the same memset the = {} gave (the freestanding
+    // runtime provides it); cells are read only below m_queued, so the
+    // init is defensive either way.
+    constexpr TxCutThrough() {
+        for (uint16_t& cell : m_compare) {
+            cell = 0;
+        }
+    }
 
     // One Node output. Emit* enqueues the nominal compare; Idle is
     // containment (Hunt or Mute) — stop regenerating and let the FIFO
@@ -149,13 +163,9 @@ private:
     }
 
     // The DMA refill runs ahead of the wire, but the storage is only
-    // ever written by the sequencer itself — a plain array. Value-init
-    // like TxSequencer's m_bits: cells are read only below m_queued, so
-    // the init is defensive, and the target's gcc lowers the 256 B
-    // default to a memset the freestanding runtime provides (the
-    // store-and-forward's 256 B frame queue already does the same).
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint16_t m_compare[CapacityCells] = {};
+    // ever written by the sequencer itself — a plain Array, zeroed by
+    // the constructor (see its comment for the elementwise shape).
+    lib::Array<uint16_t, CapacityCells> m_compare;
     uint16_t m_head = 0;           // next cell to play
     uint16_t m_queued = 0;         // cells at [m_head, …)
     uint16_t m_idle_remaining = 0; // re-armed break idle cells still owed
@@ -210,7 +220,7 @@ public:
         if (m_playable == 0) {
             return tx_idle_compare;
         }
-        const Bit bit = bit_at(lib::Span<const uint8_t>{m_bits}, m_head);
+        const Bit bit = bit_at(m_bits, m_head);
         m_head = static_cast<uint16_t>((m_head + 1) % CapacityBits);
         m_playable -= 1;
         if (m_playable == 0) {
@@ -252,9 +262,8 @@ private:
     }
 
     // The DMA refill runs ahead of the wire, but the storage is only
-    // ever written by the Sequencer itself — a plain array.
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint8_t m_bits[CapacityBits / 8] = {};
+    // ever written by the Sequencer itself — a plain Array.
+    lib::Array<uint8_t, CapacityBits / 8> m_bits{};
     uint16_t m_head = 0;           // next bit to play
     uint16_t m_playable = 0;       // closed bits at [m_head, …)
     uint16_t m_pending = 0;        // accumulating bits after the playable run
