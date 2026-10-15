@@ -179,6 +179,13 @@ against silicon are marked **unverified**.
 - **DATA0/DATA1 option data need explicit flashing** — not set by a normal
   program run; tooling support is manual
   ([cnlohr/ch32fun#509](https://github.com/cnlohr/ch32fun/issues/509)).
+- **RM §16.3.7 pins FLASH_OBR at the wrong offset** — the section header
+  says "Offset address: 0x14", but the RM's own register list (Table 16-2)
+  and the SDK's `FLASH_TypeDef` both put OBR at 0x4002201C (offset 0x1C,
+  +0x18 reserved; 0x14 is FLASH_ADDR). Follow the register list
+  (RM v1.9 §16.3.7 vs Table 16-2;
+  [ch32v003hw.h](https://github.com/cnlohr/ch32fun/blob/master/ch32fun/ch32v003hw.h)
+  FLASH_TypeDef).
 
 ## ADC
 
