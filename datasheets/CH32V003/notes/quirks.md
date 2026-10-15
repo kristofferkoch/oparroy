@@ -1,10 +1,10 @@
 # CH32V003 tribal-knowledge errata
 
-Compiled 2026-09-26. WCH ships no errata sheet for the CH32V003 — the
+WCH ships no errata sheet for the CH32V003 — the
 community asked for one and got silence
 ([openwch/ch32v003#24](https://github.com/openwch/ch32v003/issues/24);
-no errata PDF on the [product page](https://www.wch-ic.com/products/CH32V003.html)
-as of 2026-09-26). This file is the substitute: silicon quirks, doc-vs-silicon
+no errata PDF on the [product page](https://www.wch-ic.com/products/CH32V003.html)).
+This file is the substitute: silicon quirks, doc-vs-silicon
 mismatches, and toolchain traps, each with a source. Official documents live in
 `datasheets/CH32V003/` (`CH32V003RM-reference-manual-v1.9.pdf` = "RM §",
 `CH32V003DS0-datasheet-v1.8.pdf` = "DS §").
@@ -19,16 +19,18 @@ against silicon are marked **unverified**.
   RM v1.9 Table 3-1 now says 0x00000020. Trust silicon, not old manuals.
   [openwch/ch32v003#17](https://github.com/openwch/ch32v003/issues/17),
   [openwch/ch32v003#26](https://github.com/openwch/ch32v003/issues/26).
-- **PLL is fixed ×2 with a mandatory /3 on the HSE path** — no PLLMUL field
-  exists (unlike STM32F1/CH32V103). PLL source is HSI (24 MHz ×2 = 48 MHz) or
-  HSE, and the clock tree shows HSE routed through /3 before the ×2 PLL, so an
-  HSE crystal cannot reach 48 MHz SYSCLK. Source must be set before PLLON and
-  cannot change while the PLL runs. RM v1.9 §3.3.4, Figure 3-2; DS v1.8
-  Figure 3-1.
+- **PLL is fixed ×2, no PLLMUL field** — unlike STM32F1/CH32V103 there is
+  no multiplier field: PLLCLK = source ×2, source selected by PLLSRC
+  (0 = HSI, 1 = HSE, undivided per RM §3.4.2). A 24 MHz HSE crystal ×2
+  reaches 48 MHz SYSCLK fine. The /3 divider in the clock tree sits on the
+  HSI feeding the flash time base, not on the PLL path. Source must be set
+  before PLLON and cannot change while the PLL runs. RM v1.9 §3.3.4,
+  Figure 3-2; DS v1.8 Figure 1-3.
 - **Clock security system fires NMI into the void** — with `FUNCONF_USE_HSE`,
-  a failing crystal trips CSS → NMI; the WCH EVT vector table has no NMI
-  handler, so the part hangs unless you define one. CSS also only acts when
-  HSE (or HSE-fed PLL) is the system clock. RM v1.9 §3.3.2;
+  a failing crystal trips CSS → NMI; the WCH EVT startup's weak `NMI_Handler`
+  falls through to the default `j 1b` loop, so the part hangs unless you
+  define one. CSS also only acts when HSE (or HSE-fed PLL) is the system
+  clock. RM v1.9 §3.3.6;
   [openwch/ch32v003#48](https://github.com/openwch/ch32v003/issues/48).
 - **HSI trim is a live register** — `RCC_CTLR` HSITRIM[7:3] / HSICAL[15:8]
   ([ch32v003hw.h](https://github.com/cnlohr/ch32fun/blob/master/ch32fun/ch32v003hw.h)
@@ -40,7 +42,7 @@ against silicon are marked **unverified**.
   `VENDOR_CFG0_BASE` / `CFG0_PLL_TRIM` at 0x1FFFF7D4; RM v1.9 documents the
   ESIG block at 0x1FFFF7E0 but never this word
   ([ch32v003hw.h](https://github.com/cnlohr/ch32fun/blob/master/ch32fun/ch32v003hw.h)
-  lines 568, 607). Contents and semantics unknown — read-only archaeology.
+  lines 568-569, 607). Contents and semantics unknown — read-only archaeology.
 - **LDOTRIM field barely documented** — EXTEND_CTR LDOTRIM adjusts the
   internal LDO; WCH never explained the trade-off
   ([openwch/ch32v003#25](https://github.com/openwch/ch32v003/issues/25)).
@@ -49,10 +51,13 @@ against silicon are marked **unverified**.
   clock-select bit is set (ch32fun: `SYSTICK_USE_HCLK`). Rollover at 6 MHz is
   715 s, at 48 MHz 89.5 s — plan accordingly
   ([ch32fun wiki: Time](https://github.com/cnlohr/ch32fun/wiki/Time)).
-- **SysTick is absent from the datasheet and RM** — register description
-  lives only in the QingKeV2 processor manual
+- **SysTick was absent from the datasheet and RM for years** — the register
+  description lived only in the QingKeV2 processor manual
   ([openwch/ch32v003#14](https://github.com/openwch/ch32v003/issues/14);
   manual linked from the [ch32fun README](https://github.com/cnlohr/ch32fun#footnoteslinks)).
+  RM v1.9 finally documents it in §6.5.4 as `R32_STK_CTLR`/`STK_SR`/
+  `STK_CNTL`/`STK_CMPLR` — names differ from the PM's CTLR/SR/CNTR/CMPR,
+  addresses and fields match.
 
 ## GPIO & alternate functions
 
@@ -75,11 +80,16 @@ against silicon are marked **unverified**.
   definitions the zip has (e.g. PWR PVD levels MODE4–MODE7 absent from
   `ch32v00x_pwr.h`). Download the current EVT from wch.cn when a definition
   looks thin ([openwch/ch32v003#57](https://github.com/openwch/ch32v003/issues/57)).
-- **PD7 is GPIO by default, not NRST** — fresh parts ship with option byte
-  USER.RST_MODE = OB_RST_EN_DT1ms (0xD7), while the RM claims default 11b
-  (NRST disabled); board-reset buttons do nothing until the option byte is
-  rewritten ([openwch/ch32v003#11](https://github.com/openwch/ch32v003/issues/11)).
-  ch32fun wiki confirms PD7 defaults to GPIO; `minichlink -d`/`-D` toggles it
+- **PD7 ships as NRST, with a 12 ms ignore window** — fresh parts carry
+  option byte USER.RST_MODE = 10b (USER = 0xD7, `OB_RST_EN_DT12ms` in both
+  WCH and ch32fun headers): the reset pin is enabled, but pulses shorter
+  than ~12 ms are ignored, so a quick button tap can look like "reset does
+  nothing". RM v1.9 Table 16-4 documents the 10b default; earlier RMs
+  claimed 11b (NRST disabled), and the ch32fun wiki still says PD7 defaults
+  to GPIO in some configurations — community sources conflict, WCH staff
+  confirmed 10b in
+  [openwch/ch32v003#11](https://github.com/openwch/ch32v003/issues/11).
+  `minichlink -d`/`-D` toggles it
   ([ch32fun wiki: reset](https://github.com/cnlohr/ch32fun/wiki/reset)).
 - **Remaps need the AFIO clock** — alternate-function remapping silently does
   nothing until `RCC->APB2PCENR |= RCC_APB2Periph_AFIO`; ch32fun's TIM2 remap
@@ -97,9 +107,10 @@ against silicon are marked **unverified**.
   more flash wait states, and SWIO that cannot be glitched high (external
   pull-up mandatory for in-circuit programming)
   ([cnlohr/ch32fun#906](https://github.com/cnlohr/ch32fun/issues/906)).
-  Read this as: 003 inputs tolerate 5 V and SWIO needs no pull-up —
-  **unverified** beyond cnlohr's characterization; the DS does not claim 5 V
-  tolerance.
+  Read this as: 003 inputs tolerate 5 V **on the FT pins only** — DS v1.8
+  Table 2-1 marks PC1/PC2/PC5/PC6 as `I/O/FT` ("FT = 5V tolerant", abs-max
+  input 5.5 V in Table 3-2); cnlohr's blanket "003 has 5 V-tolerant I/O"
+  overstates it, and PD1/SWIO is `I/O/A`, not FT.
 
 ## Debug / SDI & recovery
 
@@ -107,10 +118,11 @@ against silicon are marked **unverified**.
   "do not re-use PD1 for multiple functions"
   ([ch32fun README, Quick Reference](https://github.com/cnlohr/ch32fun#quick-reference)).
 - **Brick recipe: touch PD1, kill interrupts, or sleep early** — firmware that
-  zeroes GPIOD_CFGLR, disables all interrupts, or enters sleep immediately
-  after reset locks the debugger out
+  zeroes GPIOD_CFGLR or disables all interrupts locks the debugger out
   ([cnlohr/ch32fun#846](https://github.com/cnlohr/ch32fun/issues/846),
-  [cnlohr/ch32fun#835](https://github.com/cnlohr/ch32fun/issues/835)).
+  [cnlohr/ch32fun#835](https://github.com/cnlohr/ch32fun/issues/835));
+  entering sleep immediately after reset does the same
+  ([cnlohr/ch32fun#233](https://github.com/cnlohr/ch32fun/issues/233)).
 - **`minichlink -u` unbrick often fails; power-cycle recovery works** — the
   documented escape is WCH-LinkUtility's "Clear All Code Flash - By Power
   Off", which holds the chip in reset through a power cycle;
@@ -125,7 +137,7 @@ against silicon are marked **unverified**.
   `DidDebuggerAttach()` ([cnlohr/ch32fun#909](https://github.com/cnlohr/ch32fun/issues/909)).
 - **Repeated debug memory reads reset the MCU** — polling RAM via
   `minichlink -r` resets the target every 3rd–5th read on some setups
-  ([cnlohr/ch32fun#901](https://github.com/cnlohr/ch32fun/issues/901), open).
+  ([cnlohr/ch32fun#901](https://github.com/cnlohr/ch32fun/issues/901)).
 - **No factory bootloader; SDI is the only way in** — the boot/system flash
   contains no open ISP protocol; programming requires the proprietary
   single-wire interface (protocol reverse-engineered by fxsheep et al.)
@@ -133,36 +145,34 @@ against silicon are marked **unverified**.
 - **Non-WCH-LinkE programmers hit flash-unlock walls** — Ardulink detects the
   chip but fails unlock with `CTLR = 00008080` / `WRPTRERR` on some parts;
   recovery needs the official tool's clear-all sequence
-  ([cnlohr/ch32fun#915](https://github.com/cnlohr/ch32fun/issues/915), open).
+  ([cnlohr/ch32fun#915](https://github.com/cnlohr/ch32fun/issues/915)).
 - **No hardware breakpoints** — the debug module implements no trigger
   module; WCH-LinkE and PicoRVD both emulate breakpoints by patching
   `ebreak` into flash and unpatched on resume, so breakpoint count is
   unlimited but every set/clear costs flash writes
-  ([PicoRVD SoftBreak](https://github.com/Community-PIO-CH32V/PicoRVD#softbreak),
-  2026-09-29).
+  ([PicoRVD SoftBreak](https://github.com/Community-PIO-CH32V/PicoRVD#softbreak)).
 - **Undocumented debug-interface register PART at 0x7F** — PicoRVD reads a
   part-info word from 7-bit address 0x7F, absent from QDM §2.3's register
-  table ([PicoRVD PicoSWIO.cpp](https://github.com/Community-PIO-CH32V/PicoRVD/blob/master/src/PicoSWIO.cpp),
-  2026-09-29).
+  table ([PicoRVD PicoSWIO.cpp](https://github.com/Community-PIO-CH32V/PicoRVD/blob/master/src/PicoSWIO.cpp)).
 - **Programmer options beyond WCH-LinkE** — minichlink drives WCH-LinkE,
   ESP32-S2 (funprog), and "RVSWDIO003-01" (a CH32V003 as SWIO programmer);
   PicoRVD turns an RP2040 into a GDB-server SWIO probe (PIO bitbang,
   ~800 kbps normal mode) — directly usable for a supervisor-as-programmer
   CI board ([PicoRVD](https://github.com/Community-PIO-CH32V/PicoRVD),
-  [minichlink](https://github.com/cnlohr/ch32fun/tree/master/minichlink),
-  2026-09-29).
+  [minichlink](https://github.com/cnlohr/ch32fun/tree/master/minichlink)).
 
 ## Flash & option bytes
 
-- **Programming is 64-byte fast-page only** — no single-word program mode;
-  each page loads as 16 × 4-byte buffer writes (BUFRST/BUFLOAD) then STRT.
-  Erase granularity is 1 KB (standard) or 64 B (fast erase). Two unlock
-  layers: FLASH_KEYR, then FLASH_MODEKEYR for fast mode; a wrong key sequence
-  locks the interface until the next system reset. RM v1.9 §16.4.
+- **Fast-page programming is the fast path, not the only path** — RM v1.9
+  §16.4.3 also documents standard half-word (2-byte) programming via the PG
+  bit. Fast mode loads each 64-byte page as 16 × 4-byte buffer writes
+  (BUFRST/BUFLOAD) then STRT. Erase granularity is 1 KB (standard) or 64 B
+  (fast erase). Two unlock layers: FLASH_KEYR, then FLASH_MODEKEYR for fast
+  mode; a wrong key sequence locks the interface until the next system
+  reset. RM v1.9 §16.4.
 - **Boot/system flash is firmware-inaccessible** — write-protected against
   user code; only the debugger writes it, by a mechanism WCH has not
-  documented ([cnlohr/ch32fun#945](https://github.com/cnlohr/ch32fun/issues/945),
-  open as of 2026-09-26).
+  documented ([cnlohr/ch32fun#945](https://github.com/cnlohr/ch32fun/issues/945)).
 - **Option bytes live at 0x1FFFF800; identity block at 0x1FFFF7E0** —
   `OB` struct (RDPR/USER/DATA0/DATA1/WRPR0/WRPR1) and `ESIG` (R16_FLACAP
   flash-size word, R32_ESIG_UNIID1..3 unique ID) at 0x1FFFF7E0; ESIG is
@@ -209,7 +219,7 @@ against silicon are marked **unverified**.
 - **Timer-triggered ADC conversion unreliable/undocumented** — external
   trigger from TIM1 CH1/CH2 never starts conversions in at least one
   documented attempt; STATR stays 0
-  ([openwch/ch32v003#63](https://github.com/openwch/ch32v003/issues/63), open).
+  ([openwch/ch32v003#63](https://github.com/openwch/ch32v003/issues/63)).
 - **Sample time matters more than the docs suggest** — OPA-boosted signals
   read dramatically different at 30 vs 241 cycle sample time; long sample
   times are the fix for high-impedance sources
@@ -283,8 +293,8 @@ against silicon are marked **unverified**.
 ## EXTI / interrupts
 
 - **All eight EXTI lines share one IRQ** — EXTI0–EXTI7 vector to the single
-  `EXTI7_0_IRQHandler` (RM v1.9 §2 vector table); demux by reading
-  EXTI_INTF. Line 8 is PVD, line 9 is AWU wakeup. There is no EXTI15_10 on
+  `EXTI7_0_IRQHandler` (RM v1.9 §6.3 Table 6-1); demux by reading
+  EXTI_INTFR. Line 8 is PVD, line 9 is AWU wakeup. There is no EXTI15_10 on
   this part.
 - **C++ name mangling silently kills ISRs** — declare handlers
   `extern "C"`; a mangled `EXTI7_0_IRQHandler` never links into the vector
@@ -297,7 +307,7 @@ against silicon are marked **unverified**.
   ([startup_ch32v00x.S](https://github.com/openwch/ch32v003/blob/main/EVT/EXAM/SRC/Startup/startup_ch32v00x.S)).
   Neither the RM nor the processor manual states the reset path outright;
   the mechanism that makes the SDK correct is mtvec resetting to 0
-  (PM §3.2) — unified-entry mode at base 0 — and PM §2.2's unified entry
+  (PM §3.2) — unified-entry mode at base 0 — and PM §2.3's unified entry
   *fetching a jump instruction* from the base. Consistent only with
   entry 0 being executed, not read as an address, and the `norvc` is
   load-bearing: a compressed `c.j` occupies half a slot and shifts every
@@ -305,8 +315,7 @@ against silicon are marked **unverified**.
 - **STM32-style NVIC priority API doesn't map cleanly** — PFIC priority
   configuration via `NVIC_PriorityGroupConfig` produces no observable
   preemption change for users; QingKe priority/interrupt-enable model
-  differs from ARM's ([openwch/ch32v003#30](https://github.com/openwch/ch32v003/issues/30),
-  unresolved).
+  differs from ARM's ([openwch/ch32v003#30](https://github.com/openwch/ch32v003/issues/30)).
 - **Hardware priority escalation (HPE / `WCH-Interrupt-fast`) has sharp
   edges** — needs a patched compiler, adds ~4 cycles to every ISR, nests only
   2 deep, and requires manual s0/s1 save/restore care; cnlohr recommends
@@ -357,7 +366,8 @@ against silicon are marked **unverified**.
 - **DMA does not run in sleep mode** — see USART section; 003-specific per
   WCH support
   ([EEVblog](https://www.eevblog.com/forum/microcontrollers/ch32v003-dmauart-tx-stalls-during-wfi-even-with-sramendma1en-set-expected/)).
-- **NRST defaults differ between silicon and RM** — see GPIO section;
+- **NRST default: silicon and RM v1.9 agree (10b, enabled); older RMs said
+  11b** — see GPIO section;
   [openwch/ch32v003#11](https://github.com/openwch/ch32v003/issues/11).
 
 ## Toolchain / programmer pitfalls
@@ -387,7 +397,7 @@ against silicon are marked **unverified**.
   reported as CH32V006 ([cnlohr/ch32fun#646](https://github.com/cnlohr/ch32fun/issues/646));
   cross-check against ESIG flash size before trusting the banner.
 - **One LinkE at a time** — minichlink cannot select among multiple attached
-  WCH-LinkE programmers ([cnlohr/ch32fun#902](https://github.com/cnlohr/ch32fun/issues/902), open).
+  WCH-LinkE programmers ([cnlohr/ch32fun#902](https://github.com/cnlohr/ch32fun/issues/902)).
 - **OpenOCD verify is 15× slower than programming** — 15 s verify vs \<1 s
   program on 16 KB with WCH's OpenOCD fork; budget CI time accordingly
   ([openwch/ch32v003#28](https://github.com/openwch/ch32v003/issues/28)).
@@ -402,13 +412,11 @@ against silicon are marked **unverified**.
   Pinouts also differ between 003 packages (DS v1.8 §2): check the exact
   suffix (F4P6/A4M6/J4M6) pin table before routing.
 - **Fake/remarked CH32V003 warnings** — **not found**. No credible report of
-  remarked 003s surfaced in this search (2026-09-26); at this price point
+  remarked 003s surfaced in this search; at this price point
   counterfeiting is rarely economical. The real lookalike risk is buying a
   V002/A-variant board sold as F4P6 — verify with ESIG FLACAP/UNIID reads.
 
 ## Sources mined
-
-All accessed 2026-09-26.
 
 - [cnlohr/ch32fun](https://github.com/cnlohr/ch32fun) — README, issues
   (#319, #383, #397, #484, #487, #509, #556, #560, #572, #613, #628, #646,
