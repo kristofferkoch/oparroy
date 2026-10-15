@@ -18,8 +18,8 @@ F4P6 pin map (DS0 §2.1; A# = ADC channel, T#/U# abbreviated per DS0 note):
 | 2   | PD5  | ADC_IN5, USART_TX                            | TIM2_CH4_3, USART_RX_2                                                     |
 | 3   | PD6  | ADC_IN6, USART_RX                            | TIM2_CH3_3, USART_TX_2                                                     |
 | 4   | PD7  | **NRST**, TIM2_CH4, **OPA_P1**               | USART_CK_1/2, TIM2_CH4_2                                                   |
-| 5   | PA1  | OSC_IN, ADC_IN1, TIM1_CH2, **OPA_N0**        | TIM1_CH2_2                                                                 |
-| 6   | PA2  | OSC_OUT, ADC_IN0, TIM1_CH2N, **OPA_P0**      | ADC_ETR2_1, TIM1_CH2N_2                                                    |
+| 5   | PA1  | ADC_IN1, TIM1_CH2, **OPA_N0**                | TIM1_CH2_2, OSC_IN (PA1PA2_RM)                                             |
+| 6   | PA2  | ADC_IN0, TIM1_CH2N, **OPA_P0**               | ADC_ETR2_1, TIM1_CH2N_2, OSC_OUT (PA1PA2_RM)                               |
 | 7   | VSS  |                                              |                                                                            |
 | 8   | PD0  | TIM1_CH1N, **OPA_N1**                        | I2C_SDA_1, USART_TX_1, TIM1_CH1N_2                                         |
 | 9   | VDD  |                                              |                                                                            |
@@ -37,7 +37,9 @@ F4P6 pin map (DS0 §2.1; A# = ADC channel, T#/U# abbreviated per DS0 note):
 
 Remap control: `AFIO_PCFR1` (0x40010004, reset 0) — TIM2_RM[1:0] bits
 9:8, TIM1_RM[1:0] bits 7:6, USART1_RM {21,2}, I2C1_RM {22,1}, SPI1_RM
-bit 0, SWCFG[2:0] bits 26:24, PA1PA2_RM bit 15, TIM1_IREMAP bit 23,
+bit 0, SWCFG[2:0] bits 26:24, PA1PA2_RM bit 15 (1 = PA1/PA2 become the
+crystal pins OSC_IN/OSC_OUT; 0 = GPIO/AF, the reset state), TIM1_IREMAP
+bit 23,
 ADC_ETRGREG_RM bit 18, ADC_ETRGINJ_RM bit 17. `_N` suffixes in the
 table = remap-field value in binary. TIM2 remap table (RM §7.2.11.1 Table
 7-9): TIM2_RM=00 → CH1/ETR PD4, CH2 PD3, CH3 PC0, CH4 PD7; 01 →
