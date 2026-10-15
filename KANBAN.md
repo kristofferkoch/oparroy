@@ -48,21 +48,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T36 — KLEE proofs must gate on completed paths.** *Shape: bug.*
-  `klee-echo` and `klee-rx` currently complete **0 paths** and CI is
-  green anyway: `llvm.lifetime.start.p0` leaks into the bitcode
-  despite `-Xclang -disable-lifetime-markers` in `klee_bitcode_flags`
-  (root `meson.build`), klee 3.2 reports `KLEE: WARNING: unimplemented intrinsic: llvm.lifetime.start.p0` and then `KLEE: ERROR: (location information missing) unimplemented intrinsic` at the
-  entry state, and `scripts/klee-prove` never checks the
-  completed-path count — so a proof that explores nothing still
-  passes. Two parts: (1) make `klee-prove` fail loud on 0 completed
-  paths (and on any "unimplemented intrinsic" in the klee output) so
-  proof liveness is CI-enforced; (2) repair the echo/rx bitcode so
-  the lifetime markers are actually gone and the proofs explore real
-  paths again — `firmware/node/klee/runtime.cpp`'s `prove_width`
-  comment already documents dodging lifetime markers structurally,
-  extend that approach or fix the flag. **Blocked by:** — ·
-  **Unblocks:** —
 - **T37 — Bitcode-intrinsic lint for KLEE inputs.** *Shape: tooling.*
   clang's front-end batches a constructor's zero-init into one
   `llvm.memset.p0.i64` once any member is class-typed — a
