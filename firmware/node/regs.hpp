@@ -207,6 +207,9 @@ struct Tim2 {
     uint32_t ch2cvr;     // 0x38
     uint32_t ch3cvr;     // 0x3C
     uint32_t ch4cvr;     // 0x40
+    uint32_t reserved44; // 0x44 (TIM1's BDTR lives here; TIM2 has none)
+    uint32_t dmacfgr;    // 0x48 — burst DMA base/length (RM §11.4.17)
+    uint32_t dmaadr;     // 0x4C — burst DMA address (RM §11.4.18)
 };
 
 static_assert(offsetof(Tim2, ctlr2) == 0x04);
@@ -225,7 +228,10 @@ static_assert(offsetof(Tim2, ch1cvr) == 0x34);
 static_assert(offsetof(Tim2, ch2cvr) == 0x38);
 static_assert(offsetof(Tim2, ch3cvr) == 0x3C);
 static_assert(offsetof(Tim2, ch4cvr) == 0x40);
-static_assert(sizeof(Tim2) == 0x44);
+static_assert(offsetof(Tim2, reserved44) == 0x44);
+static_assert(offsetof(Tim2, dmacfgr) == 0x48);
+static_assert(offsetof(Tim2, dmaadr) == 0x4C);
+static_assert(sizeof(Tim2) == 0x50);
 
 // TIM2_CTLR1 (RM §11.4.1).
 inline constexpr uint32_t tim2_ctlr1_cen = 1u << 0;
@@ -260,8 +266,10 @@ inline constexpr uint32_t tim2_dmaintenr_cc2de = 1u << 10;
 inline constexpr uint32_t tim2_intfr_cc1of = 1u << 9;
 inline constexpr uint32_t tim2_intfr_cc2of = 1u << 10;
 
-// TIM1, base 0x40012C00 (RM §10.4): the TIM2 layout through CH4CVR
-// plus the advanced-control registers (notes/timers.md).
+// TIM1, base 0x40012C00 (RM §10.4): the TIM2 layout plus the
+// advanced-control registers RPTCR and BDTR — the only members TIM2
+// lacks; the burst-DMA pair DMACFGR/DMAADR is shared
+// (notes/timers.md).
 struct Tim1 {
     uint32_t ctlr1;     // 0x00
     uint32_t ctlr2;     // 0x04
