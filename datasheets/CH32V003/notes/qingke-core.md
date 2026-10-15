@@ -20,8 +20,10 @@ manual, vendored as `QingKeV2PM-processor-manual-v1.3.pdf`); RM ch.6.
 - Exception codes and IRQ numbers share one vector index space (PM
   Table 2-1, RM §6.3 Table 6-1): 2 = NMI, 3 = HardFault, 12 = SysTick,
   14 = software interrupt, 16+ = peripherals; synchronous exceptions use
-  codes 0/1/2/3/4–7/8/11 (misaligned/fetch-access/illegal/breakpoint/
-  load/store misaligned/load/store access/ecall-U/ecall-M). Index 0 only
+  codes 0/1/2/3/4/6/8/11 (misaligned/fetch-access/illegal/breakpoint/
+  load/store misaligned/ecall-U/ecall-M) — codes 5 and 7 (load/store
+  access error) are non-precise *asynchronous* exceptions per PM
+  Table 2-1. Index 0 only
   ever receives exception code 0 (instruction address misaligned) — under
   address vectoring its slot still holds the reset `j`, so that one
   exception reads garbage; every other defined slot routes to a handler
@@ -33,8 +35,10 @@ manual, vendored as `QingKeV2PM-processor-manual-v1.3.pdf`); RM ch.6.
 - `INTSYSCR` (CSR 0x804, PM §3.2): bit 0 HWSTKEN (hardware
   prologue/epilogue), bit 1 INESTEN (nesting), bit 2 EABIEN; all reset
   0\. HPE saves 10 caller-saved registers in a 48-byte stack frame,
-  nesting depth 2 (PM §3.4) — requires `__attribute__((interrupt))` or
-  WCH-Interrupt-fast codegen, so plain ISRs leave it off
+  nesting depth 2 (PM §3.4) — engaging it requires
+  `__attribute__((interrupt("WCH-Interrupt-fast")))` codegen
+  specifically; a plain `__attribute__((interrupt))` ISR uses the
+  software stack-push prologue and does not use HPE
   ([quirks.md](quirks.md) §EXTI).
 - VTF: two channels bypass vector-table lookup entirely (PM §3.5).
 
@@ -42,14 +46,16 @@ manual, vendored as `QingKeV2PM-processor-manual-v1.3.pdf`); RM ch.6.
 
 - 32-bit up-counter, memory-mapped (PM §4 Table 4-1): `STK_CTLR`
   0xE000F000, `STK_SR` 0xE000F004, `STK_CNTR` 0xE000F008 (the full
-  32-bit count), `STK_CMPR` 0xE000F010. Absent from the DS and RM —
-  core peripheral (quirks.md §Clock).
+  32-bit count), `STK_CMPR` 0xE000F010. Also documented in RM v1.9
+  §6.5.4 under the names `R32_STK_CTLR`/`STK_SR`/`STK_CNTL`/`STK_CMPLR`
+  (same addresses and fields; earlier RMs omitted it, quirks.md §Clock).
 - `STK_CTLR` (PM §4 Table 4-2): bit 0 STE (counter enable), bit 1 STIE
   (interrupt enable), bit 2 STCLK (1 = HCLK, 0 = HCLK/8 — the reset
   default, quirks.md §Clock), bit 3 STRE (1 = reload from 0 at compare
   match; **0 = keep counting up**, i.e. free-running with natural 2^32
-  wrap), bit 31 SWIE (software-interrupt trigger, self-clearing
-  required).
+  wrap), bit 31 SWIE (software-interrupt trigger — not self-clearing;
+  software must write it back to 0 or it keeps triggering, PM §4
+  Table 4-2).
 - `STK_SR` bit 0 CNTIF: compare-match flag, **write 0 to clear**,
   writing 1 is invalid (PM §4 Table 4-3) — inverted from the usual
   W1C convention.
