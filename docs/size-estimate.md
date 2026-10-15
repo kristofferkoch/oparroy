@@ -101,3 +101,23 @@ When the real numbers exist, append them here:
   miss was process, not code — the build defaulted to -O0 (1228 B)
   until -Os was settled (DESIGN.md §8). Verdict and headroom
   unchanged.
+- Personality firmware (the real ENUM stamp: ESIG UNIID + option-byte
+  Data0 type byte, `firmware/node/personality.cpp`, replacing the
+  bring-up placeholder): the full image — protocol core, RX/TX paths,
+  vsync latch, strobe, personality — measures **2828 B flash
+  (17.3 % of 16 KB), 434 B RAM** at -Os. The personality slice itself
+  is +184 B flash / +18 B RAM over the same image with the placeholder
+  (2644 B): three ESIG word reads, the Data0 inverse check, the
+  14-byte pack, the config VERIFY. The placeholder number also closes
+  the loop on the plumbing estimates: 2644 B against ~1.9 KB estimated
+  for those same lines (protocol 0.4 + startup 0.3 + RX 0.5 + TX 0.4 +
+  vsync 0.2 + strobe 0.1) — the ~0.7 KB delta is again the
+  never-estimated failure path and heartbeat plus estimate optimism on
+  the RX/TX glue. RAM tracks well: 434 B against ~460 B estimated for
+  the landed lines (rings 384 B + vsync 16 B + `Node`). Remaining
+  unbuilt: the app-I/O union (~1.5 KB) and debug UART (~0.4 KB) —
+  13.5 KB of flash stays free for them, so the ~2× headroom verdict
+  holds. (The meson.build -Os comment's "642 B" predated this log's
+  604 B bring-up entry — the same bring-up image measured two commits
+  apart — and then went stale as RX/TX landed; the comment now points
+  here instead of carrying numbers.)
