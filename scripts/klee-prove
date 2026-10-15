@@ -4,6 +4,16 @@
 # holds only generated explorer state under the build dir.
 # Usage: klee-prove <output-dir> [klee args...] <harness.bc>
 #
+# Pre-flight, before klee runs: the harnesses dodge clang's batched
+# memory/lifetime intrinsics structurally (klee_bitcode_flags in
+# meson.build) because klee 3.2 cannot execute llvm.memset — the proof
+# dies at instruction 0 and the gates below only see the corpse (0
+# completed paths, as when the batched zero-init of a class-typed
+# member killed klee-cut_through). llvm-dis the bitcode and reject the
+# whole batched class by name — memset, memcpy, memmove, lifetime — so
+# a dodge that stops working fails here with the cause named, not in
+# the explorer with a mystery.
+#
 # klee exits 0 even when the proof failed or never ran — a reachable
 # klee_report_error (a KLEE_PROVE counterexample) terminates a state,
 # not the process, and an unimplemented intrinsic kills the entry state
@@ -15,6 +25,23 @@ set -eu
 
 out=$1
 shift
+
+# The harness bitcode is the last argument.
+for bc in "$@"; do :; done
+
+if ! ir=$(llvm-dis "$bc" -o -); then
+    echo "klee-prove: FAIL: llvm-dis could not read $bc" >&2
+    exit 1
+fi
+# Pipeline status is sort's, so an empty match does not trip set -e.
+intrinsics=$(printf '%s\n' "$ir" | grep -oE 'llvm\.(memset|memcpy|memmove|lifetime)\.[a-z0-9.]+' | sort -u)
+if [ -n "$intrinsics" ]; then
+    echo "klee-prove: FAIL: $bc carries batched intrinsics klee cannot execute:" >&2
+    printf '%s\n' "$intrinsics" | sed 's/^/  /' >&2
+    echo "klee-prove: dodge them structurally — klee_bitcode_flags'" >&2
+    echo "comment in meson.build lists the moves." >&2
+    exit 1
+fi
 
 rm -rf "$out"
 

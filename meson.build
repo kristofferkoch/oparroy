@@ -68,7 +68,9 @@ if not meson.is_cross_build()
   # govern; both are dodged structurally — values-in at the entry point
   # (firmware/node/klee/runtime.cpp's prove_width comment) and
   # scalar-only aggregate copies in the core (firmware/protocol/
-  # node.hpp's swap_faces comment). scripts/klee-prove gates on the
+  # node.hpp's swap_faces comment). scripts/klee-prove rejects the
+  # batched memory/lifetime intrinsics statically before klee runs, so
+  # a dodge that stops working fails at the lint, and gates on the
   # completed-path count, so a proof that dodges nothing fails loud.
   klee_bitcode_flags = [
     '-std=c++23', '-Wall', '-Wextra', '-Wpedantic', '-Werror',
