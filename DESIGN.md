@@ -754,14 +754,21 @@ from the plain node, enumerated and budgeted) and the bench-verify
 list.
 
 Board power and host link: one **USB-C receptacle** is both the power
-inlet and the supervisor's host link. 5 V in — CC sink pull-downs
-only, no PD negotiation; the load (8 tiles at tens of mA each, §2.1,
-plus RP2040 and the scan plane) sits trivially inside baseline USB-C
-delivery — and an on-board **3.3 V regulator** feeds the ring rail
-(§2.1) and all board logic. The receptacle's D+/D− wire to the
-RP2040's USB (it keeps its 12 MHz crystal for exactly this, §5), so
-one cable is power, host channel, and debug transport uplink.
-Regulator and connector are inventory-driven picks (§6); the per-node
+inlet and the supervisor's host link — the HCTL HC-TYPE-C-16P-01A
+(LCSC C2894897; Extended tier, no Basic USB-C receptacle exists). 5 V
+in — CC sink pull-downs only (5.1 kΩ Rd ×2), no PD negotiation; the
+load (8 tiles at tens of mA each, §2.1, plus RP2040 and the scan
+plane) sits trivially inside baseline USB-C delivery — and an on-board
+**3.3 V regulator**, the AMS1117-3.3 (LCSC C6186, SOT-223), feeds the
+ring rail (§2.1) and all board logic. The §2.1 unregulated payload
+rail is **omitted on this board**: no 5 V copper past the regulator
+input. The power tree is captured in the DSL (`design/ci_power.py`;
+the ceramic-vs-tantalum output-cap mismatch and its bench-verify
+obligation live in `datasheets/AMS1117/notes/quirks.md`; the per-tile
+3V3/3V3N split stays the board capture's transform). The receptacle's
+D+/D− wire to the RP2040's USB (it keeps its 12 MHz crystal for
+exactly this, §5), so one cable is power, host channel, and debug
+transport uplink. The per-node
 power-cut switches of the fault complement sit between the rail and
 each tile — P-FET high-side per tile (above), so the bypass switch
 and the fault injectors stay on the always-on rail per §4 while the

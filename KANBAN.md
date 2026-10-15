@@ -33,7 +33,6 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T35[T35 CI power: USB-C + 3V3] --> T10
     T30[T30 RP2040 supervisor subcircuit] --> T10
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
@@ -45,19 +44,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T35 — CI board power: USB-C inlet and 3.3 V rail.** DSL capture of
-  the board's power tree (§6): one USB-C receptacle is
-  both power inlet and host link — CC sink pull-downs (5.1 kΩ Rd ×2,
-  no PD, 5 V only), 5 V distribution, and a **3.3 V regulator**
-  feeding the ring rail (§2.1) and all board logic: 8 tiles through
-  the per-node power-cut switches (the settled fault complement slots
-  in downstream of the rail — `docs/instrumented-ci.md`),
-  RP2040, and the scan plane. Power budget
-  against baseline USB-C 5 V delivery: tiles at tens of mA each
-  (§2.1), RP2040, fault/scan logic. Regulator and connector are
-  inventory-driven picks into the parts DB (§6, §7). Decides whether
-  the §2.1 unregulated payload rail is populated (plain 5 V copper) or
-  omitted on this board. **Blocked by:** — · **Unblocks:** T10
 - **T30 — RP2040 supervisor subcircuit.** DSL capture of the §5
   supervisor: RP2040 minimal system — QSPI flash, 12 MHz crystal (§5:
   the supervisor keeps its crystal for USB), decoupling, boot/reset —
@@ -242,6 +228,13 @@ ______________________________________________________________________
   goldens; not `.kicad_sch` — editable output is SKiDL's trap and buys
   review nothing. T7bd's port direction tags are the block view's
   natural input. **Blocked by:** T7bd · **Unblocks:** —
+- **T36 — DSL rail-current budget check.** *Shape: implementation.*
+  Parts and captures declare per-rail current draws; a check pass sums
+  the draws per rail against the rail's source budget — the
+  machine-checked successor of `design/ci_power.py`'s docstring power
+  arithmetic. Extends the T8 check machinery (the ports' limit ranges
+  already carry an optional current interval). **Blocked by:** — ·
+  **Unblocks:** —
 - **T10 — Test board design.** 8 ring nodes + supervisor, full fault
   injection (per-segment open/short, per-node power cut, keep-alive
   cut),
@@ -264,11 +257,10 @@ ______________________________________________________________________
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
-  Supervisor-side work splits out: power inlet and 3.3 V rail (T35),
-  RP2040 subcircuit (T30), debug-transport decision (T33); the scan
+  Supervisor-side work splits out: RP2040 subcircuit (T30), debug-transport decision (T33); the scan
   control/observe plane is settled (docs/scan-plane.md) and the
   supervisor image itself is T32.
-  **Blocked by:** T30, T33, T35 ·
+  **Blocked by:** T30, T33 ·
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
