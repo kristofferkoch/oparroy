@@ -41,6 +41,12 @@ conventions in [facts.md](facts.md). Sources: RM ch.15–16; DS0 §3.3.8.
   therefore hardware-assisted: OBERR covers all four pairs at once; for a
   per-pair verdict read the byte/inverse pair directly from 0x1FFFF800.
 
+- The node provisioning write (USER.RST_MODE=11b — PD7 is the ring-B
+  OPP1 input but ships as NRST, quirks.md §GPIO — plus the personality
+  Data0) is a flash-flow tooling step, never runtime firmware
+  (DESIGN.md §6 node-programming flow). Option bytes survive image
+  reflashes, so CI's per-run flashing never repeats it.
+
 - ESIG (RM ch.15, Table 15-1): flash size R16_ESIG_FLACAP at 0x1FFFF7E0;
   96-bit unique ID at 0x1FFFF7E8/0xEC/0xF0 (R32_ESIG_UNIID1/2/3) —
   usable as a per-node ring address seed. Read-only; accessible by

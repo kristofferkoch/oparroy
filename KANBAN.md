@@ -193,10 +193,17 @@ ______________________________________________________________________
   programming flow: a pogo jig targeting the node board's
   TP1/TP2/TP3 (SWIO/3V3/GND) strip, a WCH-LinkE driving — **the probe
   powers the board**, jig 3V3 never from the ring (brick recovery is a
-  power cycle through reset, quirks). Flashes the single node image
-  plus the personality type byte where a board carries one; reads the
+  power cycle through reset, quirks). Flashes the single node image,
+  writes the option bytes — **USER.RST_MODE=11b on every node** (PD7
+  ships as NRST; `minichlink -D` rewrites the option-byte region, so
+  it lands before the personality write) plus the personality **Data0**
+  type byte where a board carries one — and reads the
   factory UNIID at flash time and logs it against the handwritten
-  unit serial (§7 checklist). Bela lesson
+  unit serial (§7 checklist). Bring-up measurements on first
+  silicon, via the jig: the real EXTEN_CTR reset value (quirks.md
+  §OPA — RM v1.9 contradicts itself) and the OPO→TIM2_CH1 capture
+  band placement at the §6 opo/PD4 tap (the §2 measured block's
+  low-band shortfall makes it a contract input). Bela lesson
   (docs/bela-lessons.md §5): the test rig is a first-class
   deliverable with its own schedule risk — budget for it. Promoted to
   Next: the jig targets the landed node board.

@@ -199,7 +199,7 @@ recorded here with the decision):
 ## 6. Addressing / node ID
 
 **Positional addressing, discovered by enumeration — no solder
-bridges, no provisioning step.**
+bridges, no per-node-unique data.**
 
 - Position in the ring *is* the address; the ring hands us ordering
   for free, which neither a bus nor a chain-with-bridges does.
@@ -226,7 +226,15 @@ bridges, no provisioning step.**
 - **Node personality**: one firmware image, type byte from option-byte
   **Data0** (settled — personality is provisioning, not code: option
   bytes survive image reflashes and cost no flash; a flash data page
-  loses on both). Auto-detect from populated peripherals stays
+  loses on both). The same provisioning session writes
+  **USER.RST_MODE=11b** on every node — PD7 is the ring-B OPP1 input
+  but boots as NRST on fresh parts (RST_MODE=10b;
+  [quirks.md](../datasheets/CH32V003/notes/quirks.md) §GPIO).
+  The read rule: Data0 counts only against its stored inverse (RM
+  §16.5's load-time checksum) — an inverse mismatch reads as 0x00
+  "plain node", which is also what an erased pair (0xFF/0xFF)
+  decodes to.
+  Auto-detect from populated peripherals stays
   available where cheap. The type byte
   rides in the ENUM stamp, so the supervisor's auto-detect mirrors
   Trill's host-library behavior without any node-side strapping.

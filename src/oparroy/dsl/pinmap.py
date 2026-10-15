@@ -156,7 +156,8 @@ def _gpio(
 # only, per DS0 §2.1 (gpio-pinout.md); OPA signal names per opa.md
 # (OPP0/OPP1 → opa_p 0/1, OPN0/OPN1 → opa_n 0/1, OPO → opa_out).
 # TIM2_CH1 needs no pad: the OPA output routes to it internally (§2).
-# PD7 is GPIO out of reset — NRST only via option byte (quirks.md §GPIO).
+# PD7 boots as NRST on fresh parts (USER.RST_MODE=10b); provisioning
+# writes 11b to free it as GPIO (quirks.md §GPIO, DESIGN.md §6).
 CH32V003F4P6 = Chip(
     "CH32V003F4P6",
     (
