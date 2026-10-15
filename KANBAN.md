@@ -48,19 +48,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T37 — Bitcode-intrinsic lint for KLEE inputs.** *Shape: tooling.*
-  clang's front-end batches a constructor's zero-init into one
-  `llvm.memset.p0.i64` once any member is class-typed — a
-  `lib::Array` member flips the whole struct — and klee 3.2 (partial
-  LLVM 19 build, flake.nix) cannot execute it, so the proof dies at
-  the first instruction. This bit `klee-cut_through` during the
-  `lib::Array` sweep (0 paths vs 16384) and was fixed by
-  `TxCutThrough`'s elementwise-zeroing constructor
-  (`firmware/protocol/tx.hpp`), but nothing keeps the class from
-  recurring. Add a static bitcode lint — `llvm-dis` the klee `.bc`
-  products and reject `llvm.memset` / `llvm.memcpy` / `llvm.lifetime`
-  intrinsics — as a pre-flight in the firmware gate, complementing
-  T36's runtime gating. **Blocked by:** — · **Unblocks:** —
 - **T11d3b — Personality firmware: ESIG UNIID + Data0 type byte.**
   Split out of T11d3; the marker-bit discovery core (105-bit slot =
   occupancy marker + 104-bit stamp, find-first-empty-slot in
