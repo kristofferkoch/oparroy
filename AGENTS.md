@@ -22,6 +22,11 @@
   commit, but when it carries separable changes — a parser feature,
   a rule built on it, a doc note — split it into one commit per
   concept so review, cherry-pick, and revert stay cheap.
+- **Agent-authored commits carry a provenance trailer.** End the
+  commit message with a `Co-authored-by` line naming the harness with
+  its version, the model name/version, and the model settings that
+  shaped the work (thinking effort, etc.), e.g.:
+  `Co-authored-by: Kimi Code CLI 2.2.0 (kimi-code/k3-256k, effort: high) <noreply@moonshot.ai>`
 - **Rehearse CI input declarations locally.** Every CI gate
   sparse-checks-out only its declared inputs, so an undeclared
   dependency passes locally and fails CI. After adding files or
