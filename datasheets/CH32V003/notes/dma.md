@@ -9,7 +9,7 @@ PADDRx/MADDRx/CNTRx (≤65535 transfers)/CFGRx (PL[1:0] priority, DIR,
 CIRC circular, PINC/MINC, PSIZE/MSIZE 8/16/32-bit, HTIE/TCIE/TEIE,
 MEM2MEM). Flash, SRAM and peripherals as source/target. Interrupt status
 DMA_INTFR, clear DMA_INTFCR; one IRQ per channel (RM §6.3 Table 6-1
-lists them twice: PFIC vector numbers 22–28, hardware interrupt numbers
+lists them twice: PFIC vector numbers 22–28, priority numbers
 8–14).
 
 Peripheral mapping (RM §8.2.3 Table 8-2):
@@ -34,11 +34,12 @@ to the programmed value in CIRC mode (RM §8.3.4) — so a channel's write
 position in a circular buffer is `programmed − CNTRx` (mod the buffer
 length), which is how the RX glue polls without interrupts. PADDRx /
 MADDRx / CNTRx and the CFGRx direction/circular/increment fields are
-writable only with the channel off (RM §8.3 note).
+writable only with the channel off (RM §8.2.1 configuration-process
+note; §8.3.4–8.3.6 for the address/count registers).
 
 Interrupt numbering: the vector table's DMA entries are PFIC numbers
-22–28 for channels 1–7; the RM's Table 6-1 also lists "hardware
-interrupt numbers" 8–14 for the same lines — the vector index is what
+22–28 for channels 1–7; the RM's Table 6-1 second column (headed
+"Priority") lists 8–14 for the same lines — the vector index is what
 firmware tables are indexed by (startup.cpp).
 
 Quirks: see [quirks.md](quirks.md) §USART / I2C / SPI and §Timers.

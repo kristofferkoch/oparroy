@@ -9,19 +9,19 @@ files listed below. Tribal-knowledge errata: [quirks.md](quirks.md).
 
 Sources (canonical PDFs live in `datasheets/CH32V003/`):
 
-- `CH32V003DS0-datasheet-v1.8.pdf` — cited as (DS0 §x.y); fetched
-  2026-09-26 from wch-ic.com. Note: interior footers still print V1.4/V1.7;
+- `CH32V003DS0-datasheet-v1.8.pdf` — cited as (DS0 §x.y); vendored
+  from wch-ic.com. Note: interior footers still print V1.4/V1.7;
   cover is V1.8.
-- `CH32V003RM-reference-manual-v1.9.pdf` — cited as (RM §x.y); fetched
-  2026-09-26 from wch-ic.com.
+- `CH32V003RM-reference-manual-v1.9.pdf` — cited as (RM §x.y);
+  vendored from wch-ic.com.
 - Core-level CSRs (PFIC, debug) live in the separate QingKeV2
   processor manual —
-  `QingKeV2PM-processor-manual-v1.3.pdf`, cited as (PM §x.y); fetched
-  2026-10-12 from the ch32-riscv-ug/WCH-common mirror (the wch-ic.com
+  `QingKeV2PM-processor-manual-v1.3.pdf`, cited as (PM §x.y); vendored
+  from the ch32-riscv-ug/WCH-common mirror (the wch-ic.com
   download gate is a JS app). SysTick is covered by both the PM (§4) and
   RM v1.9 §6.5.4.
-- `QingKeV2DM-debug-manual-v1.0.pdf` — cited as (QDM §x.y); fetched
-  2026-09-29 from openwch/ch32v003. Covers the SWIO wire protocol
+- `QingKeV2DM-debug-manual-v1.0.pdf` — cited as (QDM §x.y); vendored
+  from openwch/ch32v003. Covers the SWIO wire protocol
   (ch.2) and the RISC-V v0.13.2 debug module (ch.3).
 
 All registers are accessed as 32-bit words unless noted; WCH header names

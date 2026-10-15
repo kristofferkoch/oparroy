@@ -2,7 +2,7 @@
 
 28 AWG stranded round-conductor flat ribbon cable, 0.050" (1.27 mm)
 pitch, PVC insulation — **the segment cable** for the ring
-interconnect (DESIGN.md §3, decided 2026-09-29): the 10-way variant
+interconnect (DESIGN.md §3): the 10-way variant
 3365/10, or a generic UL2651 equivalent, on 2.54 mm 2x5 IDC
 connectors. Document on disk:
 
@@ -31,8 +31,10 @@ Transmission-line figures, per the datasheet's own configurations —
 | Propagation delay        | 1.47 ns/ft [4.86 ns/m]  | 1.4 ns/ft [4.59 ns/m]  |
 | Velocity of propagation  | 69 %                    | 73 %                   |
 
-- Conductor resistance: 65 Ω/1000 ft [≈ 0.214 Ω/m] (28 AWG class value
-  carried in the doc's characteristics table)
+- Conductor resistance: 65 Ω/1000 ft [≈ 0.214 Ω/m] — the doc's
+  characteristics table lists "65 Ohm" with no per-length unit; the
+  /1000 ft basis is 3M's catalog convention for 28 AWG (3M cable
+  catalog), consistent with the AWG gauge
 - Insulation resistance: > 1×10¹⁰ Ω / 10 ft [3 m]
 - Cross-check: √(L/C) = 101.6 Ω ≈ the spec'd 102 Ω, and √(L·C) =
   4.82 ns/m ≈ the spec'd 4.86 ns/m — the table is internally
