@@ -113,6 +113,11 @@ Scope: all oparroy firmware and host-testable firmware logic.
   ([#5-error-handling](#5-error-handling)): `try_*` for data-driven
   fills, VERIFY-contract growth (`push_back`) for sized-by-construction
   ones.
+- Fixed-size values are `Array<T, N>` (`firmware/lib/array.hpp`),
+  never raw C arrays — the size lives in the type, and the value
+  converts implicitly to `Span`. Raw arrays remain only at adoption
+  points: `array.hpp`'s own member, `Span`/`StringView`'s adopting
+  constructors, and the raw-pointer mem\* test fixtures.
 - **No raw pointers at interfaces**: a view over a buffer
   is `Span<T>` (`firmware/lib/span.hpp`), never `T*` plus a separate
   length — the bound travels with the pointer or it gets lost. Raw
