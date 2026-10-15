@@ -132,7 +132,9 @@ void rx_init() {
     // Both RX candidates are pulled-down inputs: the internal weak
     // pull-down parks a disconnected line at silence (DESIGN.md §2,
     // the connector-fault measurement). The threshold divider's pin
-    // (PA1, OPN0) keeps its floating reset state.
+    // (PA1, OPN0) keeps its floating reset state. rx_b is PD7 — a
+    // GPIO here only because provisioning wrote USER.RST_MODE=11b;
+    // on a fresh part this pin is NRST (quirks.md §GPIO).
     Gpio volatile& gpioa = gpio(pins::rx_a.port_base);
     configure_pin(gpioa, pins::rx_a.bit, gpio_cfglr_in_pulled);
     gpioa.bcr = 1u << pins::rx_a.bit; // OUTDR=0: pull-down

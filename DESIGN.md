@@ -145,7 +145,7 @@ owes only fast, chatter-free settling to idle, which tb_fault shows.
   Closure discipline: the supervisor is the only frame originator and
   drainer; echo mismatch ⇒ fault.
 - **Addressing: positional, discovered — no solder bridges, no
-  provisioning step.** Position in the ring *is* the address. The
+  per-node address data.** Position in the ring *is* the address. The
   supervisor enumerates with one circulation of an ENUM frame that
   each node stamps with its factory 96-bit UNIID (ESIG — see
   [flash-option-bytes.md](datasheets/CH32V003/notes/flash-option-bytes.md))
@@ -638,11 +638,21 @@ JLCPCB places the front; each board then lands on a **pogo jig**
 (the bela-lessons first-class deliverable) where a **WCH-LinkE** —
 the official probe; clones hit flash-unlock walls (quirks) —
 flashes the single node image plus the personality type byte where
-a board carries one. **The programmer powers the board**: brick
+a board carries one. The same session writes the option bytes
+([flash-option-bytes.md](datasheets/CH32V003/notes/flash-option-bytes.md)):
+**USER.RST_MODE=11b on every node** (NRST disabled — fresh parts ship
+RST_MODE=10b with PD7 as NRST, and the pin map spends PD7 as the
+ring-B OPP1 input; [quirks.md](datasheets/CH32V003/notes/quirks.md)
+§GPIO) plus the personality **Data0** where a board carries one.
+`minichlink -D` does the RST_MODE write over the WCH-LinkE; it
+rewrites the option-byte region, so it lands before (or alongside)
+the Data0 write, never after. Option bytes survive image reflashes,
+so the §6 CI flash fan-out below never repeats this. **The programmer
+powers the board**: brick
 recovery is a power cycle through reset (quirks), so the jig's 3V3
 comes from the WCH-LinkE, never the ring, and the board exposes a
 **SWIO + GND + 3V3 pad strip** for it (§7 checklist). Positional
-addressing (§2) means **zero per-node provisioning** — one image,
+addressing (§2) means **no per-node-unique data** — one image,
 no serial numbers burned; the factory UNIID (ESIG) is read at flash
 time and logged against the handwritten unit serial (§7 checklist).
 The back-side connectors go on *after* programming — the bela
@@ -718,8 +728,8 @@ splitting the tile's 3.3 V into an always domain (bypass switch,
 injectors — the §4 no-Ioff constraint) and a node domain (MCU, status
 LEDs, payload); it doubles as the brick-recovery power cycle. The
 **clock-kill fault class does not exist on this node** — HSI-only
-(§5), NRST option-byte-disabled
-([quirks](datasheets/CH32V003/notes/quirks.md)) — and resolves to the
+(§5), NRST option-byte-disabled at provisioning
+(above; [quirks](datasheets/CH32V003/notes/quirks.md)) — and resolves to the
 power cut (dead), a series switch on the keep-alive strobe (hung:
 watchdog bypass engages with the MCU alive and observable), and SWIO
 halt on the debug DUT. Control rides the shift-register plane under

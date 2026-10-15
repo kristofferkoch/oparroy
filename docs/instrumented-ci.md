@@ -31,8 +31,9 @@ Every §3 failure mode, and how the CI board reproduces it:
 
 **"Clock kill" resolves**: the literal fault does not
 exist on this node. The node runs HSI-only — no crystal, no clock net
-anywhere (§5) — and PD7 ships as GPIO with NRST option-byte-disabled
-([quirks.md](../datasheets/CH32V003/notes/quirks.md) §GPIO), so there is
+anywhere (§5) — and PD7's NRST function is option-byte-disabled at
+provisioning (USER.RST_MODE=11b; fresh parts ship NRST-enabled,
+[quirks.md](../datasheets/CH32V003/notes/quirks.md) §GPIO), so there is
 no external clock to kill and no reset pin to hold. The intent — node
 stops advancing — is covered by the three real mechanisms: power cut
 (dead), keep-alive cut (hung → watchdog bypass), and SWIO halt on the

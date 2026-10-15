@@ -133,7 +133,7 @@ def capture() -> PinMap:
     # binding reason — peripheral-forced pads cite the signal.
     gpio.bind(
         rx_a="PA2",  # OPP0 (opa.md)
-        rx_b="PD7",  # OPP1; GPIO by default, NRST only via option byte
+        rx_b="PD7",  # OPP1; NRST until provisioning writes USER.RST_MODE=11b (§6)
         rx_threshold="PA1",  # OPN0 — OPN1/PD0 stays free
         comp_out="PD4",  # OPO — the §2 feedback-R fallback stays DNP
         tx_a="PD2",  # TIM1_CH1

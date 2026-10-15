@@ -94,7 +94,14 @@ against silicon are marked **unverified**.
   confirmed 10b in
   [openwch/ch32v003#11](https://github.com/openwch/ch32v003/issues/11).
   `minichlink -d`/`-D` toggles it
-  ([ch32fun wiki: reset](https://github.com/cnlohr/ch32fun/wiki/reset)).
+  ([ch32fun wiki: reset](https://github.com/cnlohr/ch32fun/wiki/reset));
+  at the flake-pinned rev the WCH-LinkE backend implements the toggle
+  (`LEConfigureNRSTAsGPIO`, pgm-wch-linke.c — one vendor command
+  rewrites the option-byte region), while other backends fall back to
+  a default handler that just errors out. The on-target sequence
+  (OBKEYR unlock, OPTER erase, OPTPG byte writes, RM §16.5) is what
+  the SDK's FLASH option-byte functions and the ch32fun `optionbytes`
+  demo do.
 - **Remaps need the AFIO clock** — alternate-function remapping silently does
   nothing until `RCC->APB2PCENR |= RCC_APB2Periph_AFIO`; ch32fun's TIM2 remap
   example shows the required enables and the full-remap pin list
