@@ -40,7 +40,6 @@ graph TD
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
-    T11d3b[T11d3b personality firmware] --> T12
     T32[T32 supervisor firmware] --> T12
 ```
 
@@ -48,27 +47,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T11d3b — Personality firmware: ESIG UNIID + Data0 type byte.**
-  Split out of T11d3; the marker-bit discovery core (105-bit slot =
-  occupancy marker + 104-bit stamp, find-first-empty-slot in
-  `firmware/protocol/node.hpp`, the wire format in
-  `firmware/protocol/enum.hpp`) landed with T11d3a. Remaining — wire
-  the real stamp into the node image, replacing rx.cpp's placeholder:
-  read the 96-bit ESIG UNIID (0x1FFFF7E8/EC/F0,
-  flash-option-bytes.md) and the personality type byte —
-  **option-byte Data0** (settled, docs/phy-analysis.md §6;
-  inverse-mismatch or unprogrammed reads as 0x00 "plain node") — and
-  `pack_stamp` it at boot. Includes: the option-byte layout extraction
-  (RM §16.5 per-field offsets + SDK cross-check →
-  `datasheets/CH32V003/notes/flash-option-bytes.md`, quirks as found);
-  `regs.hpp` `Esig`/`OptionBytes` blocks; a personality TU building
-  the stamp with a runtime `VERIFY(Node::config_valid)`; the meson
-  source-list update. Settles the §9 -O2/-Os ship-flavor question
-  against real image size: append the docs/size-estimate.md
-  laughter-log entry with the measured -Os image (and reconcile the
-  stale "642 B" in firmware/node/meson.build against the doc's
-  604 B). `lib::verify_failed`'s debug-transport reporting stays
-  deferred (T33). **Blocked by:** — · **Unblocks:** T12, T13
 - **T31 — CI scan control/observe plane.** *Shape: design.* Split out
   of the instrumented-CI design work. Settles the §6 shift-register
   plane as its own design: 74HC595-class control stages and
@@ -223,6 +201,30 @@ ______________________________________________________________________
   deliverable with its own schedule risk — budget for it. Promoted to
   Next: the jig targets the landed node board.
   **Blocked by:** — · **Unblocks:** —
+- **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
+  re-route vs hardware auto-bypass vs both (DESIGN.md §3, §9).
+  **Postponed:** the decision is unratifiable before the
+  substrate it polices exists — no frame format, no firmware
+  prototype, no node schematic. PR #6's analysis
+  (`docs/intermittent-fault-strategy.md`, on the retained
+  branch `t13-intermittent-fault-strategy`; PR closed unmerged) is
+  the starting point on pickup: it recommends a layered split —
+  protocol re-route with anti-flap hysteresis for segment faults, the
+  §4 charge-pump bypass for MCU death, deliberate self-bypass as the
+  escalation rung, no new hardware. Open questions recorded in PR
+  #6's closing discussion, to be answered before ratification:
+  hysteresis observability under one-direction RX source select,
+  flap-latch semantics on subsequent faults, flap contagion between
+  adjacent nodes, escalation-command delivery over the flapping
+  fabric, and ring-level convergence as a proof obligation. Direction
+  to design for, landed with the ENUM slice: **protocol-level
+  keepalive** — a healthy line
+  is never silent longer than ~1 s — so silence is an unambiguous
+  fault signal and flip policy keys on edge presence, not decode
+  quality. T5's detection hooks: supervisor frame-echo comparison,
+  illegal-cell detection, and the pull-down-parked idle-low segment
+  (§2 measured block). Promoted to Next: the personality firmware it
+  waited on has landed. **Blocked by:** — · **Unblocks:** —
 
 ## Backlog
 
@@ -286,7 +288,7 @@ ______________________________________________________________________
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
-  CI-platform integration is a later card. **Blocked by:** T10, T11d3b,
+  CI-platform integration is a later card. **Blocked by:** T10,
   T32 ·
   **Unblocks:** —
 - **T15 — Cable reach: bench confirmation and §2 adoption.** *Shape:
@@ -304,26 +306,3 @@ ______________________________________________________________________
   block, resolve the §9 cable-reach open question, and decide the
   broken-loop power policy (≤ 5 m segments vs §2.1 second-tap
   injection). **Blocked by:** T10 · **Unblocks:** —
-- **T13 — Intermittent-fault strategy.** *Shape: decision.* Protocol
-  re-route vs hardware auto-bypass vs both (DESIGN.md §3, §9).
-  **Postponed:** the decision is unratifiable before the
-  substrate it polices exists — no frame format, no firmware
-  prototype, no node schematic. PR #6's analysis
-  (`docs/intermittent-fault-strategy.md`, on the retained
-  branch `t13-intermittent-fault-strategy`; PR closed unmerged) is
-  the starting point on pickup: it recommends a layered split —
-  protocol re-route with anti-flap hysteresis for segment faults, the
-  §4 charge-pump bypass for MCU death, deliberate self-bypass as the
-  escalation rung, no new hardware. Open questions recorded in PR
-  #6's closing discussion, to be answered before ratification:
-  hysteresis observability under one-direction RX source select,
-  flap-latch semantics on subsequent faults, flap contagion between
-  adjacent nodes, escalation-command delivery over the flapping
-  fabric, and ring-level convergence as a proof obligation. Direction
-  to design for, landed with the ENUM slice: **protocol-level
-  keepalive** — a healthy line
-  is never silent longer than ~1 s — so silence is an unambiguous
-  fault signal and flip policy keys on edge presence, not decode
-  quality. T5's detection hooks: supervisor frame-echo comparison,
-  illegal-cell detection, and the pull-down-parked idle-low segment
-  (§2 measured block). **Blocked by:** T11d3b · **Unblocks:** —
