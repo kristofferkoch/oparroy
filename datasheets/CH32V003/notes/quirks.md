@@ -47,6 +47,10 @@ against silicon are marked **unverified**.
   internal LDO; WCH never explained the trade-off
   ([openwch/ch32v003#25](https://github.com/openwch/ch32v003/issues/25)).
   RM v1.9 §17.1 acknowledges it exists, nothing more.
+- **DS §1.3 lists an LSE the silicon doesn't have** — the datasheet prose
+  names an "external low-frequency oscillator (LSE)" among the clock
+  sources, but the clock tree, RCC registers, and pinout have no LSE;
+  copy-paste from bigger WCH parts (DS v1.8 §1.3 vs RM v1.9 Figure 3-2).
 - **SysTick defaults to HCLK/8** — 6 MHz tick at 48 MHz SYSCLK unless the
   clock-select bit is set (ch32fun: `SYSTICK_USE_HCLK`). Rollover at 6 MHz is
   715 s, at 48 MHz 89.5 s — plan accordingly
@@ -234,6 +238,12 @@ against silicon are marked **unverified**.
   OPA_EN/OPA_PSEL/OPA_NSEL are fields of `EXTEND_CTR` at 0x40023800 (RM v1.9
   ch.17); earlier RMs did not document it, and code had to poke EXTEN bits
   17/18 directly ([cnlohr/ch32fun#397](https://github.com/cnlohr/ch32fun/issues/397)).
+- **EXTEN_CTR's reset value is self-contradictory in RM v1.9** — Table 17-1
+  gives `0x00000400` (bit 10, LDOTRIM set), but the §17.2.1 bit table says
+  LDOTRIM resets to 0 and LKUPEN (bit 6) resets to 1, which would be
+  `0x00000040`. Both are printed in the same document; the truth needs a
+  bench read of `R32_EXTEN_CTR` out of reset. Firmware should not RMW from
+  the unknown reset state for the non-OPA fields.
 - **OPA pins collide with crystal and reset** — OPA0 inputs are PA1(OSCI)/
   PA2(OSCO): OPA0 and an HSE crystal are mutually exclusive. OPA1 uses
   PD0/PD7: conflicts with NRST if PD7 is reset-enabled. DS v1.8 pin table.

@@ -27,14 +27,18 @@ conventions in [facts.md](facts.md). Sources: RM ch.9; DS0 §3.3.14.
 - Analog watchdog: 10-bit high/low thresholds ADC_WDHTR (reset 0x3FF) /
   ADC_WDLTR; AWD flag in ADC_STATR; can reset the chip when enabled as
   watchdog reset (RM §3.2.2).
-- Calibration: after ADON=1 power-up (wait tSTAB ≥ 7 µs), set RSTCAL, wait
+- Calibration: after ADON=1 power-up (tSTAB 7 µs typ, Table 3-23 — no min
+  given; RM §9.2.2 requires only >2 ADC clock cycles before CAL), set
+  RSTCAL, wait
   clear, set CAL, wait clear; code lands in ADC_RDATAR. Recommended at
   each power-up (RM §9.2.2).
 - Registers at 0x40012400: STATR 0x00, CTLR1 0x04 (reset 0x02000000),
   CTLR2 0x08 (ADON, DMA, ALIGN, EXTSEL[2:0], EXTTRIG, SWSTART,
   RSTCAL, CAL), SAMPTR1 0x0C, SAMPTR2 0x10, IOFR1–4, WDHTR, WDLTR,
   RSQR1–3, ISQR, IDATAR1–4, RDATAR 0x4C, DLYR 0x50.
-- Source impedance: keep RAIN < 10 kΩ at fADC=12 MHz (Table 3-24; 8.5 kΩ
-  at 3-cycle sampling). A potentiometer ≤10 kΩ is fine.
+- Source impedance: RAIN max scales with sample time — 8.5 kΩ at 3-cycle
+  sampling, 142 kΩ at 43 cycles, fADC=12 MHz (Table 3-24). The < 10 kΩ
+  figure is Table 3-25's accuracy-spec condition (fADC=12 MHz, VDD>2.9 V).
+  A potentiometer ≤10 kΩ needs a longer sample time than 3 cycles.
 
 Quirks: see [quirks.md](quirks.md) §ADC.

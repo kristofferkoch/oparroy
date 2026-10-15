@@ -12,8 +12,11 @@ ch.17.
   "comparison results from the GPIO output or directly into the TIMx input
   channel"). OPA output also feeds the ADC path ("amplified and fed into the
   ADC").
-- Control register: `R32_EXTEN_CTR` at `0x40023800`, reset `0x00000400`
-  (RM §17.2):
+- Control register: `R32_EXTEN_CTR` at `0x40023800` (RM §17.2). RM v1.9
+  contradicts itself on the reset value: Table 17-1 says `0x00000400`
+  (bit 10, LDOTRIM) while the §17.2.1 bit table says LDOTRIM resets to 0
+  and LKUPEN (bit 6) resets to 1 (which would be `0x00000040`) — see
+  [quirks.md](quirks.md). Bits:
   - bit 18 `OPA_PSEL` — 1: positive channel 1 (PD7); 0: channel 0 (PA2).
   - bit 17 `OPA_NSEL` — 1: negative channel 1 (PD0); 0: channel 0 (PA1).
   - bit 16 `OPA_EN` — 1: enable.
@@ -27,10 +30,10 @@ ch.17.
 - OPCM reset: with OPA/CMP reset enable on, a high OPA output generates a
   system reset (RM §3.2.2) — a hardware "line active" wake/reset option.
 - Key electricals (DS0 §3.3.15 Table 3-26): common-mode input 0–VDD; input
-  offset ±3 mV typ / ±13 mV max; GBW 12 MHz; slew rate 7.7 V/µs; wake-up
-  from shutdown 520 ns (0.1%, CLOAD=50 pF, RLOAD=4 kΩ); output swing
-  VDD−180 mV high / 5 mV low at 4 kΩ load; static current 273 µA; drive
-  current 1.5 mA; supply 2.8–5.5 V.
+  offset ±3 mV typ / ±13 mV max; GBW 12 MHz typ; slew rate 7.7 V/µs typ;
+  wake-up from shutdown 520 ns (0.1%, CLOAD=50 pF, RLOAD=4 kΩ); output
+  swing min VDD−180 mV high / max 5 mV low at 4 kΩ load; static current
+  273 µA typ; drive current 1.5 mA max; supply 2.8–5.5 V.
 - At 48 MHz one bit cell of an 800 kbit/s WS2812-class signal is 60 clocks;
   OPA slew/wake-up times are far below that, so comparator timing is not the
   bottleneck.

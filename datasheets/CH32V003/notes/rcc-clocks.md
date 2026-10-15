@@ -13,7 +13,10 @@ conventions in [facts.md](facts.md). Sources: RM ch.3; DS0 §1.3,
   oscillator pins when `PA1PA2_RM` (AFIO_PCFR1 bit 15) = 1.
 - PLL: fixed ×2 only. Source select `PLLSRC` (RCC_CFGR0 bit 16): 0 = HSI,
   1 = HSE. 24 MHz HSI ×2 = 48 MHz SYSCLK — the project's clock plan.
-- LSI: ~128 kHz RC (100–150 kHz) for IWDG/AWU. No LSE.
+- LSI: ~128 kHz RC (100–150 kHz) for IWDG/AWU. No LSE on the silicon —
+  though the DS0 §1.3 prose lists "external low-frequency oscillator (LSE)"
+  among the clock sources (copy-paste from bigger WCH parts; no LSE in the
+  clock tree, registers, or pinout — [quirks.md](quirks.md)).
 - `RCC_CTLR` (0x40021000, reset 0x0000xx83, RM §3.4.1): bit 0 HSION,
   bit 1 HSIRDY, bits [7:3] HSITRIM, [15:8] HSICAL, bit 16 HSEON, 17
   HSERDY, 18 HSEBYP, 19 CSSON, bit 24 PLLON, bit 25 PLLRDY.
