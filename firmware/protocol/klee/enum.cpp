@@ -20,8 +20,10 @@ constexpr uint16_t slot_bits = 8;
 // The spec, written from the wire format: a node rewrites the first
 // marker-0 slot with its stamp and leaves everything else untouched.
 // The marker is wire bit 0 — MSB-first, byte 0's top bit (bits.hpp).
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays,bugprone-easily-swappable-parameters)
-void spec_stamp(const uint8_t in[2], const uint8_t stamp[1], uint8_t out[2]) {
+// Array references keep the slot sizes in the type — decayed pointers
+// would make them comments and the three same-typed pointers swappable.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+void spec_stamp(const uint8_t (&in)[2], const uint8_t (&stamp)[1], uint8_t (&out)[2]) {
     out[0] = in[0];
     out[1] = in[1];
     if ((out[0] & 0x80u) == 0) {
