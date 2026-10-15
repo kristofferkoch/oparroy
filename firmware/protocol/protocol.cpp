@@ -233,12 +233,14 @@ namespace {
         Node node{NodeConfig{.slot_bits = 4}, double_buffered(face, face)};
         node.on_break();
 
-        // Slot 0 occupied (marker 1): echoes 1,0,0,1 untouched.
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-        const Bit occupied[4] = {Bit::One, Bit::Zero, Bit::Zero, Bit::One};
+        // Slot 0 occupied (marker 1): echoes its wire bits 1,0,0,1
+        // untouched — the expected values are a wire byte through
+        // bit_at, the same MSB-first ordering the protocol reads.
+        const uint8_t occupied_byte = 0b10010000;
+        const BitSlice occupied{.bytes = lib::Span<const uint8_t>{&occupied_byte, 1},
+                                .bit_count = 4};
         for (const uint8_t i : lib::irange(uint8_t{4})) {
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-            if (!expect_echo(node, occupied[i])) {
+            if (!expect_echo(node, bit_at(occupied, i))) {
                 return false;
             }
         }
@@ -262,8 +264,7 @@ namespace {
         node.on_break();
         for ([[maybe_unused]] const uint8_t slot : lib::irange(uint8_t{2})) {
             for (const uint8_t i : lib::irange(uint8_t{4})) {
-                // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-                if (!expect_echo(node, occupied[i])) {
+                if (!expect_echo(node, bit_at(occupied, i))) {
                     return false;
                 }
             }
