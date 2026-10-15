@@ -14,6 +14,7 @@
 // EmitOne), 5 push Idle, 6 break, 7 brown-out reset. Capacity is 64
 // cells so real-length inputs drive the ring to wrap and overflow.
 
+#include "../../lib/array.hpp"
 #include "../../lib/span.hpp"
 #include "../cell.hpp"
 #include "../node.hpp"
@@ -37,8 +38,7 @@ constexpr uint16_t capacity = 64;
 // here would need a compaction loop the store-and-forward shadow only
 // avoids because push and pop touch different queues).
 struct ShadowCut {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint16_t cells[capacity] = {};
+    lib::Array<uint16_t, capacity> cells{};
     uint16_t head = 0;
     uint16_t count = 0;
     uint16_t idle = 0;

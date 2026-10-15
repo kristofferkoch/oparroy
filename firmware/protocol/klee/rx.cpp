@@ -14,6 +14,7 @@
 // must match step for step.
 
 #include "../rx.hpp"
+#include "../../lib/array.hpp"
 #include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../bits.hpp"
@@ -146,8 +147,11 @@ void prove_step(Rig& rig, Step step) {
 } // namespace
 
 extern "C" int klee_rx() {
-    uint8_t stamp[1];
-    klee_make_symbolic(&stamp, sizeof stamp, "stamp");
+    // Uninitialized: klee_make_symbolic fills it (klee/tx.cpp's memset
+    // constraint).
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+    lib::Array<uint8_t, 1> stamp;
+    klee_make_symbolic(stamp.data(), sizeof stamp, "stamp");
     // A stamp's first wire bit is the occupancy marker (enum.hpp).
     klee_assume(stamp[0] & 0x80u);
     const oparroy::NodeConfig config{.slot_bits = 4};

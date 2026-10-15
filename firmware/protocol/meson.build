@@ -16,6 +16,7 @@ if not meson.is_cross_build()
       # hand or a header edit would rerun klee on stale bitcode.
       depend_files: [
         'bits.hpp', 'cell.hpp', 'node.hpp', 'rx.hpp', 'tx.hpp',
+        '..' / 'lib' / 'array.hpp',
         '..' / 'lib' / 'klee.hpp',
         '..' / 'lib' / 'range.hpp',
         '..' / 'lib' / 'span.hpp',

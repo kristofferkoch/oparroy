@@ -5,9 +5,9 @@
 // stamping stays a slot rewrite — 16 bits in, 16 bits out, every bit
 // forwarded.
 
+#include "../../lib/array.hpp"
 #include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
-#include "../../lib/span.hpp"
 #include "../bits.hpp"
 #include "../node.hpp"
 
@@ -20,10 +20,10 @@ constexpr uint16_t slot_bits = 8;
 // The spec, written from the wire format: a node rewrites the first
 // marker-0 slot with its stamp and leaves everything else untouched.
 // The marker is wire bit 0 — MSB-first, byte 0's top bit (bits.hpp).
-// Array references keep the slot sizes in the type — decayed pointers
-// would make them comments and the three same-typed pointers swappable.
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-void spec_stamp(const uint8_t (&in)[2], const uint8_t (&stamp)[1], uint8_t (&out)[2]) {
+// Array keeps the slot sizes in the type — decayed pointers would make
+// them comments and the three same-typed views swappable.
+void spec_stamp(const lib::Array<uint8_t, 2>& in, const lib::Array<uint8_t, 1>& stamp,
+                lib::Array<uint8_t, 2>& out) {
     out[0] = in[0];
     out[1] = in[1];
     if ((out[0] & 0x80u) == 0) {
@@ -35,8 +35,8 @@ void spec_stamp(const uint8_t (&in)[2], const uint8_t (&stamp)[1], uint8_t (&out
     }
 }
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays) — byte accumulator
-void record_bit(uint8_t (&into)[2], uint32_t i, oparroy::TxAction action) {
+// The byte accumulator.
+void record_bit(lib::Array<uint8_t, 2>& into, uint32_t i, oparroy::TxAction action) {
     // Value-select, never branch: a symbolic bit must not fork a KLEE
     // path (bits.hpp) — an if on the symbolic action forks the state
     // space once per bit.
@@ -47,14 +47,19 @@ void record_bit(uint8_t (&into)[2], uint32_t i, oparroy::TxAction action) {
 } // namespace
 
 extern "C" int klee_enum() {
-    uint8_t frame[2]; // 16 bits: two pre-sized slots
-    uint8_t stamp0[1];
-    uint8_t stamp1[1];
-    uint8_t stale0[1]; // a distinct face — stamped only if the latch is wrong
-    klee_make_symbolic(&frame, sizeof frame, "frame");
-    klee_make_symbolic(&stamp0, sizeof stamp0, "stamp0");
-    klee_make_symbolic(&stamp1, sizeof stamp1, "stamp1");
-    klee_make_symbolic(&stale0, sizeof stale0, "stale0");
+    // Uninitialized: klee_make_symbolic fills them, and zeroing would
+    // lower to an llvm.memset klee 3.2 doesn't implement (klee/tx.cpp's
+    // ShadowTx comment).
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-member-init)
+    lib::Array<uint8_t, 2> frame; // 16 bits: two pre-sized slots
+    lib::Array<uint8_t, 1> stamp0;
+    lib::Array<uint8_t, 1> stamp1;
+    lib::Array<uint8_t, 1> stale0; // a distinct face — stamped only if the latch is wrong
+    // NOLINTEND(cppcoreguidelines-pro-type-member-init)
+    klee_make_symbolic(frame.data(), sizeof frame, "frame");
+    klee_make_symbolic(stamp0.data(), sizeof stamp0, "stamp0");
+    klee_make_symbolic(stamp1.data(), sizeof stamp1, "stamp1");
+    klee_make_symbolic(stale0.data(), sizeof stale0, "stale0");
     // A stamp's first wire bit is the occupancy marker (enum.hpp) — the
     // config_valid invariant.
     klee_assume(stamp0[0] & 0x80u);
@@ -82,8 +87,8 @@ extern "C" int klee_enum() {
     KLEE_PROVE(node0.on_break() == oparroy::TxAction::Idle);
     KLEE_PROVE(node1.on_break() == oparroy::TxAction::Idle);
 
-    uint8_t middle[2] = {0, 0};
-    uint8_t drained[2] = {0, 0};
+    lib::Array<uint8_t, 2> middle{{0, 0}};
+    lib::Array<uint8_t, 2> drained{{0, 0}};
     for (const uint32_t i : lib::irange<uint32_t>(2 * slot_bits)) {
         const oparroy::TxAction action0 = node0.on_bit(oparroy::bit_at(frame, i));
         // A legal bit in flight is always forwarded, never swallowed.
@@ -98,8 +103,8 @@ extern "C" int klee_enum() {
     }
 
     // Hop by hop against the spec: node0's output, then the drained frame.
-    uint8_t after0[2] = {0, 0};
-    uint8_t expected[2] = {0, 0};
+    lib::Array<uint8_t, 2> after0{{0, 0}};
+    lib::Array<uint8_t, 2> expected{{0, 0}};
     spec_stamp(frame, stamp0, after0);
     spec_stamp(after0, stamp1, expected);
     KLEE_PROVE(middle[0] == after0[0] && middle[1] == after0[1]);

@@ -27,6 +27,8 @@
 #include "../lib/verify.hpp"
 #endif
 
+#include "../lib/array.hpp"
+
 #include <cstdint>
 
 // Linker-script symbols (ch32v003.ld): the address is the payload, the
@@ -83,10 +85,10 @@ extern "C" {
 // firmware arms a real handler.
 using VectorEntry = void (*)();
 [[gnu::section(".vectors.table"), gnu::used]]
-// A linker-placed table is a C array by definition — std::array's
-// <array> header is outside the freestanding set.
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays, modernize-avoid-c-arrays)
-const VectorEntry vector_table[] = {
+// A linker-placed table: Array's layout is exactly the array's
+// (array.hpp), so the section placement and the size assert below are
+// unaffected.
+const lib::Array<VectorEntry, 38> vector_table = {{
     nullptr,         // 1: reserved
     unexpected_trap, // 2: NMI
     unexpected_trap, // 3: HardFault
@@ -116,7 +118,7 @@ const VectorEntry vector_table[] = {
     unexpected_trap, // 36: TIM1 trigger
     unexpected_trap, // 37: TIM1 capture/compare
     unexpected_trap, // 38: TIM2
-};
+}};
 static_assert(sizeof(vector_table) == 38 * sizeof(VectorEntry));
 
 [[noreturn]] void node_boot() {

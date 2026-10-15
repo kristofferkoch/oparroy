@@ -6,6 +6,7 @@
 // inside them, containment after faults, one latch per frame. A reset
 // brown-out hits one node at a time — a real brown-out is per-node.
 
+#include "../../lib/array.hpp"
 #include "../../lib/span.hpp"
 #include "../bits.hpp"
 #include "../cell.hpp"
@@ -97,11 +98,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     // One telemetry byte per node (the occupancy marker — enum.hpp — is
     // forced set); slots are discovered, not configured — the chain's
     // stamping falls out of the marker scan.
-    uint8_t telemetry_storage[node_count];
+    lib::Array<uint8_t, node_count> telemetry_storage{};
     for (uint8_t& byte : telemetry_storage) {
         byte = static_cast<uint8_t>(cursor.take_u8() | 0x80u);
     }
-    const lib::Span<const uint8_t> telemetry_span{telemetry_storage};
+    const lib::Span<const uint8_t> telemetry_span = telemetry_storage;
     NodeRig rig0 = make_rig(telemetry_span.subspan(0, 1));
     NodeRig rig1 = make_rig(telemetry_span.subspan(1, 1));
     NodeRig rig2 = make_rig(telemetry_span.subspan(2, 1));

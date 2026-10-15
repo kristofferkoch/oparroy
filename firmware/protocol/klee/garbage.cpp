@@ -8,6 +8,7 @@
 // (poisoned), not the node's own state() — an assertion that trusts the
 // implementation under test proves nothing (code-std.md#4-tests).
 
+#include "../../lib/array.hpp"
 #include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../../lib/verify.hpp"
@@ -67,8 +68,11 @@ void prove_break_step(oparroy::Node& node, Shadow& shadow) {
 } // namespace
 
 extern "C" int klee_garbage() {
-    uint8_t stamp[1];
-    klee_make_symbolic(&stamp, sizeof stamp, "stamp");
+    // Uninitialized: klee_make_symbolic fills it (klee/tx.cpp's memset
+    // constraint).
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+    lib::Array<uint8_t, 1> stamp;
+    klee_make_symbolic(stamp.data(), sizeof stamp, "stamp");
     // A stamp's first wire bit is the occupancy marker (enum.hpp).
     klee_assume(stamp[0] & 0x80u);
     oparroy::Node node{oparroy::NodeConfig{.slot_bits = 4},

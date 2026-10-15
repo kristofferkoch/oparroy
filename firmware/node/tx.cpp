@@ -29,6 +29,7 @@
 
 #include <pins.hpp>
 
+#include "../lib/array.hpp"
 #include "../lib/verify.hpp"
 #include "../protocol/cell.hpp"
 #include "../protocol/node.hpp"
@@ -45,12 +46,13 @@ namespace {
 // cut-through FIFO is separate storage (tx.hpp).
 inline constexpr uint32_t ring_cells = 16;
 
-// DMA sources, hardware-read between polls — writable C arrays by
-// definition.
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-volatile uint16_t compare_ring_a[ring_cells];
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-volatile uint16_t compare_ring_b[ring_cells];
+// DMA sources, hardware-read between polls — volatile elements; the
+// address crosses to the DMA through data() at the MMIO boundary
+// (dma_config).
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+lib::Array<volatile uint16_t, ring_cells> compare_ring_a;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+lib::Array<volatile uint16_t, ring_cells> compare_ring_b;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) — the one sequencer instance
 oparroy::TxCutThrough<> cut_through;
@@ -137,8 +139,8 @@ void tx_init() {
     // DMA before the counter starts: the streams are aligned from the
     // first compare. UG latches the preloads (RM §10.3.5 — the SDK's
     // TIM_TimeBaseInit ends with it) before CEN.
-    dma_config(pins::tx_a_tx_dma, tim.ch1cvr, compare_ring_a);
-    dma_config(pins::tx_b_tx_dma, tim.ch3cvr, compare_ring_b);
+    dma_config(pins::tx_a_tx_dma, tim.ch1cvr, compare_ring_a.data());
+    dma_config(pins::tx_b_tx_dma, tim.ch3cvr, compare_ring_b.data());
     tim.swevgr = tim1_swevgr_ug;
     tim.ctlr1 = tim1_ctlr1_cen;
 }

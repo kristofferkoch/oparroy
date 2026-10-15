@@ -27,6 +27,7 @@
 // 4 idle one cell, 5 originate a break (tx_break_cells of idle),
 // 6 brown-out reset hop payload % 3, 7 origin pause.
 
+#include "../../lib/array.hpp"
 #include "../../lib/range.hpp"
 #include "../../lib/span.hpp"
 #include "../bits.hpp"
@@ -53,8 +54,7 @@ constexpr uint32_t wire_gap_cap_ticks = 4800;
 // are the idle-run-first ordering, the mute containment, and the break
 // resync (a linear queue here would need a compaction loop).
 struct ShadowCut {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint16_t cells[capacity] = {};
+    lib::Array<uint16_t, capacity> cells{};
     uint16_t head = 0;
     uint16_t count = 0;
     uint16_t idle = 0;
@@ -228,11 +228,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     // One telemetry byte per node (the occupancy marker — enum.hpp — is
     // forced set); slots are discovered, not configured (fuzz/ring.cpp's
     // setup).
-    uint8_t telemetry_storage[node_count];
+    lib::Array<uint8_t, node_count> telemetry_storage{};
     for (uint8_t& byte : telemetry_storage) {
         byte = static_cast<uint8_t>(cursor.take_u8() | 0x80u);
     }
-    const lib::Span<const uint8_t> telemetry_span{telemetry_storage};
+    const lib::Span<const uint8_t> telemetry_span = telemetry_storage;
     const oparroy::NodeConfig config{.slot_bits = slot_bits};
     const auto telemetry_of = [&telemetry_span](size_t index) {
         const oparroy::BitSlice face{.bytes = telemetry_span.subspan(index, 1),

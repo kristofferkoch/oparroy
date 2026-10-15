@@ -22,6 +22,7 @@
 // log is read only below its indices.
 
 #include "../tx.hpp"
+#include "../../lib/array.hpp"
 #include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../cell.hpp"
@@ -45,8 +46,7 @@ constexpr uint16_t capacity = 8;
 // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
 struct ShadowTx {
     // Sized for the proof's step count; every append logs one entry.
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint8_t bits[24];
+    lib::Array<uint8_t, 24> bits;
     uint16_t play_pos = 0;
     uint16_t play_end = 0;
     uint16_t append_pos = 0;

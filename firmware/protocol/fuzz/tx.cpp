@@ -14,6 +14,7 @@
 // bits so real-length inputs drive the ring to wrap and overflow.
 
 #include "../tx.hpp"
+#include "../../lib/array.hpp"
 #include "../../lib/range.hpp"
 #include "../../lib/span.hpp"
 #include "../cell.hpp"
@@ -34,12 +35,10 @@ constexpr uint16_t capacity = 64;
 struct ShadowTx {
     // 2× capacity: up to capacity unconsumed playable bits plus the
     // capacity-bit pending frame a break can close onto them.
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint8_t playable[2 * capacity] = {};
+    lib::Array<uint8_t, 2 * static_cast<std::size_t>(capacity)> playable{};
     uint16_t playable_count = 0;
     uint16_t play_pos = 0;
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-    uint8_t pending[capacity] = {};
+    lib::Array<uint8_t, capacity> pending{};
     uint16_t pending_count = 0;
     uint16_t idle = 0;
     bool dropped = false;

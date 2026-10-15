@@ -2,6 +2,7 @@
 // GCC cross build (rv32ec) and clang-tidy compiling the same headers the
 // KLEE bitcode targets include directly.
 
+#include "../lib/array.hpp"
 #include "../lib/error_or.hpp"
 #include "../lib/range.hpp"
 #include "../lib/span.hpp"
@@ -101,10 +102,10 @@ namespace {
         // A 16-bit slot with the occupancy marker set: every frame's
         // first decoded bit below is a 1 (an occupied marker), so the
         // node echoes the whole stream — this walk is the decoder's,
-        // not the slot walk's. BitSlice adopts the array (span.hpp).
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
-        const uint8_t telemetry_bytes[2] = {0x80, 0x00};
-        const BitSlice face{.bytes = lib::Span<const uint8_t>{telemetry_bytes}, .bit_count = 16};
+        // not the slot walk's. The Array converts to Span at the
+        // BitSlice boundary (array.hpp).
+        const lib::Array<uint8_t, 2> telemetry_bytes{{0x80, 0x00}};
+        const BitSlice face{.bytes = telemetry_bytes, .bit_count = 16};
         Node node{NodeConfig{.slot_bits = 16}, double_buffered(face, face)};
         RxDecoder decoder{node};
 

@@ -4,6 +4,7 @@
 // bit-identical, every node forwards every legal bit, and the frame gap
 // latches exactly once per node (the vsync, §2).
 
+#include "../../lib/array.hpp"
 #include "../../lib/klee.hpp"
 #include "../../lib/range.hpp"
 #include "../../lib/span.hpp"
@@ -17,8 +18,11 @@ extern "C" int klee_echo() {
     constexpr uint32_t frame_bits = 24;
     constexpr size_t node_count = 3;
 
-    uint8_t frame[frame_bits / 8];
-    klee_make_symbolic(&frame, sizeof frame, "frame");
+    // Uninitialized: klee_make_symbolic fills it (klee/tx.cpp's memset
+    // constraint).
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+    lib::Array<uint8_t, frame_bits / 8> frame;
+    klee_make_symbolic(frame.data(), sizeof frame, "frame");
 
     // The echo invariant holds for frames with no empty slot: constrain
     // every slot marker (wire bits 0, 8, 16 — MSB-first, bits.hpp) to
@@ -29,22 +33,23 @@ extern "C" int klee_echo() {
 
     // Loop-init, not = {}: the memset intrinsic is unimplemented in klee
     // 3.2's partial LLVM 19 build (flake.nix).
-    uint8_t telemetry[node_count];
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+    lib::Array<uint8_t, node_count> telemetry;
     for (uint8_t& byte : telemetry) {
         byte = 0;
     }
-    const lib::Span<const uint8_t> telemetry_span{telemetry};
+    const lib::Span<const uint8_t> telemetry_span = telemetry;
     // Both faces of the vsync double buffer are the same 8-bit
     // telemetry — never stamped here: every slot reads occupied.
     const auto telemetry_of = [&](size_t index) {
         const oparroy::BitSlice face{.bytes = telemetry_span.subspan(index, 1), .bit_count = 8};
         return oparroy::DoubleBuffer<oparroy::BitSlice>{.front = face, .back = face};
     };
-    oparroy::Node nodes[] = {
+    lib::Array<oparroy::Node, node_count> nodes{{
         oparroy::Node{oparroy::NodeConfig{.slot_bits = 8}, telemetry_of(0)},
         oparroy::Node{oparroy::NodeConfig{.slot_bits = 8}, telemetry_of(1)},
         oparroy::Node{oparroy::NodeConfig{.slot_bits = 8}, telemetry_of(2)},
-    };
+    }};
 
     for (oparroy::Node& node : nodes) {
         KLEE_PROVE(node.on_break() == oparroy::TxAction::Idle);
