@@ -115,6 +115,50 @@ static_assert(sizeof(FlashInterface) == 0x04);
 // 01 for ≤ 48 MHz.
 inline constexpr uint32_t flash_actlr_latency_1ws = 1;
 
+// ESIG identity block, base 0x1FFFF7E0 (RM §15.2 Table 15-1): read-only
+// factory data, 8/16/32-bit accessible (RM §15.1). The 96-bit UNIID is
+// the ENUM stamp's identity (firmware/protocol/enum.hpp).
+struct Esig {
+    uint16_t flacap;     // 0x00 — flash capacity
+    uint16_t reserved02; // 0x02
+    uint32_t reserved04; // 0x04
+    uint32_t uniid1;     // 0x08
+    uint32_t uniid2;     // 0x0C
+    uint32_t uniid3;     // 0x10
+};
+
+static_assert(offsetof(Esig, uniid1) == 0x08);
+static_assert(offsetof(Esig, uniid2) == 0x0C);
+static_assert(offsetof(Esig, uniid3) == 0x10);
+static_assert(sizeof(Esig) == 0x14);
+
+// User option bytes, base 0x1FFFF800 (RM §16.5 Table 16-4): each byte
+// stored with its inverse as a load-time checksum
+// (datasheets/CH32V003/notes/flash-option-bytes.md). data0 is the node's
+// personality type byte (phy-analysis §6).
+struct OptionBytes {
+    uint8_t rdpr;        // 0x00 — read protection (0xA5 = unprotected)
+    uint8_t nrdpr;       // 0x01
+    uint8_t user;        // 0x02
+    uint8_t nuser;       // 0x03
+    uint8_t data0;       // 0x04 — personality type byte
+    uint8_t ndata0;      // 0x05
+    uint8_t data1;       // 0x06
+    uint8_t ndata1;      // 0x07
+    uint8_t wrpr0;       // 0x08
+    uint8_t nwrpr0;      // 0x09
+    uint8_t wrpr1;       // 0x0A
+    uint8_t nwrpr1;      // 0x0B
+    uint32_t reserved0c; // 0x0C
+};
+
+static_assert(offsetof(OptionBytes, user) == 0x02);
+static_assert(offsetof(OptionBytes, data0) == 0x04);
+static_assert(offsetof(OptionBytes, data1) == 0x06);
+static_assert(offsetof(OptionBytes, wrpr0) == 0x08);
+static_assert(offsetof(OptionBytes, wrpr1) == 0x0A);
+static_assert(sizeof(OptionBytes) == 0x10);
+
 // GPIO port (RM §7.3); per-port bases are pins::gpio_*_base.
 struct Gpio {
     uint32_t cfglr; // 0x00
@@ -398,6 +442,18 @@ inline void configure_pin(Gpio volatile& port, uint8_t bit, uint32_t nibble) {
     // MMIO boundary: the flash interface block (RM §16.3).
     // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
     return *reinterpret_cast<FlashInterface volatile*>(0x40022000u);
+}
+
+[[nodiscard]] inline Esig volatile& esig() {
+    // MMIO boundary: the ESIG identity block (RM §15.2 Table 15-1).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
+    return *reinterpret_cast<Esig volatile*>(0x1FFFF7E0u);
+}
+
+[[nodiscard]] inline OptionBytes volatile& option_bytes() {
+    // MMIO boundary: the user option bytes (RM §16.5 Table 16-4).
+    // NOLINTNEXTLINE(performance-no-int-to-ptr) — MMIO boundary, the cast is the point
+    return *reinterpret_cast<OptionBytes volatile*>(0x1FFFF800u);
 }
 
 [[nodiscard]] inline Gpio volatile& gpio(uint32_t port_base) {

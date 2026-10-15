@@ -20,9 +20,9 @@
 #include "../lib/array.hpp"
 #include "../protocol/bits.hpp"
 #include "../protocol/cell.hpp"
-#include "../protocol/enum.hpp"
 #include "../protocol/node.hpp"
 #include "../protocol/rx.hpp"
+#include "personality.hpp"
 #include "regs.hpp"
 #include "rx.hpp" // this directory's glue declarations, not the protocol's rx.hpp
 #include "tx.hpp" // this directory's glue declarations, not the protocol's tx.hpp
@@ -46,17 +46,14 @@ lib::Array<volatile uint16_t, ring_cells> high_ring;
 // The node's telemetry is its ENUM stamp (enum.hpp, DESIGN.md §2): the
 // slot walk claims each frame's first empty slot and stamps it — the
 // find-first-empty-slot discovery that keeps position provision-free.
-// The stamp is a placeholder until the personality firmware slice wires
-// the real ESIG UNIID and option-byte type byte: zero UNIID, type 0
-// ("plain node"). The stamp's Array converts to Span at the BitSlice
-// boundary (enum.hpp's stamp_slice); both vsync faces are the one
-// stamp — it never changes after boot.
-constexpr oparroy::EnumStamp placeholder_stamp = oparroy::pack_stamp(0, 0, 0, 0);
-constexpr oparroy::NodeConfig node_config{.slot_bits = oparroy::enum_slot_bits};
-constexpr oparroy::DoubleBuffer<oparroy::BitSlice> stamp_latch{
-    .front = oparroy::stamp_slice(placeholder_stamp),
-    .back = oparroy::stamp_slice(placeholder_stamp)};
-static_assert(oparroy::Node::config_valid(node_config, stamp_latch));
+// The stamp itself is personality.cpp's: the ESIG UNIID + option-byte
+// type byte packed at boot (personality_init, called from node_main
+// before rx_init), with the config contract VERIFYed there. Both vsync
+// faces are the one stamp — it never changes after boot; the slices
+// bind its storage by address (personality.hpp), so the boot-time pack
+// needs no re-construction here.
+constexpr oparroy::NodeConfig node_config = oparroy::personality_config();
+constexpr oparroy::DoubleBuffer<oparroy::BitSlice> stamp_latch = oparroy::personality_latch();
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) — the one node instance
 oparroy::Node node{node_config, stamp_latch};
