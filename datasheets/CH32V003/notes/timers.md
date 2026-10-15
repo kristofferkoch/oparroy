@@ -16,7 +16,8 @@ TIM2 (GPTM, base `0x40000000`, RM §11.4):
 - Registers: CTLR1 0x00, CTLR2 0x04, SMCFGR 0x08, DMAINTENR 0x0C,
   INTFR 0x10, SWEVGR 0x14, CHCTLR1 0x18, CHCTLR2 0x1C, CCER 0x20,
   CNT 0x24, PSC 0x28, ATRLR 0x2C (0xFFFF), CH1CVR–CH4CVR
-  0x34–0x40 (32-bit).
+  0x34–0x40 (32-bit), DMACFGR 0x48 / DMAADR 0x4C (burst DMA,
+  RM §11.4.17–11.4.18).
 - Input capture path per channel x: pin → TIx → digital filter `ICxF[3:0]`
   (CHCTLRx) → edge detector → polarity `CCxP` (CCER) → mux `CCxS[1:0]`
   (01 = ICx on TIx, 10 = on the other channel, 11 = TRC) → prescaler
@@ -34,10 +35,16 @@ TIM2 (GPTM, base `0x40000000`, RM §11.4):
   CC1S=01 (IC1 on TI1), CC1P=0 (rising), CC2S=10 (IC2 on TI1),
   CC2P=1 (falling), TS=101 (TI1FP1 as slave trigger), SMS=100 (CNT
   reset on trigger), CC1E+CC2E — CH1CVR then reads the period, CH2CVR
-  the high time. Only TI1FP1/TI2FP2 reach the slave-mode controller,
-  so the channel pair is always CH1+CH2, and both channels are inputs:
+  the high time. Only TI1FP1/TI2FP2 reach the slave-mode controller
+  (TS also offers TI1F_ED at 100 and ETRF at 111, RM §10.2.2 Figure
+  10-2 — TI1F_ED is both-edges, useless for period reset), so the
+  channel pair is always CH1+CH2, and both channels are inputs:
   no CH2 output (and no CNT-based PWM) can coexist with PWM-input
-  capture on the same timer.
+  capture on the same timer. The mirror recipe on TI2 is equally
+  legal (roles swapped): CC2S=01, CC2P=0, CC1S=10, CC1P=1, TS=110
+  (TI2FP2), SMS=100 — CH2CVR then reads the period, CH1CVR the high
+  time, and the DMA requests swap with the roles (period = TIM2_CH2 =
+  channel 7, high time = TIM2_CH1 = channel 5; dma.md Table 8-2).
 - Output/PWM mode (RM §11.4.1, §11.4.7–11.4.9): `CTLR1` bit 0 CEN
   (counter enable); `CHCTLR1` covers channels 1–2, `CHCTLR2` channels
   3–4 — per channel CCxS[1:0] (00 = output), OCxM[2:0] (110 = PWM mode
@@ -60,8 +67,9 @@ TIM2 (GPTM, base `0x40000000`, RM §11.4):
 
 TIM1 (ADTM, base `0x40012C00`, RM §10.4):
 
-- Same register set plus RPTCR 0x30 (8-bit repetition counter), BDTR 0x44
-  (break + dead-time), DMACFGR 0x48 / DMAADR 0x4C (burst DMA).
+- Same register set (DMACFGR/DMAADR included) plus RPTCR 0x30 (8-bit
+  repetition counter) and BDTR 0x44 (break + dead-time) — those two are
+  the only TIM1 additions (RM §11.2.2).
 - 3 complementary PWM outputs with dead-time and BKIN brake input; CSS
   clock-failure event is hardwired to TIM1 brake (RM §3.3.6).
 - Output-compare/PWM path per channel (RM §10.4.7–10.4.9): `CHCTLR1`
@@ -70,7 +78,8 @@ TIM1 (ADTM, base `0x40012C00`, RM §10.4):
   (writable only while CCxE=0); OCxM[2:0] (000 freeze, 001/010 set
   active/inactive on match, 011 toggle on match, 100/101 force
   inactive/active, 110 = PWM mode 1 — OCxREF active while CNT < CHxCVR
-  up-counting, active while CNT > CHxCVR down-counting, 111 = PWM mode
+  up-counting, active while CNT ≤ CHxCVR down-counting (RM §10.4.7:
+  inactive when CNT exceeds CHxCVR); 111 = PWM mode
   2 inverted); OCxPE preload (1: writes hit the preload register and
   latch into the shadow register at the update event; 0: CHxCVR takes
   effect immediately — the RM rates PWM without preload as determined
