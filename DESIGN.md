@@ -199,13 +199,23 @@ Measured (ngspice — benches in `circuits/phy-segment/`, models in
 
 - **Decode margins (tb_decode)** — 24 combos (segment capacitance
   47 pF–1 nF × comparator offset ±13 mV × bypass/inserted switch
-  path): every cell lands ≥ 178 ns from the decode midpoint at the
-  TIM2 Schmitt slice (≥ 144 ns at the pessimistic VDD/2 slice), period
-  1245–1253 ns everywhere — a healthy segment never trips the
+  path), each scanned at four capture-slice placements. Every cell
+  lands ≥ 178 ns from the decode midpoint at the center Schmitt band
+  (1.30/1.15 V, centered near the ~0.37×VDD typical — the modeling
+  choice) and ≥ 158 ns at the highest datasheet-legal band (VT+/VT− =
+  1.68/1.53 V, DS0 §3.3.9 T3-16), ≥ 145 ns at the pessimistic VDD/2
+  slice — but only ≥ 70 ns at the lowest legal band (0.91/0.76 V),
+  short of the contracted 100 ns while still correct-side. The
+  internal OPO→TIM2_CH1 route's thresholds are undocumented
+  ([quirks.md](datasheets/CH32V003/notes/quirks.md) §OPA), so the real
+  band placement is a bring-up measurement (the §6 opo tap on PD4
+  exists for exactly this); sensitivity is ~27 ns per 100 mV of
+  band-center shift, set by the comparator's 7.7 V/µs slew. Period
+  1249–1251 ns at every slice — a healthy segment never trips the
   0.9–1.6 µs illegal-cell detector. Margins are flat vs capacitance
-  (±4 ns across 47 pF→1 nF) and vs offset (< 4 ns): the binding effect
-  is the comparator's 7.7 V/µs slew (~230 ns edge-symmetric delay,
-  ~50 ns pattern-dependent), not drive strength vs segment C.
+  (±3 ns across 47 pF→1 nF) and vs offset (< 2 ns): the binding effect
+  is the slew (~230 ns edge-symmetric delay, ~50 ns
+  pattern-dependent), not drive strength vs segment C.
 - **No analog hysteresis (tb_noise)** — see the signaling bullet
   above; zero spurious edges under ringing and 250 mV-class crosstalk.
 - **Connector faults (tb_fault)** — short to GND/VCC parks the line
