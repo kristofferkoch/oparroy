@@ -10,14 +10,14 @@
   from stomping on each other's checkout — never share a working tree
   between tasks. When the PR merges, remove the worktree
   (`git worktree remove ../oparroy-wt-<name>`) and delete the branch.
-- **Open PRs as drafts** (`gh pr create --draft`). Mergify skips
-  drafts, so nothing merges before its time. Mark a PR ready for
-  review only when the user explicitly authorizes it — otherwise leave
-  the flip to the user.
-- **Merging is automatic once ready.** When a non-draft PR's `check`
+- **Open PRs ready for review, never as drafts.** Mergify skips
+  drafts, so a draft PR sits until someone flips it manually —
+  plain `gh pr create` skips that step.
+- **Merging is automatic once CI is green.** When a PR's `check`
   CI job goes green, Mergify queues it and merges it against the
   latest `main` (`.mergify.yml`) — no session needs to stay open
-  waiting for CI.
+  waiting for CI. If a PR must not merge on green, say so in the
+  PR body.
 - **One commit per concept when feasible.** A PR is typically a single
   commit, but when it carries separable changes — a parser feature,
   a rule built on it, a doc note — split it into one commit per
