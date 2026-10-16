@@ -264,3 +264,22 @@ ______________________________________________________________________
   block, resolve the §9 cable-reach open question, and decide the
   broken-loop power policy (≤ 5 m segments vs §2.1 second-tap
   injection). **Blocked by:** T10c · **Unblocks:** —
+- **T39 — Partial-connector phantom power: sim + fault-model
+  decision.** *Shape: research.* The deliberate per-node power cut
+  already covers VCC-lost-with-IO-live (bounded back-feed,
+  [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split);
+  the §10 bench-verify list measures it directly), and
+  [cable-reach §5](docs/cable-reach.md#5-power-loop-drop--the-21-check)
+  covers a full power-loop break. Not covered: **partial contact
+  loss** — a node's GND (or 3V3) pin open while its A/B IO pins stay
+  connected, phantom-powering the node through its ESD clamps onto a
+  floating rail. The connector pinout's interleaved redundant GNDs
+  (DESIGN.md §3) mitigate but don't eliminate it (multi-pin fretting,
+  cable-side strand break). Work: an ngspice bench in the phy-segment
+  capture modeling the floating-GND node
+  (`circuits/lib/ch32v003.spi` already models the clamp diodes),
+  asserting decode margin on the bypass route — the sim precursor of
+  the §10 back-feed bench item — then the fault-model decision: a
+  GND-cut position in the §6 fault complement, or a recorded DESIGN.md
+  note on why the redundant-GND pinout suffices.
+  **Blocked by:** — · **Unblocks:** —
