@@ -227,6 +227,23 @@ ______________________________________________________________________
   arithmetic. Extends the T8 check machinery (the ports' limit ranges
   already carry an optional current interval). **Blocked by:** — ·
   **Unblocks:** —
+- **T38 — DSL power-domain crossing check.** *Shape: implementation.*
+  Captures declare power domains (the `design/ci_power.py` transform's
+  `3V3` always / `3V3N` switched split) and a check pass audits every
+  net crossing a domain boundary: each crossing carries a declared
+  disposition — **dies-with-domain** (the `Rth1` divider must die with
+  the MCU or it back-feeds the op-amp pin), **always-domain** (the
+  no-Ioff placement rule: parts with no partial-power-down spec —
+  [1G3157 facts](datasheets/SN74LVC1G3157/notes/facts.md) — sit on the
+  always rail), or **bounded back-feed** with a current budget and a
+  doc citation (the 470 Ω / ≈5.7 mA clamp-injection analysis,
+  [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)).
+  An undeclared crossing fails the check — the machine-checked
+  successor of the hand enumeration in instrumented-ci.md §3 and
+  [scan-plane.md §5](docs/scan-plane.md#5-the-swio-flash-mux-a-3157-binary-tree)
+  (SWIO pull-ups tied to `3V3N`, never `3V3`). Extends the T8 check
+  machinery; negative control per the reliability contract: a planted
+  undeclared crossing must fail. **Blocked by:** — · **Unblocks:** —
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10c,
