@@ -123,6 +123,25 @@ class Other(Subcircuit):
         circuit.part("R1", Resistor("1k", a=gnd, b=gnd, footprint="StubFP:R_0603"))
 
 
+def bare_phy_capture(circuit: Circuit) -> None:
+    """Build a PHY without the clamp cap: TX_A carries only the series R."""
+    tx_a = circuit.port("tx_a")
+    circuit.port("gnd")
+    mcu_rx = circuit.port("mcu_rx")
+    circuit.part("Rat", Resistor("470", a=mcu_rx, b=tx_a, footprint="StubFP:R_0603"))
+
+
+class BareTile(Subcircuit):
+    """A connector-less tile (the CI board's R10 shape): TX_A's one pin is the PHY's."""
+
+    def capture(self, circuit: Circuit) -> None:
+        """Build the tile; no connector, no TVS — TX_A is PHY1/Rat.b alone."""
+        tx_a = circuit.port("TX_A")
+        gnd = circuit.port("GND")
+        mcu_rx = circuit.net("mcu_rx")
+        circuit.instance("PHY1", bare_phy_capture, tx_a=tx_a, gnd=gnd, mcu_rx=mcu_rx)
+
+
 def build_board(symbols: StubSymbols) -> Circuit:
     """Build the board: two tiles chained on segment nets, plus X1."""
     board = Circuit("ci", symbols)
@@ -247,6 +266,44 @@ def test_insert_series_on_an_internal_net(symbols: StubSymbols) -> None:
     rpd = tile.parts["FI1/RPD"]
     assert rpd.pin("1").net is tile.nets["ka#b"]
     assert rpd.pin("2").net is tile.nets["GND"]
+
+
+def test_cut_may_detach_every_pin_of_a_port_net(symbols: StubSymbols) -> None:
+    """The connector-less tile's port cut: the parent binding is the interface."""
+    board = Circuit("ci", symbols)
+    board.instance("T0", BareTile(), TX_A=board.net("SEG"), GND=board.net("GND"))
+    apply_transforms(board, [PerTile(BareTile, (f1(),))])
+    tile = board.instances["T0"].circuit
+    assert net_pins(tile, "TX_A#a") == {"PHY1/Rat.2", "FI1/SWAB.2"}
+    # The port keeps name, flag, and binding as the #b side — its only
+    # pin is now the switch's interface-side common.
+    assert tile.nets["TX_A"].is_port
+    assert net_pins(tile, "TX_A") == {"FI1/SWAB.1"}
+
+
+def test_cut_off_every_pin_of_an_internal_net_still_raises(
+    symbols: StubSymbols,
+) -> None:
+    board = build_board(symbols)
+    with pytest.raises(DefinitionError, match="leaves no pins on the interface side"):
+        apply_transforms(
+            board,
+            [
+                PerTile(
+                    Tile,
+                    (
+                        InsertSeries(
+                            label="F9",
+                            net="ka",
+                            pins=("U1.2", "Rwd.a"),
+                            part=TransformPart(
+                                "FI1/SW", StubSwitch(a="@a", b1="@b", s="GND")
+                            ),
+                        ),
+                    ),
+                )
+            ],
+        )
 
 
 def test_add_shunt_hangs_a_branch_without_cutting(symbols: StubSymbols) -> None:

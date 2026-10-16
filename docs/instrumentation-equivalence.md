@@ -79,12 +79,22 @@ which escaped port is a control, which a tap) and proves:
    reset levels are part of the proof's inputs, not assumed).
 1. **Taps are high-impedance.** Every `add_tap` part's attached pin
    is an input-class pin (KiCad `PinType`, or a declared impedance
-   limit on the part) — nothing a tap adds can drive the net.
+   limit on the part) — nothing a tap adds can drive the net. The
+   declared exception: the tap names its non-input-class consumers
+   with a reset-state justification (the SWIO/debug trees'
+   bidirectional channel pins, the supervisor's GPIOs at POR) — a
+   proof input like the reset levels. The screen guards nets the
+   replicated (`PerTile`-matched) tiles carry; nets touching only
+   singly-scoped or board-level parts (the supervisor-side stubs the
+   scan plane and trees wire to) are board infrastructure.
 1. **Bijection over the base.** Every base part and base net survives
    into the reduced instrumented circuit — nothing lost, nothing
    re-connected. This is the anti-drift property: the instrumented
    board cannot silently drop the watchdog's timing cap or rewire a
-   segment.
+   segment. Two re-bindings are the composition's wiring, not drift:
+   a base pin riding an escaped control/source net (absent in reset
+   state — the pot-override PWM pins) or a declared tap's net (the
+   supervisor's PIO tap pins, the tap screen's pin-type rule applied).
 1. **Residuals are enumerated, not assumed away.** The reduction is
    not exact: a closed 74LVC1G3157 is ~6 Ω, not 0 Ω; a tap is ~10 pF
    of stub capacitance, not open. The pass emits the residual set as

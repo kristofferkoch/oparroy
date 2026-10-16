@@ -26,14 +26,26 @@ report tile-local paths (``T3/ka``). Per tile:
    A control-less series insert reduces unconditionally — it declared
    itself pass-through at capture.
 2. **Taps are high-impedance.** A pin the instrumented board adds to a
-   base net is legitimate only through a declared ``AddTap``, and its
-   ``PinType`` must be input-class — nothing a tap adds can drive the
-   net.
+   base net carrying tile content — one with a pin under a
+   per-tile-matched instance — is legitimate only through a declared
+   ``AddTap``, and its ``PinType`` must be input-class — nothing a tap
+   adds can drive the net — unless the tap declares
+   ``non_input_consumers``: the reset-state justification for
+   bidirectional/passive consumers (a mux tree's channel pins, a
+   pull-up, the supervisor's GPIOs), a proof input like the reset
+   levels (memo Q2). Nets that touch no per-tile instance — the
+   supervisor-side stubs the scan plane and mux trees wire to — are
+   board infrastructure, outside the screen.
 3. **Bijection over the base.** Every base part and base-net pin
    membership survives the reduction — nothing lost, nothing
-   re-connected, and no untagged part may appear inside a tile
-   (instrumentation is transforms only, never capture edits). Extra
-   board-level parts are the scan plane and supervisor — allowed.
+   re-connected, and no untagged part may appear inside a
+   transform-scoped tile (instrumentation is transforms only, never
+   capture edits). A base pin legitimately rides an escaped
+   control/source net (absent in reset state) or a declared tap's net
+   (the supervisor's tap and PWM pins re-bind from their plain-board
+   stubs — the tap screen's pin-type rule applies). Extra board-level
+   parts outside the scoped tiles are the scan plane, the mux trees,
+   and the supervisor — allowed.
 4. **Residuals are enumerated, not assumed away.** Each reduced
    element's electrical magnitudes come from the parts DB (memo Q3:
    ``Residuals`` on the typed part, threaded onto the placed part);
@@ -150,13 +162,15 @@ def check_equivalent(
     no residual warns as stale. Waivers come from the instrumented
     capture (``Circuit.waive``), as in ``check``.
     """
-    tiles = _tile_transforms(instrumented, plan)
+    tiles, content_paths = _tile_transforms(instrumented, plan)
     base_names = _base_net_names(base)
     base_flat = base.flatten()
     flat = instrumented.flatten()
     issues: list[Issue] = []
     drop_nets, seen_levels = _check_reset_levels(flat, tiles, reset_levels, issues)
-    tap_names = _declared_tap_nets(instrumented, tiles, base_names, issues)
+    tap_names, tap_citations = _declared_tap_nets(
+        instrumented, tiles, base_names, issues
+    )
     residuals = _enumerate_residuals(
         flat, tiles, budgets, base_names=base_names, tap_names=tap_names, issues=issues
     )
@@ -166,6 +180,9 @@ def check_equivalent(
         base_names=base_names,
         drop_nets=drop_nets,
         tap_nets=set(tap_names.values()),
+        tap_citations=tap_citations,
+        tile_paths=set(tiles),
+        content_paths=content_paths,
         issues=issues,
     )
     issues.extend(
@@ -186,17 +203,26 @@ def check_equivalent(
 
 def _tile_transforms(
     circuit: Circuit, plan: Sequence[Scope]
-) -> dict[tuple[str, ...], list[Transform]]:
-    """Resolve the plan's scopes to per-tile transform lists (memo Q5)."""
+) -> tuple[dict[tuple[str, ...], list[Transform]], set[tuple[str, ...]]]:
+    """Resolve the plan's scopes to per-tile transform lists (memo Q5).
+
+    Returns the tile map plus the **content paths** — the instances a
+    ``PerTile`` declaration matched (the replicated DUT tiles, as
+    opposed to the singly-scoped infrastructure instances the
+    ``PerInstance`` declarations address). The tap screen guards nets
+    carried by content-path parts.
+    """
     tiles: dict[tuple[str, ...], list[Transform]] = {}
+    content: set[tuple[str, ...]] = set()
     for scope in plan:
         if isinstance(scope, PerTile):
             for path, inst in _walk_instances(circuit, ()):
                 if _matches(inst, scope.subcircuit):
                     tiles.setdefault(path, []).extend(scope.transforms)
+                    content.add(path)
         else:
             tiles.setdefault(scope.path, []).extend(scope.transforms)
-    return tiles
+    return tiles, content
 
 
 def _base_net_names(circuit: Circuit) -> dict[TileNet, str]:
@@ -323,7 +349,7 @@ def _declared_tap_nets(
     tiles: dict[tuple[str, ...], list[Transform]],
     base_names: dict[TileNet, str],
     issues: list[Issue],
-) -> dict[TileNet, str]:
+) -> tuple[dict[TileNet, str], dict[str, str]]:
     """Map each declared ``AddTap`` to the flattened base net it legitimates.
 
     The bound net is looked up by the tap's full name first — the sides
@@ -332,9 +358,12 @@ def _declared_tap_nets(
     alias (``TX#b``, whose port keeps the unsuffixed name). A tagged
     bound net (a tap on a tile-internal net) resolves through its
     provenance to the base net's flattened name; an untagged one (a
-    tap on a port) is already a base net.
+    tap on a port) is already a base net. The second return maps the
+    flattened base net to the tap's ``non_input_consumers``
+    justification when declared — the pin-type screen's cited exception.
     """
     taps: dict[TileNet, str] = {}
+    citations: dict[str, str] = {}
     for path in sorted(tiles):
         inst: Instance = _lookup_instance(board, path)
         for transform in tiles[path]:
@@ -355,23 +384,26 @@ def _declared_tap_nets(
                 )
                 continue
             if bound.provenance is None:
-                taps[TileNet(path, transform.net)] = bound.name
-                continue
-            key = TileNet(path, bound.provenance.base.split("/")[-1])
-            name = base_names.get(key)
-            if name is None:
-                issues.append(
-                    _issue(
-                        f"transform {transform.label!r}: tap net "
-                        f"{bound.name!r} derives from "
-                        f"{bound.provenance.base!r}, which is not a "
-                        "base-capture net",
-                        bound.name,
+                name = bound.name
+            else:
+                key = TileNet(path, bound.provenance.base.split("/")[-1])
+                resolved = base_names.get(key)
+                if resolved is None:
+                    issues.append(
+                        _issue(
+                            f"transform {transform.label!r}: tap net "
+                            f"{bound.name!r} derives from "
+                            f"{bound.provenance.base!r}, which is not a "
+                            "base-capture net",
+                            bound.name,
+                        )
                     )
-                )
-                continue
+                    continue
+                name = resolved
             taps[TileNet(path, transform.net)] = name
-    return taps
+            if transform.non_input_consumers is not None:
+                citations.setdefault(name, transform.non_input_consumers)
+    return taps, citations
 
 
 def _residual_net(
@@ -563,6 +595,9 @@ def _check_base_bijection(  # noqa: PLR0913 — the reduction context threaded t
     base_names: dict[TileNet, str],
     drop_nets: set[str],
     tap_nets: set[str],
+    tap_citations: Mapping[str, str],
+    tile_paths: set[tuple[str, ...]],
+    content_paths: set[tuple[str, ...]],
     issues: list[Issue],
 ) -> None:
     """Check the anti-drift bijection: every base part and net survives."""
@@ -573,6 +608,13 @@ def _check_base_bijection(  # noqa: PLR0913 — the reduction context threaded t
             pin.part.symbol.is_power or pin.type is PinType.POWER_OUT
             for pin in net.pins
         )
+    }
+    content_nets = {
+        pin.net.name
+        for part in base_flat.parts.values()
+        if any(_under(part.path, tile) for tile in content_paths)
+        for pin in part.pins
+        if pin.net is not None
     }
     reduced: dict[tuple[str, str], str] = {}
     lost_nets: set[str] = set()
@@ -588,16 +630,32 @@ def _check_base_bijection(  # noqa: PLR0913 — the reduction context threaded t
                 reduced[(part.ref, pin.number)] = name
     base_refs = set(base_flat.parts)
     for ref in sorted(base_refs, key=natural_key):
-        _check_base_part(base_flat.parts[ref], flat, reduced, issues)
+        _check_base_part(
+            base_flat.parts[ref],
+            flat,
+            reduced,
+            drop_nets=drop_nets,
+            tap_nets=tap_nets,
+            tap_citations=tap_citations,
+            issues=issues,
+        )
     for ref in sorted(set(flat.parts) - base_refs, key=natural_key):
         _check_extra_part(
             flat.parts[ref],
             base_flat,
             reduced=reduced,
             tap_nets=tap_nets,
+            tap_citations=tap_citations,
             power_nets=power_nets,
+            content_nets=content_nets,
+            tile_paths=tile_paths,
             issues=issues,
         )
+
+
+def _under(path: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
+    """Return True when a flattened part's path sits under a tile path."""
+    return len(path) >= len(prefix) and path[: len(prefix)] == prefix
 
 
 def _reduced_name(
@@ -630,13 +688,25 @@ def _reduced_name(
     return name
 
 
-def _check_base_part(
+def _check_base_part(  # noqa: PLR0913 — the bijection context threaded through
     base_part: Part,
     flat: Circuit,
     reduced: dict[tuple[str, str], str],
+    *,
+    drop_nets: set[str],
+    tap_nets: set[str],
+    tap_citations: Mapping[str, str],
     issues: list[Issue],
 ) -> None:
-    """One base part must survive: present, untagged, same symbol, same nets."""
+    """One base part must survive: present, untagged, same symbol, same nets.
+
+    Two re-connections are legitimate rather than drift: the pin rides
+    an escaped control/substitute-source net (absent in reset state, so
+    the reduced circuit never carries it — the supervisor's pot-override
+    PWM pins re-bind from their plain-board stubs), or it rides a
+    declared tap's net (the supervisor's PIO tap pins) — the tap
+    screen's pin-type rule then applies to the riding pin.
+    """
     ref = base_part.ref
     placed = flat.parts.get(ref)
     if placed is None or placed.provenance is not None:
@@ -656,10 +726,25 @@ def _check_base_part(
     for pin in base_part.pins:
         want = pin.net.name if pin.net is not None else None
         got = reduced.get((ref, pin.number))
-        if got != want:
+        if got == want:
+            continue
+        placed_net = placed.pin(pin.number).net
+        if placed_net is not None and placed_net.name in drop_nets:
+            continue
+        if got is not None and got in tap_nets:
+            if pin.type in _INPUT_CLASS or got in tap_citations:
+                continue
             issues.append(
-                _issue(f"{ref}.{pin.number}: re-connected ({want} → {got})", ref)
+                _issue(
+                    f"{ref}.{pin.number} rides the declared tap on {got!r} "
+                    f"but is {pin.type} — a tap feeding non-input-class "
+                    "pins needs the tap's non-input-consumers "
+                    "justification (memo Q2)",
+                    ref,
+                )
             )
+            continue
+        issues.append(_issue(f"{ref}.{pin.number}: re-connected ({want} → {got})", ref))
 
 
 def _check_extra_part(  # noqa: PLR0913 — the bijection context threaded through
@@ -668,32 +753,46 @@ def _check_extra_part(  # noqa: PLR0913 — the bijection context threaded throu
     *,
     reduced: dict[tuple[str, str], str],
     tap_nets: set[str],
+    tap_citations: Mapping[str, str],
     power_nets: set[str],
+    content_nets: set[str],
+    tile_paths: set[tuple[str, ...]],
     issues: list[Issue],
 ) -> None:
     """Screen an instrumented-side part the base lacks.
 
-    Board-level extras are the scan plane and supervisor — allowed. An
-    untagged part inside a tile is capture drift (instrumentation is
-    transforms only, never capture edits). A pin an extra part lands on
-    a base net needs a declared tap and an input-class pin type (memo
-    obligation 2) — except on power rails, which exist to be loaded
-    (the rail's budget is the power tree's, not this proof's).
+    Extras inside a transform-scoped tile are capture drift
+    (instrumentation is transforms only, never capture edits); extras
+    in their own board-level instances are the scan plane, the mux
+    trees, and the supervisor — allowed. A pin an extra part lands on a
+    base net carrying tile content needs a declared tap and an
+    input-class pin type (memo obligation 2) — except on power rails,
+    which exist to be loaded (the rail's budget is the power tree's,
+    not this proof's), and unless the tap declares its
+    non-input-class consumers with a reset-state justification. Base
+    nets that touch no per-tile instance are board infrastructure (the
+    supervisor-side stubs the plane and trees wire to) — outside the
+    screen.
     """
     if part.provenance is not None:
         return
-    if part.path:
+    if any(_under(part.path, tile) for tile in tile_paths):
         issues.append(
             _issue(
-                f"{part.ref}: untagged part inside a tile — instrumentation "
-                "is transforms only, never capture edits",
+                f"{part.ref}: untagged part inside a transform-scoped tile — "
+                "instrumentation is transforms only, never capture edits",
                 part.ref,
             )
         )
         return
     for pin in part.pins:
         net_name = reduced.get((part.ref, pin.number))
-        if net_name is None or net_name not in base_flat.nets or net_name in power_nets:
+        if (
+            net_name is None
+            or net_name not in base_flat.nets
+            or net_name in power_nets
+            or net_name not in content_nets
+        ):
             continue
         if net_name not in tap_nets:
             issues.append(
@@ -703,12 +802,13 @@ def _check_extra_part(  # noqa: PLR0913 — the bijection context threaded throu
                     net_name,
                 )
             )
-        elif pin.type not in _INPUT_CLASS:
+        elif pin.type not in _INPUT_CLASS and net_name not in tap_citations:
             issues.append(
                 _issue(
                     f"{part.ref}.{pin.number} taps base net {net_name!r} but "
                     f"is {pin.type} — taps must be high-impedance "
-                    "(input-class PinType)",
+                    "(input-class PinType), or the tap must declare its "
+                    "non-input-consumers justification (memo Q2)",
                     net_name,
                 )
             )
