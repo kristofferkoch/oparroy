@@ -16,7 +16,10 @@ MCU pins):
   second layer; ring B is plain protected RX/TX.
 - **Terminal protection** (§7 checklist): 470 Ω series R plus a TVS
   footprint per ring terminal, wired connector → TVS → R → µC so the R
-  limits what the MCU clamp diodes absorb after the TVS clamps.
+  limits what the MCU clamp diodes absorb after the TVS clamps. The
+  TVS footprints follow the connector faces (``tvs_faces``) — the CI
+  board's copper-internal segments drop both
+  (docs/instrumented-ci.md §9 R10).
 - **Hysteresis fallback** (§2): the OPO→OPP feedback resistor the
   phy-segment noise bench rejected stays on the BOM as DNP — the
   footprint is there if real silicon disagrees with the simulation.
@@ -112,7 +115,19 @@ class Sn74lvc1g17(TypedPart):
 
 
 class PhyFrontEnd(Subcircuit):
-    """The §2/§3/§4 PHY front-end, as a reusable subcircuit."""
+    """The §2/§3/§4 PHY front-end, as a reusable subcircuit.
+
+    ``tvs_faces`` selects which connector faces carry their TVS
+    footprints (``upstream``: ``Dar``/``Dbt``, ``downstream``:
+    ``Dat``/``Dbr``). The CI board drops them on the eight
+    copper-internal segments — no connector, no ESD exposure path
+    (docs/instrumented-ci.md §9 R10) — and keeps the boundary pair.
+    """
+
+    def __init__(
+        self, *, tvs_faces: tuple[str, ...] = ("upstream", "downstream")
+    ) -> None:
+        self._tvs_faces = tvs_faces
 
     def capture(self, circuit: Circuit) -> None:
         """Build the front-end; the port list is the module docstring's."""
@@ -133,7 +148,8 @@ class PhyFrontEnd(Subcircuit):
         sel_sw = circuit.net("sel_sw")
 
         # Ring A: connector -> TVS -> R -> B1; the MCU listens at B1.
-        circuit.part("Dar", TvsSod323(a=rx_a, b=gnd))
+        if "upstream" in self._tvs_faces:
+            circuit.part("Dar", TvsSod323(a=rx_a, b=gnd))
         circuit.part("Rar", R0603("470", a=rx_a, b=mcu_rx_a))
         circuit.part(
             "SW1",
@@ -142,7 +158,8 @@ class PhyFrontEnd(Subcircuit):
             ),
         )
         circuit.part("Rat", R0603("470", a=txa_sw, b=tx_a))
-        circuit.part("Dat", TvsSod323(a=tx_a, b=gnd))
+        if "downstream" in self._tvs_faces:
+            circuit.part("Dat", TvsSod323(a=tx_a, b=gnd))
 
         # sel Schmitt insurance (§4): the watchdog drives the
         # switch through a fitted 0 Ω bridge, with a DNP 74LVC1G17 across
@@ -153,10 +170,12 @@ class PhyFrontEnd(Subcircuit):
         )
 
         # Ring B: protected RX/TX, no switch (§3 second layer).
-        circuit.part("Dbr", TvsSod323(a=rx_b, b=gnd))
+        if "downstream" in self._tvs_faces:
+            circuit.part("Dbr", TvsSod323(a=rx_b, b=gnd))
         circuit.part("Rbr", R0603("470", a=rx_b, b=mcu_rx_b))
         circuit.part("Rbt", R0603("470", a=mcu_tx_b, b=tx_b))
-        circuit.part("Dbt", TvsSod323(a=tx_b, b=gnd))
+        if "upstream" in self._tvs_faces:
+            circuit.part("Dbt", TvsSod323(a=tx_b, b=gnd))
 
         # RX threshold: VDD/2 from the 10k bin (§2; the phy-segment
         # bench values).

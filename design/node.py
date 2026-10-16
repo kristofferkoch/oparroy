@@ -3,7 +3,8 @@
 One node = CH32V003 + PHY front-end (``design/phy_frontend.py``) +
 charge-pump watchdog (``design/watchdog_chargepump.py``) + status LEDs
 (§4.1) + terminal protection (§7 checklist, inside the PHY block) + the
-two §3 segment connectors (``design/segment.py``). ``Node`` is a
+two §3 segment connectors (``design/segment.py`` — per-face optional,
+for the CI board's copper-internal tiles). ``Node`` is a
 subcircuit: the node board below captures it directly, and the CI board
 tiles it eight times — one capture, both boards.
 
@@ -78,7 +79,19 @@ class TestPoint(TypedPart):
 
 
 class Node(Subcircuit):
-    """One ring node: the unit the node board captures and the CI board tiles."""
+    """One ring node: the unit the node board captures and the CI board tiles.
+
+    ``connector_faces`` selects which segment faces carry their §3
+    connector (and the PHY's TVS pair on that face). The CI board drops
+    both on the eight copper-internal segments and keeps the boundary
+    tile's upstream face — the supervisor→tile-0 cable's far end
+    (docs/instrumented-ci.md §9 R10). The plain node board keeps both.
+    """
+
+    def __init__(
+        self, *, connector_faces: tuple[str, ...] = ("upstream", "downstream")
+    ) -> None:
+        self._connector_faces = connector_faces
 
     def capture(self, circuit: Circuit) -> None:
         """Build the node; the interface is the §3 segment pinout."""
@@ -99,16 +112,18 @@ class Node(Subcircuit):
         swio = circuit.net("swio")
         pc7 = circuit.net("pc7")
 
-        circuit.part(
-            "J1", SegmentConnector(upstream), note="upstream segment connector"
-        )
-        circuit.part(
-            "J2", SegmentConnector(downstream), note="downstream segment connector"
-        )
+        if "upstream" in self._connector_faces:
+            circuit.part(
+                "J1", SegmentConnector(upstream), note="upstream segment connector"
+            )
+        if "downstream" in self._connector_faces:
+            circuit.part(
+                "J2", SegmentConnector(downstream), note="downstream segment connector"
+            )
 
         circuit.instance(
             "PHY1",
-            PhyFrontEnd(),
+            PhyFrontEnd(tvs_faces=self._connector_faces),
             rx_a=upstream["a"],
             tx_a=downstream["a"],
             rx_b=downstream["b"],

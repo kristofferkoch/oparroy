@@ -25,6 +25,12 @@ Rail note: the payload's rail-side pins (pot end, button pull-ups)
 wire the tile's ``3V3`` port *pre-split*; the F8 power-cut transform's
 detached pin list moves them onto ``3V3N`` (the pot and pull-ups must
 die with the MCU rail — instrumented-ci.md §3/§6).
+
+Both variants also wire the PD5 ``debug_tx`` pad (unwired on the plain
+node) — the §5 debug tree's leaves land on it (docs/scan-plane.md §5)
+— and inherit ``Node``'s ``connector_faces``: the CI board keeps only
+the boundary tile's upstream face and drops the rest with their TVS
+pairs (instrumented-ci.md §9 R10).
 """
 
 from __future__ import annotations
@@ -48,12 +54,24 @@ def _payload_pin(part: Part, function: str) -> Pin:
     return part.pin(numbers if isinstance(numbers, str) else numbers[0])
 
 
+def _wire_debug_tx(circuit: Circuit) -> None:
+    """Wire the PD5 debug TX pad: the §5 debug tree's leaf lands on it.
+
+    The plain node leaves the pad unwired; the CI tiles drive the
+    emit-and-forget debug UART on it (docs/scan-plane.md §5). Capture,
+    not instrumentation — both sides of the equivalence proof carry it.
+    """
+    u1 = circuit.parts["U1"]
+    circuit.connect(circuit.net("debug_tx"), _payload_pin(u1, "debug_tx"))
+
+
 class InputNode(Node):
     """An input tile (1/3/5/7): the Node plus the pot and button payload."""
 
     def capture(self, circuit: Circuit) -> None:
         """Build the node, then the §6 input payload on PD6/PC5/PC6."""
         super().capture(circuit)
+        _wire_debug_tx(circuit)
         v3v3 = circuit.nets["3V3"]
         gnd = circuit.nets["GND"]
         u1 = circuit.parts["U1"]
@@ -86,6 +104,7 @@ class OutputNode(Node):
     def capture(self, circuit: Circuit) -> None:
         """Build the node, then the §6 buzzer on PC4."""
         super().capture(circuit)
+        _wire_debug_tx(circuit)
         gnd = circuit.nets["GND"]
         u1 = circuit.parts["U1"]
         buzzer = circuit.net("buzzer")
