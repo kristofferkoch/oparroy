@@ -35,6 +35,11 @@ Ports (the subcircuit interface):
 - ``dbg_rx`` — the §6 runtime debug transport: root of the second 8:1
   tree ganged to the flash tree's selects (docs/scan-plane.md §5),
   hearing the selected tile's PD5 debug UART stream.
+- ``pot_pwm1``/``pot_pwm3``/``pot_pwm5``/``pot_pwm7`` — the §6
+  pot-override channels: one filtered-PWM output per input tile,
+  substituted for the pot wiper through the tile's POT_SEL mux
+  (docs/instrumented-ci.md §6). The RC filter sits at the tile; the
+  board composition wires these to the escaped ``POT_PWM`` sources.
 - ``TX_A``/``RX_B`` — the ring-closure **originator port** toward
   tile 0 (DESIGN.md §2/§3: the supervisor is the only frame
   originator, on both counter-rotating rings), and ``RX_A``/``TX_B``
@@ -54,15 +59,13 @@ Ports (the subcircuit interface):
 The GPIO binding is exactly ``design/supervisor_pins.py``'s pin map:
 gpio4..7 → the ring wires (originator pair, then drain pair),
 gpio8..11 → the taps, gpio12 → ``swio``, gpio13 → ``dbg_rx``,
-gpio18..22 → the scan chain (SRCLK/SDO/SDI on the SPI0-capable pads).
-gpio0..3 stay spare — the tail of the reclaimed debug-transport
-reservation (DESIGN.md §6 settled the transport at one GPIO).
+gpio14..17 → the pot-override PWMs, gpio18..22 → the scan chain
+(SRCLK/SDO/SDI on the SPI0-capable pads). gpio0..3 stay spare — the
+tail of the reclaimed debug-transport reservation (DESIGN.md §6
+settled the transport at one GPIO) — and gpio23..29 with them.
 
-Expected unconnected-pin warnings: the fifteen spare-or-board-level
-GPIOs (GPIO0..3, GPIO14..17, GPIO23..29) and SWCLK/SWDIO, all on U1.
-GPIO14..17 bind to the pot-override PWMs in the pin map and escape
-with the board composition; in this standalone capture they report
-NC like the spares. SWD stays unwired on the board
+Expected unconnected-pin warnings: the eleven spare GPIOs (GPIO0..3,
+GPIO23..29) and SWCLK/SWDIO, all on U1. SWD stays unwired on the board
 — the §6 flash channel is PIO SWIO through the 3157 tree; the pads
 report by name so nothing else hides among them.
 
@@ -252,6 +255,7 @@ class Supervisor(Subcircuit):
         commit = circuit.port("commit")
         oe_n = circuit.port("oe_n")
         dbg_rx = circuit.port("dbg_rx")
+        pot_pwm = {tile: circuit.port(f"pot_pwm{tile}") for tile in (1, 3, 5, 7)}
         ring_txa, ring_rxb, ring_rxa, ring_txb = _ring_ports(circuit)
 
         dvdd = circuit.net("dvdd")
@@ -287,6 +291,10 @@ class Supervisor(Subcircuit):
                 gpio11=tap_led,
                 gpio12=swio,
                 gpio13=dbg_rx,
+                gpio14=pot_pwm[1],
+                gpio15=pot_pwm[3],
+                gpio16=pot_pwm[5],
+                gpio17=pot_pwm[7],
                 gpio18=srclk,
                 gpio19=sdo,
                 gpio20=sdi,

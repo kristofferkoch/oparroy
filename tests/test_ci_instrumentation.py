@@ -70,6 +70,10 @@ SUPERVISOR_TIE_OFF_PORTS = (
     "commit",
     "oe_n",
     "dbg_rx",
+    "pot_pwm1",
+    "pot_pwm3",
+    "pot_pwm5",
+    "pot_pwm7",
 )
 
 #: The originator injector's parts (§7): six 3157s + four 470 Ω legs.

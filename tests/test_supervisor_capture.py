@@ -24,11 +24,11 @@ from oparroy.dsl import (
 
 GOLDEN = Path(__file__).parent / "golden" / "supervisor.net"
 
-#: The spare-or-board-level GPIOs (GPIO0..3 — the tail of the
-#: reclaimed debug-transport reservation, GPIO14..17 — the pot-override
-#: PWMs, wired by the board composition, GPIO23..29) plus SWCLK/SWDIO,
+#: The spare GPIOs (GPIO0..3 — the tail of the reclaimed
+#: debug-transport reservation — and GPIO23..29) plus SWCLK/SWDIO,
 #: reporting by pin number on U1 — deliberate NCs, and the list pins
-#: them so nothing else hides among them.
+#: them so nothing else hides among them. GPIO14..17 bind the
+#: pot-override PWM ports and are no longer NCs.
 EXPECTED_NC_WARNINGS = {
     f"U1.{pin} is not connected"
     for pin in (
@@ -36,12 +36,8 @@ EXPECTED_NC_WARNINGS = {
         "3",
         "4",
         "5",
-        "17",
-        "18",
         "24",
         "25",
-        "27",
-        "28",
         "35",
         "36",
         "37",
@@ -73,6 +69,10 @@ SIGNAL_PORTS = {
     "commit",
     "oe_n",
     "dbg_rx",
+    "pot_pwm1",
+    "pot_pwm3",
+    "pot_pwm5",
+    "pot_pwm7",
     "TX_A",
     "RX_B",
     "RX_A",
@@ -169,6 +169,10 @@ def test_gpio_binding_matches_pin_map(kicad_libs: KiCadLibraries) -> None:
     assert nets["sdi"] == {"U1.31"}
     assert nets["commit"] == {"U1.32"}
     assert nets["oe_n"] == {"U1.34"}
+    assert nets["pot_pwm1"] == {"U1.17"}
+    assert nets["pot_pwm3"] == {"U1.18"}
+    assert nets["pot_pwm5"] == {"U1.27"}
+    assert nets["pot_pwm7"] == {"U1.28"}
 
 
 def test_ring_port_protection(kicad_libs: KiCadLibraries) -> None:
