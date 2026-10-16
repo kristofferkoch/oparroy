@@ -342,8 +342,10 @@ def ci_transform_plan(
     variant. ``boundary`` names the tile-0 instance for B1-B5.
     ``supervisor_port``/``supervisor_nets`` add the originator port's
     F1-F6 (§7): the instance path, and its (tx_net, tx_pin, rx_net,
-    rx_pin) capture names — the supervisor's ring frontend is captured
-    with the full board, so the plan takes the names as parameters.
+    rx_pin) capture names. The `Supervisor` capture's ring ports
+    (`design/supervisor.py`) mirror the tile's names minus the PHY1
+    prefix, so the board composition passes
+    ``("TX_A", "Rat.b", "RX_B", "Rbr.a")``.
     """
     plan: list[Scope] = [
         PerTile(OutputNode, per_tile_faults()),

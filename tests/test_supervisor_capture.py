@@ -24,10 +24,11 @@ from oparroy.dsl import (
 
 GOLDEN = Path(__file__).parent / "golden" / "supervisor.net"
 
-#: The spare GPIOs (GPIO0..7 — the reclaimed debug-transport
-#: reservation, GPIO14..17, GPIO23..29) plus SWCLK/SWDIO, reporting
-#: by pin number on U1 — deliberate NCs, and the list pins them so
-#: nothing else hides among them.
+#: The spare-or-board-level GPIOs (GPIO0..3 — the tail of the
+#: reclaimed debug-transport reservation, GPIO14..17 — the pot-override
+#: PWMs, wired by the board composition, GPIO23..29) plus SWCLK/SWDIO,
+#: reporting by pin number on U1 — deliberate NCs, and the list pins
+#: them so nothing else hides among them.
 EXPECTED_NC_WARNINGS = {
     f"U1.{pin} is not connected"
     for pin in (
@@ -35,10 +36,6 @@ EXPECTED_NC_WARNINGS = {
         "3",
         "4",
         "5",
-        "6",
-        "7",
-        "8",
-        "9",
         "17",
         "18",
         "24",
@@ -76,6 +73,10 @@ SIGNAL_PORTS = {
     "commit",
     "oe_n",
     "dbg_rx",
+    "TX_A",
+    "RX_B",
+    "RX_A",
+    "TX_B",
 }
 
 
@@ -153,6 +154,10 @@ def test_dvdd_net(kicad_libs: KiCadLibraries) -> None:
 def test_gpio_binding_matches_pin_map(kicad_libs: KiCadLibraries) -> None:
     # design/supervisor_pins.py's binding, in netlist form.
     nets = nets_of(capture(kicad_libs))
+    assert nets["ring_txa"] == {"U1.6", "Rat.1"}
+    assert nets["ring_rxb"] == {"U1.7", "Rbr.2"}
+    assert nets["ring_rxa"] == {"U1.8", "Rar.2"}
+    assert nets["ring_txb"] == {"U1.9", "Rbt.1"}
     assert nets["tap_rx"] == {"U1.11"}
     assert nets["tap_tx"] == {"U1.12"}
     assert nets["tap_comp"] == {"U1.13"}
@@ -164,6 +169,22 @@ def test_gpio_binding_matches_pin_map(kicad_libs: KiCadLibraries) -> None:
     assert nets["sdi"] == {"U1.31"}
     assert nets["commit"] == {"U1.32"}
     assert nets["oe_n"] == {"U1.34"}
+
+
+def test_ring_port_protection(kicad_libs: KiCadLibraries) -> None:
+    # The §7 terminal-protection contract, mirrored from the node PHY:
+    # 470 Ω series per wire; connector-adjacent TVS only on the
+    # originator pair (the board's one connectorized segment) — the
+    # drain faces board copper (instrumented-ci.md §2).
+    circuit = capture(kicad_libs)
+    nets = nets_of(circuit)
+    assert nets["TX_A"] == {"Rat.2", "Dat.1"}
+    assert nets["RX_B"] == {"Rbr.1", "Dbr.1"}
+    assert nets["RX_A"] == {"Rar.1"}
+    assert nets["TX_B"] == {"Rbt.2"}
+    assert {"Dat.2", "Dbr.2"} <= nets["GND"]
+    for ref in ("Rat", "Rar", "Rbt", "Rbr"):
+        assert circuit.parts[ref].value == "470"
 
 
 def test_part_values(kicad_libs: KiCadLibraries) -> None:
