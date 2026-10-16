@@ -19,14 +19,17 @@ from design.ci_instrumentation import (
     boundary_taps,
     ci_transform_plan,
     input_overrides,
+    observe_taps,
     per_tile_faults,
     reset_levels,
     segment_injector,
+    tree_taps,
 )
 from design.ci_tiles import InputNode, OutputNode
 from design.supervisor import Supervisor
 from oparroy.dsl import (
     AddShunt,
+    AddTap,
     Circuit,
     EquivalenceReport,
     InsertSeries,
@@ -52,6 +55,9 @@ if TYPE_CHECKING:
 
 #: B1-B4 observe taps on the boundary tile (§7); B5 is a rail shunt.
 BOUNDARY_TAP_COUNT = 4
+
+#: O1/O2 (the §8 observe taps) + M1/M2 (the §5 tree taps), per tile.
+PER_TILE_TAP_COUNT = 4
 
 #: The Supervisor ports the injector fixture doesn't exercise, tied to
 #: their own board nets so the instance binds its full interface.
@@ -365,20 +371,30 @@ def test_reset_state_equivalence(kicad_libs: KiCadLibraries) -> None:
     assert kinds.count(LEAKAGE) == 8 + 10
     assert kinds.count(SHUNT_OFF_CAPACITANCE) == 5 + 6
     assert kinds.count(EXTRA_LOADING) == 6 + 10
-    assert kinds.count(TAP_CAPACITANCE) == BOUNDARY_TAP_COUNT
+    assert kinds.count(TAP_CAPACITANCE) == BOUNDARY_TAP_COUNT + 2 * PER_TILE_TAP_COUNT
     taps = [r for r in report.residuals if r.kind == TAP_CAPACITANCE]
     assert {r.net for r in taps} == {
         "T0/opa_p",
         "SEG1_A",
         "T0/opo",
         "T0/led_work",
+        "T0/sel",
+        "T0/swio",
+        "T0/debug_tx",
+        "T1/sel",
+        "T1/swio",
+        "T1/debug_tx",
+        # The 3V3N observe taps reduce to the rail they were cut from.
+        "3V3",
     }
     assert all(r.layout_obligation for r in taps)
-    # The power cut's residual lands on the rail, R5-class.
+    # The power cut's residual lands on the rail, R5-class, alongside
+    # the two 3V3N observe-tap stubs.
     r5 = [r for r in report.residuals if r.net == "3V3"]
     assert {(r.kind, r.magnitude) for r in r5} == {
         (SERIES_ON_RESISTANCE, "0.085 Ω"),
         (EXTRA_LOADING, "47k"),
+        (TAP_CAPACITANCE, "stub geometry — bounded, not known (memo Q3)"),
     }
 
 
@@ -416,8 +432,19 @@ def test_plan_records_are_data() -> None:
     boundary = boundary_taps()
     assert [t.label for t in boundary] == ["B1", "B2", "B3", "B4", "B5"]
     assert [t.net for t in boundary[:4]] == ["opa_p", "TX_A#b", "opo", "led_work"]
+    # The boundary taps feed the supervisor's bidirectional GPIOs.
+    taps = [t for t in boundary if isinstance(t, AddTap)]
+    assert all(t.non_input_consumers for t in taps)
     assert isinstance(boundary[4], AddShunt)
     assert boundary[4].rail == "3V3"
+    observe = observe_taps()
+    assert [t.label for t in observe] == ["O1", "O2"]
+    assert [t.net for t in observe] == ["sel", "3V3N"]
+    trees = tree_taps()
+    assert [t.label for t in trees] == ["M1", "M2"]
+    assert [t.net for t in trees] == ["swio", "debug_tx"]
+    # The tree taps feed the 3157 channel pins and the leaf pull-ups.
+    assert all(t.non_input_consumers for t in trees)
     overrides = input_overrides()
     assert [t.label for t in overrides] == ["H1", "H2", "H3"]
     assert isinstance(overrides[0], Substitute)
