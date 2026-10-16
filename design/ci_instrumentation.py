@@ -26,6 +26,16 @@ H-transforms cut against):
   (post-injector, so the tap rides the split alias and must apply
   after F1), `opo`, `led_work`, and the watchdog defeat: a 3157 shunt
   clamping `sel` to the always rail (B1 = NC = watchdog in charge).
+  The taps feed the supervisor's bidirectional GPIOs, so they carry
+  the POR-input justification (`AddTap.non_input_consumers`).
+- **O1/O2, per tile** — the §8 observe taps: `sel` (the truthful
+  node-health bit) and `3V3N` (the coarse power bit) to the 165
+  chain's D inputs. O2 taps the net F8 creates, so it must apply
+  after the faults set.
+- **M1/M2, per tile** — the §5 mux-tree taps: `swio` to the flash
+  tree's leaf, `debug_tx` to the debug tree's leaf. The trees'
+  bidirectional channel pins and the SWIO leaf pull-ups are the
+  declared non-input-class consumers.
 - **H1-H3, input tiles** — the §6 overrides against the variant
   payload nets: the pot substitution mux (B1 = wiper = human, B2 =
   the supervisor's filtered PWM — the escaped `POT_PWM` source behind
@@ -88,9 +98,11 @@ __all__ = [
     "boundary_taps",
     "ci_transform_plan",
     "input_overrides",
+    "observe_taps",
     "per_tile_faults",
     "reset_levels",
     "segment_injector",
+    "tree_taps",
 ]
 
 
@@ -266,12 +278,23 @@ def per_tile_faults(*, input_tile: bool = False) -> tuple[Transform, ...]:
 
 
 def boundary_taps() -> tuple[Transform, ...]:
-    """Build B1-B5: the §5 boundary-node PIO taps and the watchdog defeat."""
+    """Build B1-B5: the §5 boundary-node PIO taps and the watchdog defeat.
+
+    The taps feed the supervisor's GPIO8-11 — bidirectional pins, so
+    each declares its non-input-class consumers: the RP2040's GPIOs
+    are inputs from POR until firmware drives them (the §8 zero-load
+    boot); stimulus drive is the injected state the proof does not
+    cover (instrumented-ci.md §5).
+    """
+    tap_consumers = (
+        "RP2040 tap GPIOs are inputs from POR (scan-plane.md §4's "
+        "zero-load discipline); stimulus drive is the §6 injected state"
+    )
     return (
-        AddTap(label="B1", net="opa_p"),
-        AddTap(label="B2", net="TX_A#b"),
-        AddTap(label="B3", net="opo"),
-        AddTap(label="B4", net="led_work"),
+        AddTap(label="B1", net="opa_p", non_input_consumers=tap_consumers),
+        AddTap(label="B2", net="TX_A#b", non_input_consumers=tap_consumers),
+        AddTap(label="B3", net="opo", non_input_consumers=tap_consumers),
+        AddTap(label="B4", net="led_work", non_input_consumers=tap_consumers),
         AddShunt(
             label="B5",
             net="sel",
@@ -282,6 +305,46 @@ def boundary_taps() -> tuple[Transform, ...]:
             ),
             control="WD_DEFEAT",
         ),
+    )
+
+
+def observe_taps() -> tuple[AddTap, ...]:
+    """Build O1/O2: the §8 per-tile observe taps to the 165 chain.
+
+    `sel` reports the bypass state (the truthful node-health bit);
+    `3V3N` is the coarse power bit (F8's switched rail — the tap must
+    apply after the faults set). The consumers are the 165's
+    parallel-in pins — input-class, so no consumer declaration.
+    """
+    return (
+        AddTap(label="O1", net="sel"),
+        AddTap(label="O2", net="3V3N"),
+    )
+
+
+def tree_taps() -> tuple[AddTap, ...]:
+    """Build M1/M2: the §5 SWIO/debug tree leaf taps.
+
+    The consumers are the trees' 3157 channel pins — bidirectional —
+    plus the SWIO tree's 10 kΩ leaf pull-ups, so both taps carry the
+    reset-state justification: at POR the selects sit at 000, opening
+    every leaf channel except tile 0's, which connects to a Hi-Z root
+    (the supervisor's GPIO is an input at POR; the 4.7 kΩ root pull-up
+    and the leaf pull-ups are the only DC paths — scan-plane.md §4/§5).
+    """
+    swio_consumers = (
+        "3157 leaf channels reset open except leaf 0's, to a Hi-Z root "
+        "(scan-plane.md §4/§5); the 10 kΩ leaf pull-up to the tile's own "
+        "3V3N is the one DC load"
+    )
+    debug_consumers = (
+        "3157 leaf channels reset open except leaf 0's, connecting the "
+        "tile's push-pull debug TX to the supervisor's Hi-Z UART RX "
+        "(scan-plane.md §5)"
+    )
+    return (
+        AddTap(label="M1", net="swio", non_input_consumers=swio_consumers),
+        AddTap(label="M2", net="debug_tx", non_input_consumers=debug_consumers),
     )
 
 
@@ -339,7 +402,9 @@ def ci_transform_plan(
     (`design/ci_tiles.py`): every OutputNode gets the F-set, every
     InputNode the F-set with its payload pins joining 3V3N plus the
     H-set — one declaration each instruments all instances of the
-    variant. ``boundary`` names the tile-0 instance for B1-B5.
+    variant — and every tile of either variant gets the observe (O1/O2)
+    and mux-tree (M1/M2) taps. ``boundary`` names the tile-0 instance
+    for B1-B5.
     ``supervisor_port``/``supervisor_nets`` add the originator port's
     F1-F6 (§7): the instance path, and its (tx_net, tx_pin, rx_net,
     rx_pin) capture names. The `Supervisor` capture's ring ports
@@ -348,8 +413,16 @@ def ci_transform_plan(
     ``("TX_A", "Rat.b", "RX_B", "Rbr.a")``.
     """
     plan: list[Scope] = [
-        PerTile(OutputNode, per_tile_faults()),
-        PerTile(InputNode, (*per_tile_faults(input_tile=True), *input_overrides())),
+        PerTile(OutputNode, (*per_tile_faults(), *observe_taps(), *tree_taps())),
+        PerTile(
+            InputNode,
+            (
+                *per_tile_faults(input_tile=True),
+                *input_overrides(),
+                *observe_taps(),
+                *tree_taps(),
+            ),
+        ),
         PerInstance((boundary,), boundary_taps()),
     ]
     if supervisor_port is not None:
@@ -424,10 +497,10 @@ BUDGETS = {
         "unchanged"
     ),
     LEAKAGE: (
-        "instrumented-ci.md §9 has no leakage row (register gap): "
-        "3157 ±1 µA max (SCES424O §5.5) and 2N7002 ≤ 80 nA are "
-        "µV-class across the 470 Ω legs and 10 kΩ pull-ups — inside "
-        "the §2 swept margins the R1/R2 citations point at"
+        "instrumented-ci.md §9 R11 — 3157 ±1 µA max (SCES424O §5.5) and "
+        "2N7002 ≤ 80 nA are µV-class across the 470 Ω legs and 10 kΩ "
+        "pull-ups — inside the §2 swept margins the R1/R2 citations "
+        "point at"
     ),
     EXTRA_LOADING: (
         "instrumented-ci.md §9 R4 — the 47 kΩ pull-down class; "
@@ -436,7 +509,10 @@ BUDGETS = {
     ),
     TAP_CAPACITANCE: (
         "instrumented-ci.md §9 R6 — Rar x 10 pF = 4.7 ns vs §2's "
-        "≥ 70 ns slice margin; stub length is the §7 layout checker's "
-        "short-stub contract"
+        "≥ 70 ns slice margin; the O1/O2 observe taps and the M1/M2 "
+        "tree stubs are the same stub class (the register's "
+        "observe/tree rows are a §9 gap, closing with the layout "
+        "card); stub length is the §7 layout checker's short-stub "
+        "contract"
     ),
 }
