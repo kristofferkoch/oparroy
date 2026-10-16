@@ -28,12 +28,12 @@ GOLDEN_PY = Path(__file__).parent / "golden" / "supervisor-pins.py"
 FIRMWARE_HPP = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.hpp"
 FIRMWARE_PY = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.py"
 
-# 11 function requests, no reservations = 11 of 30 GPIO spent;
-# GPIO0..7, GPIO14..17 and GPIO23..29 (19 of 30) are the spares —
+# 15 function requests, no reservations = 15 of 30 GPIO spent;
+# GPIO0..7 and GPIO23..29 (15 of 30) are the spares —
 # GPIO0..7 are the reclaimed debug-transport reservation (settled,
 # DESIGN.md §6: one tree-root GPIO instead of eight dedicated RX).
-REQUEST_COUNT = 11
-USED_COUNT = 11
+REQUEST_COUNT = 15
+USED_COUNT = 15
 GPIO_COUNT = 30
 
 
@@ -51,7 +51,7 @@ def test_capture_checks_clean() -> None:
     assert check_pin_map(capture()) == []
 
 
-def test_budget_lands_at_11_of_30() -> None:
+def test_budget_lands_at_15_of_30() -> None:
     pin_map = capture()
     assert len(pin_map.requests) == REQUEST_COUNT
     used = len(pin_map.requests) + len(pin_map.reservations)
@@ -72,10 +72,6 @@ def test_budget_lands_at_11_of_30() -> None:
         "GPIO5",
         "GPIO6",
         "GPIO7",
-        "GPIO14",
-        "GPIO15",
-        "GPIO16",
-        "GPIO17",
         "GPIO23",
         "GPIO24",
         "GPIO25",
@@ -102,6 +98,13 @@ def test_peripheral_forced_bindings() -> None:
     assert pads["dbg_rx"] == "GPIO13"
     assert pads["commit"] == "GPIO21"
     assert pads["oe_n"] == "GPIO22"
+    # The pot-override PWM channels extend the PIO region to GPIO14-17
+    # (docs/instrumented-ci.md §6: one filtered-PWM channel per input
+    # tile, substituted for the pot wiper by the tile's POT_SEL mux).
+    assert pads["pot_pwm1"] == "GPIO14"
+    assert pads["pot_pwm3"] == "GPIO15"
+    assert pads["pot_pwm5"] == "GPIO16"
+    assert pads["pot_pwm7"] == "GPIO17"
 
 
 def test_hpp_matches_golden() -> None:

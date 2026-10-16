@@ -2,8 +2,9 @@
 
 Every function the CI-board supervisor carries — the §6 PIO SWIO flash
 channel, the instrumented boundary node's four taps, the §6 debug
-transport's tree root, and the scan-plane control chain — requested by
-name, with pads bound below as refinement data: 11 of 30 GPIO spent,
+transport's tree root, the scan-plane control chain, and the four
+pot-override PWM channels — requested by
+name, with pads bound below as refinement data: 15 of 30 GPIO spent,
 verified by ``check_pin_map``. The one table feeds the firmware headers
 (``emit_pin_header`` → ``firmware/supervisor/pins.hpp``,
 ``emit_pin_module`` → ``firmware/supervisor/pins.py`` for the
@@ -115,6 +116,18 @@ def capture() -> PinMap:
         "(§6, scan-plane §5).",
     )
 
+    # §6 pot-override channels: one filtered-PWM output per input tile
+    # (1/3/5/7), substituted for the pot wiper through the tile's 3157
+    # mux during scripted runs (docs/instrumented-ci.md §6). The RC
+    # filter sits at the tile; these are plain PWM-capable GPIO (any
+    # RP2040 pad PWMs — no `uses` tag).
+    for tile in (1, 3, 5, 7):
+        gpio.request(
+            f"pot_pwm{tile}",
+            doc=f"pot-override PWM for input tile {tile}, substituted "
+            "for the pot wiper by the tile's POT_SEL mux (§6).",
+        )
+
     # The refinement data: one pad per function. Comments name the
     # binding reason — peripheral-forced pads cite the signal.
     gpio.bind(
@@ -129,9 +142,13 @@ def capture() -> PinMap:
         sdi="GPIO20",  # SPI0 RX
         commit="GPIO21",
         oe_n="GPIO22",
+        pot_pwm1="GPIO14",  # PWM7A — extends the GPIO8-13 PIO region
+        pot_pwm3="GPIO15",  # PWM7B; slices pair, duty is per-channel
+        pot_pwm5="GPIO16",  # PWM0A
+        pot_pwm7="GPIO17",  # PWM0B
     )
     # The spares: GPIO0-7 (the reclaimed debug-transport reservation —
-    # settled, DESIGN.md §6), GPIO14-17 and GPIO23-29 (19 of 30).
+    # settled, DESIGN.md §6) and GPIO23-29 (15 of 30).
     return gpio
 
 

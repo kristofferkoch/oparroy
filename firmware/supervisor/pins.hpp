@@ -5,10 +5,9 @@
 //
 // oparroy supervisor pin map — RP2040 (QFN-56). Function requests, pads bound late as refinement
 // data (DESIGN.md §5/§6).
-// 11 of 30 GPIO assigned; spare: GPIO0 (pin 2), GPIO1 (pin 3), GPIO2 (pin 4), GPIO3 (pin 5), GPIO4
-// (pin 6), GPIO5 (pin 7), GPIO6 (pin 8), GPIO7 (pin 9), GPIO14 (pin 17), GPIO15 (pin 18), GPIO16
-// (pin 27), GPIO17 (pin 28), GPIO23 (pin 35), GPIO24 (pin 36), GPIO25 (pin 37), GPIO26 (pin 38),
-// GPIO27 (pin 39), GPIO28 (pin 40), GPIO29 (pin 41).
+// 15 of 30 GPIO assigned; spare: GPIO0 (pin 2), GPIO1 (pin 3), GPIO2 (pin 4), GPIO3 (pin 5), GPIO4
+// (pin 6), GPIO5 (pin 7), GPIO6 (pin 8), GPIO7 (pin 9), GPIO23 (pin 35), GPIO24 (pin 36), GPIO25
+// (pin 37), GPIO26 (pin 38), GPIO27 (pin 39), GPIO28 (pin 40), GPIO29 (pin 41).
 
 #include <cstdint>
 
@@ -62,5 +61,21 @@ inline constexpr Pad oe_n{.port_base = gpio_sio_base, .bit = 22, .package_pin = 
 // dbg_rx — debug UART return: root of the 8:1 tree ganged to the flash tree's selects, leaves on
 // the tiles' PD5 debug_tx (§6, scan-plane §5).
 inline constexpr Pad dbg_rx{.port_base = gpio_sio_base, .bit = 13, .package_pin = 16};
+
+// pot_pwm1 — pot-override PWM for input tile 1, substituted for the pot wiper by the tile's POT_SEL
+// mux (§6).
+inline constexpr Pad pot_pwm1{.port_base = gpio_sio_base, .bit = 14, .package_pin = 17};
+
+// pot_pwm3 — pot-override PWM for input tile 3, substituted for the pot wiper by the tile's POT_SEL
+// mux (§6).
+inline constexpr Pad pot_pwm3{.port_base = gpio_sio_base, .bit = 15, .package_pin = 18};
+
+// pot_pwm5 — pot-override PWM for input tile 5, substituted for the pot wiper by the tile's POT_SEL
+// mux (§6).
+inline constexpr Pad pot_pwm5{.port_base = gpio_sio_base, .bit = 16, .package_pin = 27};
+
+// pot_pwm7 — pot-override PWM for input tile 7, substituted for the pot wiper by the tile's POT_SEL
+// mux (§6).
+inline constexpr Pad pot_pwm7{.port_base = gpio_sio_base, .bit = 17, .package_pin = 28};
 
 } // namespace pins
