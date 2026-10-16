@@ -179,14 +179,6 @@ real work — **move**, don't copy. Reference, don't duplicate.
   Routing replication would also unlock a copper congruence check —
   copper carries no sheet metadata, so attribution would go through the
   tile's nets.
-- **Parts-DB stock refresh tooling**: the parts table
-  (`design/parts_db.py`) is as-of-dated snapshots by hand; a script
-  that queries JLCPCB/LCSC (their parts API, or the jlcsearch mirror)
-  and rewrites the `Stock` entries with fresh counts and as-of dates
-  would make `check_stock`'s staleness warnings self-service. Open
-  questions: rate limits and auth on JLCPCB's side, whether the script
-  edits `design/parts_db.py` in place (data-as-code stays the source
-  of truth) or emits an overlay.
 - **Layout return-path and stitching checks**: verify, from the routed
   `.kicad_pcb`, that the return path for each switching
   signal (the PHY line drivers' outputs, the watchdog charge pump,
@@ -357,8 +349,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
   sniff capabilities, typed failure classification, never blind-retry
   uncertain outcomes); hash-bound defensive round-trips against
   external tools; targeted text edits + compare-and-swap for KiCad
-  file edits; the kicad-jlcpcb-tools feed as a no-auth parts catalog —
-  settles the stock-refresh idea's open questions (overlay cache +
-  proposed-edit diffs, snapshot-date provenance); conformance-oracle
+  file edits; the kicad-jlcpcb-tools feed as a no-auth parts catalog
+  (the stock-refresh tooling built on it is planned work — see
+  KANBAN.md); conformance-oracle
   testing against KiCad's shipped demo corpus. Non-transfer: AI-driven
   schematic capture — the DSL stays the source of truth.
