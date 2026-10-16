@@ -28,12 +28,12 @@ GOLDEN_PY = Path(__file__).parent / "golden" / "supervisor-pins.py"
 FIRMWARE_HPP = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.hpp"
 FIRMWARE_PY = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.py"
 
-# 15 function requests, no reservations = 15 of 30 GPIO spent;
-# GPIO0..7 and GPIO23..29 (15 of 30) are the spares —
-# GPIO0..7 are the reclaimed debug-transport reservation (settled,
-# DESIGN.md §6: one tree-root GPIO instead of eight dedicated RX).
-REQUEST_COUNT = 15
-USED_COUNT = 15
+# 19 function requests, no reservations = 19 of 30 GPIO spent;
+# GPIO0..3 and GPIO23..29 (11 of 30) are the spares — the tail of the
+# reclaimed debug-transport reservation (settled, DESIGN.md §6: one
+# tree-root GPIO instead of eight dedicated RX) and the top block.
+REQUEST_COUNT = 19
+USED_COUNT = 19
 GPIO_COUNT = 30
 
 
@@ -51,7 +51,7 @@ def test_capture_checks_clean() -> None:
     assert check_pin_map(capture()) == []
 
 
-def test_budget_lands_at_15_of_30() -> None:
+def test_budget_lands_at_19_of_30() -> None:
     pin_map = capture()
     assert len(pin_map.requests) == REQUEST_COUNT
     used = len(pin_map.requests) + len(pin_map.reservations)
@@ -68,10 +68,6 @@ def test_budget_lands_at_15_of_30() -> None:
         "GPIO1",
         "GPIO2",
         "GPIO3",
-        "GPIO4",
-        "GPIO5",
-        "GPIO6",
-        "GPIO7",
         "GPIO23",
         "GPIO24",
         "GPIO25",
@@ -86,7 +82,12 @@ def test_peripheral_forced_bindings() -> None:
     pads = {name: pad.name for name, pad in capture().assignments.items()}
     # The scan chain rides the SPI0-capable pads so the hardware-SPI
     # option stays open; the rest of the binding follows the pin map's
-    # one-PIO-region layout (GPIO8..13 for taps + SWIO + debug return).
+    # one-PIO-region layout — GPIO4..7 the ring ports (originator pair,
+    # then drain pair), GPIO8..13 the taps + SWIO + debug return.
+    assert pads["ring_txa"] == "GPIO4"
+    assert pads["ring_rxb"] == "GPIO5"
+    assert pads["ring_rxa"] == "GPIO6"
+    assert pads["ring_txb"] == "GPIO7"
     assert pads["srclk"] == "GPIO18"  # SPI0 SCK
     assert pads["sdo"] == "GPIO19"  # SPI0 TX
     assert pads["sdi"] == "GPIO20"  # SPI0 RX
