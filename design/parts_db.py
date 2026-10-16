@@ -190,6 +190,80 @@ PARTS = PartsDb(
             note="behavioral models only (opa_cmp, tx_pin); the node MCU (§5)",
         ),
         PartRecord(
+            name="rp2040",
+            kind="mcu",
+            lcsc="C2040",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                48_357,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16",
+            ),
+            symbol="MCU_RaspberryPi:RP2040",
+            footprint="Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm",
+            value="RP2040",
+            area_mm2=49.0,
+            datasheet="datasheets/RP2040",
+            note=(
+                "Raspberry Pi RP2040, $0.9975 @1 — the §5/§6 supervisor "
+                "MCU: PIO is the re-timing PHY engine and "
+                "golden-reference transceiver, plus the CI board's ring "
+                "supervisor. Unavoidably QFN-56, so JLCPCB's per-board "
+                "X-ray fee is budgeted (§5)"
+            ),
+        ),
+        PartRecord(
+            name="flash-w25q16jvssiq",
+            kind="flash-memory",
+            lcsc="C131025",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                3_576,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Extended "
+                "tier confirmed on the jlcpcb.com part page",
+            ),
+            symbol="Memory_Flash:W25Q16JVSS",
+            footprint="Package_SO:SOIC-8_5.3x5.3mm_P1.27mm",
+            value="W25Q16JVSSIQ",
+            area_mm2=27.6,
+            datasheet="datasheets/W25Q16JV",
+            note=(
+                "Winbond W25Q16JVSSIQ, $1.2688 @1 — 16 Mbit (2 MB) QSPI "
+                "boot flash for the supervisor: any 25-series part with "
+                "03h/24-bit read boots the RP2040 (AN §2.6), and the IQ "
+                "variant's QE bit ships set so /WP and /HOLD are plain "
+                "IO2/IO3 (datasheets/W25Q16JV/notes/facts.md). Its /CS "
+                "must track VCC at power-up (W25Q16JV DS §4.1), so the "
+                "capture fits the 10 kΩ QSPI_SS pull-up the AN marks "
+                "DNF for its W25Q128JVS (datasheets/RP2040/notes/"
+                "quirks.md)"
+            ),
+        ),
+        PartRecord(
+            name="crystal-abm8-272-t3",
+            kind="crystal",
+            lcsc="C20625731",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                5_909,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Extended "
+                "tier confirmed on the jlcpcb.com part page",
+            ),
+            symbol="Device:Crystal_GND24",
+            footprint="Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm",
+            value="ABM8-272-T3",
+            area_mm2=8.0,
+            note=(
+                "Abracon ABM8-272-T3, $0.6255 @1 — the AN §2.3 "
+                "recommended 12 MHz crystal (±30 ppm, ESR ≤ 50 Ω, CL "
+                "10 pF), the Pico's own part; the 15 pF load caps and "
+                "the 1 kΩ XOUT series resistor are tuned to it at 3.3 V "
+                "IOVDD (datasheets/RP2040/notes/flash-crystal.md)"
+            ),
+        ),
+        PartRecord(
             name="conn-idc-02x05",
             kind="connector",
             lcsc="C22385222",
