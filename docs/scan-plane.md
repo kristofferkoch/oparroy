@@ -18,18 +18,18 @@ equivalence proof (§4's reset levels).
 
 ## 1. Architecture: one daisy chain
 
-**10 × 74HC595 (control) + 2 × 74HC165 (observe) in a single daisy
+**11 × 74HC595 (control) + 2 × 74HC165 (observe) in a single daisy
 chain** from the RP2040 and back:
 
 ```
-RP2040 ──SER──▶ AUX0 ─▶ AUX1 ─▶ T0 ─▶ … ─▶ T7 ──▶ OBS0 ─▶ OBS1 ──QH──▶ RP2040
+RP2040 ──SER──▶ AUX0 ─▶ AUX1 ─▶ AUX2 ─▶ T0 ─▶ … ─▶ T7 ──▶ OBS0 ─▶ OBS1 ──QH──▶ RP2040
    (595 stages = control; 165 stages = observe)
-   SRCLK to all 12 stages; COMMIT to all 12 (RCLK on 595, SH//LD on 165);
+   SRCLK to all 13 stages; COMMIT to all 13 (RCLK on 595, SH//LD on 165);
    /OE on the 595 stages only.
 ```
 
 - **One chain, both directions.** The 165 observe stages sit at the far
-  end of the same shift path: every 96-clock transaction shifts 80 new
+  end of the same shift path: every 104-clock transaction shifts 88 new
   control bits in through the 595s while 16 observe bits stream out.
   Control and observe share SRCLK; there is no second clock domain, no
   addressing, no bus contention — every actuator is one bit at a fixed
@@ -53,9 +53,9 @@ RP2040 ──SER──▶ AUX0 ─▶ AUX1 ─▶ T0 ─▶ … ─▶ T7 ──
   that wants "commit, then read the effect" issues two transactions.
 
 Chain scaling is a firmware constant: a future control bit adds a stage
-to the middle of the chain and one byte to the transaction. The 80/16
-split below fills both stage counts exactly — there are **no spare
-bits**.
+to the middle of the chain and one byte to the transaction. The 86/16
+split below fills the observe stages exactly and leaves **two spare
+control bits** in AUX2.
 
 ## 2. Partitioning: per-tile slices + supervisor aux stages
 
@@ -68,11 +68,13 @@ Control is partitioned **per tile, one 595 per tile**, not by function:
   sheetpath-keyed one-declaration pattern as the transform list).
 - The per-role extras — the supervisor originator port's injector (6),
   the SWIO tree selects (3), the boundary node's watchdog defeat (1),
-  the two input tiles' overrides (6) — total 16 bits and fill **two aux
-  stages (AUX0/AUX1) at the supervisor end**. Per-role extras are
-  per-instance capture additions anyway; giving tiles 0/2/5 a second
-  stage each would cost a package per tile and break tile uniformity
-  for the seven slow static lines (1 + 6) routed there.
+  the four input tiles' overrides (12) — total 22 bits and fill **three
+  aux stages (AUX0/AUX1/AUX2) at the supervisor end** (two spare).
+  Per-role extras are
+  per-instance capture additions anyway; giving the boundary and input
+  tiles a second stage each would cost a package per tile and break
+  tile uniformity for the thirteen slow static lines (1 defeat + 12
+  override) routed there.
 
 Observe is **2 × 74HC165 grouped at the supervisor end**, 16 bits:
 per-tile `sel` (bypass state — the truthful node-health bit) and
@@ -91,9 +93,10 @@ matches the injector switches' always-on placement (instrumented-ci.md
 ## 3. Bit maps
 
 Bit numbers are per-stage, bit 0 = `QA` … bit 7 = `QH`. Wire order:
-firmware shifts 12 bytes per transaction; the first two bytes are
+firmware shifts 13 bytes per transaction; the first two bytes are
 don't-care pad (they land in the 165 stages), then `AUX0`, `AUX1`,
-`T0` … `T7`; the first two bytes received are `OBS1` then `OBS0`.
+`AUX2`, `T0` … `T7`; the first two bytes received are `OBS1` then
+`OBS0`.
 **Every control bit reads 0 = plain-board state** (§4).
 
 Per-tile control byte `T0`–`T7` (the F1–F8 transform set,
@@ -118,22 +121,34 @@ instrumented-ci.md §7):
 | 6   | `SWIO_A0`       | SWIO tree select, level 0 (§5)                         |
 | 7   | `SWIO_A1`       | SWIO tree select, level 1                              |
 
-`AUX1` — SWIO tree high bit, boundary defeat, input-tile overrides:
+`AUX1` — SWIO tree high bit, boundary defeat, input tiles 1/3 overrides:
 
 | Bit | Name        | 0 = plain board                    |
 | --- | ----------- | ---------------------------------- |
 | 0   | `SWIO_A2`   | SWIO tree select, level 2          |
 | 1   | `WD_DEFEAT` | watchdog in charge (boundary node) |
-| 2   | `POT_SEL2`  | tile 2 pot: human control          |
-| 3   | `BTN_A2`    | tile 2 button A: released          |
-| 4   | `BTN_B2`    | tile 2 button B: released          |
-| 5   | `POT_SEL5`  | tile 5 pot: human control          |
-| 6   | `BTN_A5`    | tile 5 button A: released          |
-| 7   | `BTN_B5`    | tile 5 button B: released          |
+| 2   | `POT_SEL1`  | tile 1 pot: human control          |
+| 3   | `BTN_A1`    | tile 1 button A: released          |
+| 4   | `BTN_B1`    | tile 1 button B: released          |
+| 5   | `POT_SEL3`  | tile 3 pot: human control          |
+| 6   | `BTN_A3`    | tile 3 button A: released          |
+| 7   | `BTN_B3`    | tile 3 button B: released          |
 
-Totals: 64 tile + 6 supervisor-port + 3 SWIO + 1 defeat + 6 override =
-**80 control bits = 10 × 74HC595 exactly** (instrumented-ci.md §8's 77 +
-the 3-bit SWIO select).
+`AUX2` — input tiles 5/7 overrides, two spare:
+
+| Bit | Name       | 0 = plain board           |
+| --- | ---------- | ------------------------- |
+| 0   | `POT_SEL5` | tile 5 pot: human control |
+| 1   | `BTN_A5`   | tile 5 button A: released |
+| 2   | `BTN_B5`   | tile 5 button B: released |
+| 3   | `POT_SEL7` | tile 7 pot: human control |
+| 4   | `BTN_A7`   | tile 7 button A: released |
+| 5   | `BTN_B7`   | tile 7 button B: released |
+| 6–7 | —          | spare                     |
+
+Totals: 64 tile + 6 supervisor-port + 3 SWIO + 1 defeat + 12 override =
+**86 control bits in 11 × 74HC595** (two spare in AUX2;
+instrumented-ci.md §8's 83 + the 3-bit SWIO select).
 
 Observe bytes (165 inputs `A`–`H` map to bits 0–7; `H` shifts out
 first):
@@ -154,15 +169,16 @@ low/high per datasheet") does not exist on this silicon; the reset
 state is **constructed by discipline**, and *that discipline* is the
 equivalence proof's reset-level input:
 
-1. **`/OE` pulled up.** All ten 595s' `/OE` nets share one 47 kΩ
+1. **`/OE` pulled up.** All eleven 595s' `/OE` nets share one 47 kΩ
    pull-up to `3V3`. At power-on — and for as long as the RP2040 is
    held in reset, unprogrammed, or hung before init — every 595 output
    is high-impedance (SCLS041J Table 8-1).
 1. **Every control line carries a 47 kΩ pull-down to GND.** With the
    outputs Hi-Z, the pull-downs define the board: bit-0 = low = the
-   plain-board state on all 80 lines. The FET-gate pull-downs already
+   plain-board state on all 86 used lines. The FET-gate pull-downs
+   already
    on the transform list (instrumented-ci.md §3/§6: `PWR`, `BTN_*`)
-   double as their lines' pull-downs; the 68 switch-select lines
+   double as their lines' pull-downs; the 70 switch-select lines
    (injectors, keep-alive, pot muxes, watchdog defeat, SWIO tree) gain
    one each — same 47 kΩ / 0603 bin. A floated LVC select is not just
    indeterminate, it burns shoot-through current and can double-clock
@@ -182,7 +198,7 @@ Properties this buys:
 - **Unpowered-supervisor = plain board.** If the RP2040 never runs
   (bad flash, held in reset), the board sits in the plain-board state
   indefinitely — the safe default is the pull-downs', not firmware's.
-- **Proof inputs are static data.** The proof consumes `reset_levels = all-zeros` over the 80-bit map of §3; the discipline above is the
+- **Proof inputs are static data.** The proof consumes `reset_levels = all-zeros` over the 86-bit map of §3; the discipline above is the
   hardware argument that all-zeros is what the nets actually see.
   (This amends the memo's Q2 mechanism — see
   [docs/instrumentation-equivalence.md](instrumentation-equivalence.md)
@@ -289,7 +305,7 @@ design constraint.
   RC-graded edges on SRCLK/COMMIT. The only RC in the design is on
   `/OE`, which is a level, not a clock.
 - **Decoupling:** one 100 nF per stage from the board's C0603 bin;
-  quiescent draw of the full plane ≈ 1 mA worst case (12 × 80 µA) —
+  quiescent draw of the full plane ≈ 1 mA worst case (13 × 80 µA) —
   noise in the §2.1 rail budget.
 - **Part picks (inventory-driven, §6):** SOIC-16, HC. Queried
   2026-10-15 against JLCPCB's live parts search:

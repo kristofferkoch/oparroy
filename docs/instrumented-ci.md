@@ -41,20 +41,27 @@ designated debug DUT (§6, single-step included).
 
 ## 2. The segment injector
 
-One injector per **wire**, placed once per segment: every tile injects
-on its downstream connector J2 — `TX_A` (J2.5) and `RX_B` (J2.7) — and
-the supervisor carries the same injector on its originator port (the
-supervisor→tile-0 segment), so each of the ring's nine segments is
-instrumented at exactly one end (tile *i*'s J2 faces tile *i+1*'s J1;
-tile 7's J2 faces the supervisor's drain). Per-wire circuit, three
+One injector per **wire**, placed once per segment. Inter-tile
+segments are intra-board copper on this board — the per-tile §3
+connectors exist only on the standalone node — so every tile injects
+at its downstream tile boundary, on the same two wires the standalone
+node's J2 carries — `TX_A` and `RX_B` — and the supervisor carries
+the same injector on its originator port (the supervisor→tile-0
+segment), so each of the ring's nine segments is instrumented at
+exactly one end (tile *i*'s injector faces tile *i+1*'s receiver;
+tile 7's faces the supervisor's drain). The supervisor→tile-0 segment
+is the one exception to copper: it carries the §3 connector pair, the
+demo's yankable connector and the cable-reach bench's insertion point
+(DESIGN.md §6). Per-wire circuit, three
 SN74LVC1G3157 SPDT switches + two 470 Ω:
 
 ```
               SW_break (3157)      SW_shg (3157)        SW_shv (3157)
 tile side   A  COM                 COM                  COM
-(Rat/Rbr) ──── B1   cable side ●── B2 ──[470 Ω]── GND ── B2 ──[470 Ω]── 3V3
-              B2  (J2 pin + TVS)   B1 = NC               B1 = NC
-               NC
+(Rat/Rbr) ──── B1   downstream ●── B2 ──[470 Ω]── GND ── B2 ──[470 Ω]── 3V3
+              B2  (copper; J2      B1 = NC               B1 = NC
+               NC   pin + TVS at
+                    the boundary pair)
 ```
 
 States (control bits; **0 = plain-board state on every bit**, §8):
@@ -74,12 +81,12 @@ electrically safe** (no interlocks, no illegal states — worst case is
 [facts.md](../datasheets/SN74LVC1G3157/notes/facts.md) §5.1), and they
 keep a driven-into-short driver inside its ±8 mA spec.
 
-Open semantics: with the break open, the cable-side stub floats and the
+Open semantics: with the break open, the downstream stub floats and the
 tile-side stub (Rar/Rbr end) parks via the OPP input's internal
 pull-down — exactly the severed-segment behavior §2 measured. A short
 cannot reproduce this signature: it is the one test that validates the
-pull-down park against a real floating cable with crosstalk from
-adjacent conductors.
+pull-down park against a real floating conductor — a long reel at the
+boundary pair — with crosstalk from adjacent conductors.
 
 Part selection: **SN74LVC1G3157 everywhere** — already a stocked BOM
 line in two vendors (parts DB: TI C10426, UMW C3040658), datasheet
@@ -88,17 +95,20 @@ inside the §2 measured baseline (tb_decode swept the inserted-switch
 path). 48 switches for the tile-side segment wires (8 tiles × 2 wires ×
 3\) plus the supervisor port's 6; the same switch also serves the
 keep-alive cut (§4, 8), the boundary watchdog defeat (§5, 1), and the
-pot substitution muxes (§6, 2) — 65 in all on one stocked BOM line.
+pot substitution muxes (§6, 4) — 67 in all on one stocked BOM line.
 Rejected alternatives in §11.
 
-The injector sits **between the tile PHY and the connector**: the split
-point on `TX_A` is `PHY1/Rat.b` ↔ {J2.5, `PHY1/Dat`}, on `RX_B` it is
-`PHY1/Rbr.a` ↔ {J2.7, `PHY1/Dbr`} — on both wires `#a` names the tile
-side and `#b` the connector/cable side. The connector TVS stays
-connector-adjacent (§7 contract); the injector switches sit on the
-cable side of the 470 Ω protection, so their own ESD exposure is
-bounded by that TVS alone — accepted for test infrastructure and noted
-for the §7 layout checker (TVS adjacency now also covers the injector).
+The injector sits **between the tile PHY and the downstream
+boundary**: the split
+point on `TX_A` is `PHY1/Rat.b` ↔ {downstream, `PHY1/Dat`}, on
+`RX_B` it is
+`PHY1/Rbr.a` ↔ {downstream, `PHY1/Dbr`} — on both wires `#a` names the tile
+side and `#b` the downstream side. The injector switches sit on the
+downstream side of the 470 Ω protection. Connector TVS exists only at
+the boundary pair on this board — intra-board copper has no ESD
+exposure path — so only the boundary segment's injector keeps the §7
+TVS-adjacency contract; the dropped per-tile connector/TVS complement
+is a residual, enumerated in §9.
 
 ## 3. Per-node power cut — and the tile rail split
 
@@ -190,9 +200,11 @@ scan-chain `sel`-observe (§8) reads high, consistent.
 
 ## 6. Human-I/O overrides (demonstrator tiles)
 
-DESIGN.md §6 dual role: two **input tiles** (2 and 5) carry a potentiometer and
-two buttons; two **output tiles** (3 and 6) carry a buzzer; tiles 1, 4,
-7 stay plain. Payloads bind the pin map's reserved functions (`pot` =
+DESIGN.md §6 dual role: four **input tiles** (1, 3, 5, 7) carry a
+potentiometer and
+two buttons; four **output tiles** (0, 2, 4, 6 — the boundary tile is
+an output tile) carry a buzzer. Payloads bind the pin map's reserved
+functions (`pot` =
 PD6/ADC_IN6, `button_a` = PC5, `button_b` = PC6, `buzzer` =
 PC4/TIM1_CH4) — payload parts are CI-board additions on those tiles,
 not changes to the node design. Every input is supervisor-overridable
@@ -237,10 +249,10 @@ instance `FI1`, parts prefixed at flatten time):
 
 | #   | Kind          | Target (capture names)                             | Parts                           | Bit (0 = plain)          |
 | --- | ------------- | -------------------------------------------------- | ------------------------------- | ------------------------ |
-| F1  | insert_series | `TX_A`: `PHY1/Rat.b` ↔ {J2.5, `PHY1/Dat`}          | FI1/SWAB 3157                   | `BRK_A` (0 = pass)       |
+| F1  | insert_series | `TX_A`: `PHY1/Rat.b` ↔ {downstream, `PHY1/Dat`}    | FI1/SWAB 3157                   | `BRK_A` (0 = pass)       |
 | F2  | add_shunt     | `TX_A#b` → GND                                     | FI1/SWAG 3157 + 470 Ω           | `SHG_A`                  |
 | F3  | add_shunt     | `TX_A#b` → `3V3`                                   | FI1/SWAV 3157 + 470 Ω           | `SHV_A`                  |
-| F4  | insert_series | `RX_B`: `PHY1/Rbr.a` ↔ {J2.7, `PHY1/Dbr`}          | FI1/SWBB 3157                   | `BRK_B` (0 = pass)       |
+| F4  | insert_series | `RX_B`: `PHY1/Rbr.a` ↔ {downstream, `PHY1/Dbr`}    | FI1/SWBB 3157                   | `BRK_B` (0 = pass)       |
 | F5  | add_shunt     | `RX_B#b` → GND                                     | FI1/SWBG 3157 + 470 Ω           | `SHG_B`                  |
 | F6  | add_shunt     | `RX_B#b` → `3V3`                                   | FI1/SWBV 3157 + 470 Ω           | `SHV_B`                  |
 | F7  | insert_series | `ka`: U1.20 ↔ `WD1/Rs.a`, +47 kΩ PD on the WD side | FI1/SWKA 3157 + 47 kΩ           | `KA_CUT` (0 = connected) |
@@ -257,7 +269,8 @@ set):
 | B4  | add_tap   | `led_work` → RP2040 GPIO | wire          | PIO                                  |
 | B5  | add_shunt | `sel` → `3V3`            | FI1/SWWD 3157 | `WD_DEFEAT` (0 = watchdog in charge) |
 
-**Input tiles 2 and 5, additional:**
+**Input tiles 1, 3, 5, 7, additional** (per-tile declaration over the
+four input tiles):
 
 | #   | Kind       | Target                                    | Parts                                                  | Bit (0 = human) |
 | --- | ---------- | ----------------------------------------- | ------------------------------------------------------ | --------------- |
@@ -265,32 +278,34 @@ set):
 | H2  | substitute | PC5: button ∥ N-FET                       | FI1/QBA 2N7002 + 47 kΩ gate PD (+ button, 10 kΩ, 1 kΩ) | `BTN_A`         |
 | H3  | substitute | PC6: button ∥ N-FET                       | FI1/QBB 2N7002 + 47 kΩ gate PD                         | `BTN_B`         |
 
-**Output tiles 3 and 6:** buzzer payload only (PC4 → 470 Ω → piezo →
+**Output tiles 0, 2, 4, 6** (the boundary tile is an output tile):
+buzzer payload only (PC4 → 470 Ω → piezo →
 GND) — an addition, no transform, no control bits.
 
 **Supervisor originator port** (the supervisor→tile-0 segment): the
 F1–F6 set on its two ring wires — 6 switches, 6 bits. The drain port
-needs none: tile 7's J2 injector covers that segment.
+needs none: tile 7's downstream injector covers that segment.
 
 **Control-line pull-downs:** every scan-plane control line carries a
 47 kΩ pull-down to GND ([docs/scan-plane.md](scan-plane.md) §4) — the
 FET-gate pull-downs in the parts columns above double as their lines';
-the 68 switch-select lines (F1–F7's selects, the supervisor port's,
+the 70 switch-select lines (F1–F7's selects, the supervisor port's,
 `WD_DEFEAT`, the pot muxes, the SWIO tree) gain one each from the same
 47 kΩ / 0603 bin.
 
 ## 8. Control/observe demands on the scan plane
 
 Settled as its own design: [docs/scan-plane.md](scan-plane.md) — one
-daisy chain of 10 × 74HC595 (control) + 2 × 74HC165 (observe) under a
+daisy chain of 11 × 74HC595 (control) + 2 × 74HC165 (observe) under a
 shared latch/capture net, per-tile control slices, the constructed-zero
 POR discipline, and the SWIO mux pick. What this doc still owns is the
 demand side the plane was sized against:
 
-- **Control: 77 bits** — 8 per tile × 8 (F1–F8) = 64, boundary
-  `WD_DEFEAT` = 1, input tiles 3 × 2 = 6, supervisor port = 6 — plus
+- **Control: 83 bits** — 8 per tile × 8 (F1–F8) = 64, boundary
+  `WD_DEFEAT` = 1, input tiles 3 × 4 = 12, supervisor port = 6 — plus
   the SWIO flash-mux select on top, settled at 3 ganged bits for a
-  3157 binary tree (scan-plane.md §5): 80 bits = 10 × 74HC595 exactly.
+  3157 binary tree (scan-plane.md §5): 86 bits in 11 × 74HC595 (two
+  spare in the last aux stage).
 - **POR invariant: bit 0 = plain-board state on every control bit.**
   The reset-state load is therefore all-zeros. The 595's storage
   register has no silicon POR state — the invariant is constructed by
@@ -323,6 +338,7 @@ enumerated and budgeted — "almost equivalent" is exactly this set:
 | R7  | pot-mux Ron in the ADC source path                                                                                             | +7 Ω on ≥ 3.5 kΩ                 | §7 ADC source ≤ 10 kΩ budget                                                                                                                                                                                             |
 | R8  | button FET off-capacitance + on-resistance                                                                                     | ~5 pF, R DS(on) ≪ 10 kΩ pull-up  | slow GPIO; millivolt levels                                                                                                                                                                                              |
 | R9  | defeat-shunt off-capacitance on `sel`                                                                                          | +5.2 pF on Cs = 10 nF            | §4 timing constants unchanged at 0.05 %                                                                                                                                                                                  |
+| R10 | per-tile §3 connectors and their TVS dropped on the eight copper segments; kept at the boundary pair                           | −0.8 pF Cj, −contact R per end   | margin-neutral to positive: the TVS capacitance leaves the wire, and §2's margins are flat across the swept segment-C range; no ESD exposure path exists intra-board (§2)                                                |
 
 The phantom-power clamp loading on the bypass route (§3) is not a
 reset-state residual — it exists only in the injected power-cut state —
@@ -333,7 +349,8 @@ it gets a dedicated bench item.
 
 - Decode margins through the injector pass path (R1+R2), measured on
   the boundary taps — direct comparison of `opa_p` vs `TX_A#b`.
-- Open fault on a real floating cable: far receiver parks idle-low, no
+- Open fault on a real floating cable (boundary pair, long reel
+  fitted): far receiver parks idle-low, no
   chatter (tb_fault's claim on real silicon, adjacent-conductor
   crosstalk included).
 - Short-to-3V3 reads as static-high, distinguishable from dead-quiet.

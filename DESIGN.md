@@ -576,14 +576,17 @@ power cut, keep-alive cut — everything scriptable from the supervisor so
 test runs are fully hands-off (design below).
 
 Dual role: the CI board is also the **demonstrator**. Beyond hands-off
-test runs, it must show the protocol to a human — so a subset of nodes
-carries real human-facing I/O from the §5
-complement: at minimum a potentiometer and buttons on input nodes,
-LEDs and a buzzer on output nodes, populated as a mix so test traffic
+test runs, it must show the protocol to a human — so the tiles carry
+real human-facing I/O from the §5
+complement: **all eight tiles, four input alternating with four output
+around the ring** — a potentiometer and two buttons on input tiles,
+LEDs and a buzzer on output tiles, the boundary tile an output tile —
+so test traffic
 *is* application traffic (§5). Properties this exploits for demos: the
 §4.1 status LEDs already narrate ring health visually, and the §2
 vsync latch makes multi-node LED/buzzer patterns tear-free — a fault
-injection live on stage (yank a connector, watch the bypass LEDs and
+injection live on stage (yank the boundary connector, watch the
+bypass LEDs and
 the ring carry on) is the demo. Constraint: the human I/O must never
 be required for operation — every input is also drivable/readable
 scriptably, so the hands-off CI role is unaffected by a knob being in
@@ -707,8 +710,8 @@ firmware.
 CI control plane ([docs/scan-plane.md](docs/scan-plane.md) — settled
 design: topology, bit maps, POR discipline, SWIO mux pick): **all slow
 control and observe on the CI board is one daisy-chained shift
-register with a global latch/capture clock** — 10 × 74HC595 control
-stages (one per-tile slice, two supervisor-side aux stages; 80 bits:
+register with a global latch/capture clock** — 11 × 74HC595 control
+stages (one per-tile slice, three supervisor-side aux stages; 86 bits:
 mux selects, per-node power switches, fault-injection switches,
 human-I/O overrides, the SWIO tree select) plus 2 × 74HC165 observe
 stages (per-tile `sel` and `3V3N`). Five RP2040 pins (clock, data out,
@@ -728,8 +731,15 @@ capture consumes): every segment wire gets a scriptable four-state
 injector — pass / open / short-to-GND / short-to-3V3 — built from
 three SN74LVC1G3157 SPDTs (one series break, two 470 Ω-legged
 shunts; every latched bit pattern is electrically safe, no
-interlocks), placed once per segment at each tile's downstream
-connector, plus the same on the supervisor's originator port.
+interlocks), placed once per segment on the intra-board copper at each
+tile's downstream boundary, plus the same on the supervisor's
+originator port. Inter-tile segments are board copper, not cable —
+the one exception is the supervisor→tile-0 segment (the boundary
+node's RX segment), which carries a §3 connector pair: the demo's
+yankable connector and the cable-reach bench's insertion point
+([docs/cable-reach.md](docs/cable-reach.md)) — long 3365 reels
+substitute for the short jumper, with far-end overshoot measured on
+the boundary node's PIO taps.
 **Per-node power cut** is a P-FET high-side switch (AO3401A-class)
 splitting the tile's 3.3 V into an always domain (bypass switch,
 injectors — the §4 no-Ioff constraint) and a node domain (MCU, status
