@@ -73,20 +73,6 @@ ______________________________________________________________________
   T22b's pre-order stock re-checks and keeps the parts DB's
   assembler-stock status current.
   **Blocked by:** — · **Unblocks:** —
-- **T34 — CI board block diagram.** *Shape: docs.* One page showing
-  the whole CI board as blocks and the wires between them: the USB-C
-  inlet → 5 V → 3.3 V regulator power tree (T35), the RP2040
-  supervisor and its PIO roles, the scan control/observe chain
-  and the mux hierarchy it drives (settled: docs/scan-plane.md), the eight node tiles with
-  their fault-injection complement (settled:
-  `docs/instrumented-ci.md`), the instrumented boundary
-  node's tap set (§6), and the human-I/O override paths (§6 dual
-  role). Mermaid in `docs/` so it diffs and reviews like the rest of
-  the planning docs. Drawn from §6 prose as a first pass — it is the
-  review artifact for the instrumentation / scan-plane / test-board
-  conversations — revised as those
-  settle, and retired in favor of T26's generated block view once the
-  CI board capture exists. **Blocked by:** — · **Unblocks:** —
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
   `circuits/watchdog-supervisor/` in the DSL — the charge pump's
