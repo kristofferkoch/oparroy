@@ -1,0 +1,200 @@
+"""The CI board constraint skeleton: stackup, net classes, DRC minimums.
+
+One :class:`PcbSpec` is the seed pcbnew opens: :func:`spec` pins the
+settled 4-layer build (DESIGN.md §6 — the fault-injection muxes and
+per-node debug plumbing want the routing room) as a nominal JLC7628-class
+1.6 mm stackup — 1 oz outer copper around 0.5 oz inners, 0.21 mm
+prepreg over a 1.06 mm core, ENIG; JLCPCB's exact thickness offerings
+verify at quote time, alongside the parts-DB stock checks. ``main()``
+writes the pair KiCad consumes:
+
+    boards/ci/oparroy-ci.kicad_pcb   (stackup + net list)
+    boards/ci/oparroy-ci.kicad_pro   (net classes, board minimums)
+
+**Net classes.** ``Default`` is the implicit catch-all — KiCad puts
+every unassigned net in it, so it declares no nets here. ``Power``
+carries the board rails: 5V (the USB-C sink rail, ending at the
+regulator), 3V3 (the board rail everything logic hangs off), and UNREG
+(the boundary cable's dead conductor — J0.1 ↔ T0/J1.1, design/ci_board.py;
+classed with the rails because it crosses the cable alongside them).
+The per-tile switched rails (``T<n>/3V3N``) stay Default: they are
+short local pours behind the F8 P-FET, not board-wide copper. GND
+stays Default too: the inner-layer plane is poured, not routed.
+
+**Board minimums.** Conservative JLCPCB 4-layer numbers, pending the
+fab quote: 0.1 mm trace/space, 0.45/0.2 mm vias, 0.3 mm
+copper-to-edge — deliberately tighter than nothing we intend to draw,
+so a DRC flag means "fix the layout", never "fight the fab". The
+hole-clearance floor stays out of the seed (``None`` — KiCad's default
+applies) until the first DRC pass over real layout settles it, the
+same path the node board took (design/node_board.py). Tune here when
+the quote lands — nowhere else.
+
+Usage (in the nix dev shell):
+
+    python -m design.ci_pcb               # write boards/ci/ artifacts
+    python -m design.ci_pcb /tmp/skel     # stage elsewhere
+    python -m design.ci_pcb --apply DIR   # merge settings into DIR's board
+
+The plain modes stay the pure emitter — a seed, not a merge: running
+them against ``boards/ci/`` overwrites the live board. ``--apply``
+emits the skeleton to a staging directory and merges it into DIR's
+board in process through KiCad's own pcbnew API
+(:mod:`oparroy.dsl.pcb_merge`).
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from oparroy.dsl import (
+    BoardMinimums,
+    NetClassSpec,
+    PcbSpec,
+    StackupLayer,
+    emit_pcb,
+    emit_project,
+)
+from oparroy.dsl.pcb_merge import PcbMergeError, merge_settings
+
+_OUT_DIR = Path(__file__).parent.parent / "boards" / "ci"
+
+
+def spec() -> PcbSpec:
+    """Build the CI board's constraint skeleton."""
+    return PcbSpec(
+        name="oparroy-ci",
+        thickness_mm=1.6,
+        copper_layers=("F.Cu", "In1.Cu", "In2.Cu", "B.Cu"),
+        stackup=(
+            StackupLayer("F.SilkS", "Top Silk Screen"),
+            StackupLayer("F.Paste", "Top Solder Paste"),
+            StackupLayer("F.Mask", "Top Solder Mask", thickness_mm=0.01),
+            StackupLayer("F.Cu", "copper", thickness_mm=0.035),
+            StackupLayer(
+                "dielectric 1",
+                "prepreg",
+                thickness_mm=0.21,
+                material="FR4",
+                epsilon_r=4.5,
+                loss_tangent=0.02,
+            ),
+            StackupLayer("In1.Cu", "copper", thickness_mm=0.015),
+            StackupLayer(
+                "dielectric 2",
+                "core",
+                thickness_mm=1.06,
+                material="FR4",
+                epsilon_r=4.5,
+                loss_tangent=0.02,
+            ),
+            StackupLayer("In2.Cu", "copper", thickness_mm=0.015),
+            StackupLayer(
+                "dielectric 3",
+                "prepreg",
+                thickness_mm=0.21,
+                material="FR4",
+                epsilon_r=4.5,
+                loss_tangent=0.02,
+            ),
+            StackupLayer("B.Cu", "copper", thickness_mm=0.035),
+            StackupLayer("B.Mask", "Bottom Solder Mask", thickness_mm=0.01),
+            StackupLayer("B.Paste", "Bottom Solder Paste"),
+            StackupLayer("B.SilkS", "Bottom Silk Screen"),
+        ),
+        copper_finish="ENIG",
+        net_classes=(
+            NetClassSpec(
+                name="Default",
+                clearance_mm=0.15,
+                trace_width_mm=0.2,
+                via_dia_mm=0.6,
+                via_drill_mm=0.3,
+                nets=(),
+                description="implicit catch-all — every unassigned net",
+            ),
+            NetClassSpec(
+                name="Power",
+                clearance_mm=0.3,
+                trace_width_mm=0.5,
+                via_dia_mm=0.8,
+                via_drill_mm=0.4,
+                nets=("3V3", "5V", "UNREG"),
+                description="board rails — USB 5V, regulated 3V3, UNREG dead conductor",
+            ),
+        ),
+        minimums=BoardMinimums(
+            min_clearance=0.1,
+            min_track_width=0.1,
+            min_via_diameter=0.45,
+            min_through_hole_diameter=0.2,
+            min_copper_edge_clearance=0.3,
+            solder_mask_clearance=0.05,
+            solder_mask_min_width=0.1,
+        ),
+    )
+
+
+def main() -> None:
+    """Emit the skeleton, or emit-and-merge it into a live board (--apply)."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "out_dir",
+        nargs="?",
+        type=Path,
+        help="output directory (default: boards/ci/)",
+    )
+    parser.add_argument(
+        "--apply",
+        metavar="DIR",
+        type=Path,
+        help="merge the skeleton's settings into DIR's live board via pcbnew",
+    )
+    args = parser.parse_args()
+    if args.apply is not None:
+        if args.out_dir is not None:
+            parser.error("--apply takes no positional out_dir")
+        _apply(args.apply)
+        return
+    _emit(args.out_dir or _OUT_DIR)
+
+
+def _emit(out_dir: Path) -> None:
+    """Write the skeleton pair (byte-identical per spec) to OUT_DIR."""
+    board_spec = spec()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, content in [
+        ("oparroy-ci.kicad_pcb", emit_pcb(board_spec)),
+        ("oparroy-ci.kicad_pro", emit_project(board_spec)),
+    ]:
+        path = out_dir / name
+        path.write_text(content, encoding="utf-8")
+        sys.stdout.write(f"wrote {path}\n")
+
+
+def _apply(live_dir: Path) -> None:
+    """Emit to a staging directory and merge into LIVE_DIR via pcbnew."""
+    if importlib.util.find_spec("pcbnew") is None:
+        sys.stderr.write("pcbnew not importable — run inside the nix dev shell\n")
+        raise SystemExit(2)
+    with TemporaryDirectory() as staging:
+        _emit(Path(staging))
+        try:
+            report = merge_settings(Path(staging), live_dir)
+        except PcbMergeError as error:
+            sys.stderr.write(f"pcb_merge: {error}\n")
+            raise SystemExit(2) from None
+    sys.stdout.write(
+        f"merged {report.staged_pcb} → {report.live_pcb}:"
+        f" net classes {', '.join(report.net_classes) or '(none)'},"
+        f" stackup {'applied' if report.stackup else 'absent'},"
+        f" board minimums {'applied' if report.minimums else 'absent'}\n"
+    )
+
+
+if __name__ == "__main__":
+    main()
