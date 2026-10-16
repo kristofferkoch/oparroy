@@ -85,13 +85,16 @@ jobs:
               # watchdog-chargepump bench; test_dsl_spice.py and
               # test_status_leds.py drive benches via scripts/sim-run;
               # test_check_sparse.py drives scripts/check-sparse;
-              # test_node_pins.py reads the committed firmware copy;
+              # test_node_pins.py and test_supervisor_pins.py read the
+              # committed firmware copies;
               # test_dsl_layout_check.py parses the node board;
               # test_dsl_parts_db.py asserts datasheet dirs exist.
               - 'circuits/**'
               - 'scripts/sim-run'
               - 'scripts/check-sparse'
               - 'firmware/node/pins.hpp'
+              - 'firmware/supervisor/pins.hpp'
+              - 'firmware/supervisor/pins.py'
               - 'boards/node/**'
               - 'datasheets/**'
             firmware:
@@ -178,6 +181,8 @@ jobs:
             scripts/sim-run
             scripts/check-sparse
             firmware/node/pins.hpp
+            firmware/supervisor/pins.hpp
+            firmware/supervisor/pins.py
             boards/node/**
             datasheets/**
 
