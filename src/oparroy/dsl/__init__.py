@@ -151,12 +151,14 @@ from oparroy.dsl.pcb_emit import (
 )
 from oparroy.dsl.pinmap import (
     CH32V003F4P6,
+    RP2040,
     Chip,
     Pad,
     PinMap,
     PinRequest,
     check_pin_map,
     emit_pin_header,
+    emit_pin_module,
 )
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
@@ -177,6 +179,7 @@ __all__ = [
     "CH32V003F4P6",
     "EQUIVALENCE",
     "RANGE_CONTAINMENT",
+    "RP2040",
     "AddShunt",
     "AddTap",
     "AdjacencyRule",
@@ -286,6 +289,7 @@ __all__ = [
     "emit_netlist",
     "emit_pcb",
     "emit_pin_header",
+    "emit_pin_module",
     "emit_project",
     "emit_spice",
     "footprint_map",

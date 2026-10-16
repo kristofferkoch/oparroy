@@ -7,6 +7,9 @@ The one authoritative table then feeds both consumers:
 - ``emit_pin_header`` — the freestanding-C++ header the firmware
   includes (``constexpr`` pads and peripheral-channel constants,
   code-std-cpp.md#6-constants-and-configuration style);
+- ``emit_pin_module`` — the MicroPython pin-constant module the
+  supervisor target imports (GPIO-bit constants for ``machine.Pin``
+  plus the same channel constants);
 - ``check_pin_map`` — the GPIO-budget check of DESIGN.md §5/§3 ("lands
   at ~16-17 of 18"): every request bound to a fitting pad, no pad
   serving two functions, reservations (SWIO) and the total count
@@ -44,11 +47,18 @@ _IDENT = re.compile(r"[a-z][a-z0-9_]*")
 #: here so the header is clang-format-stable (LLVM reflows comments).
 _COMMENT_WIDTH = 100
 
+#: ruff's column limit (pyproject.toml sets none, so the 88 default):
+#: the MicroPython module's comments wrap here so the generated file
+#: lints clean (E501).
+_PY_COMMENT_WIDTH = 88
 
-def _comment(text: str, *, prefix: str = "// ") -> list[str]:
-    """Wrap one comment to the column limit, each line ``// ``-prefixed."""
+
+def _comment(
+    text: str, *, prefix: str = "// ", width: int = _COMMENT_WIDTH
+) -> list[str]:
+    """Wrap one comment to the column limit, each line ``prefix``-prefixed."""
     wrapper = textwrap.TextWrapper(
-        width=_COMMENT_WIDTH,
+        width=width,
         initial_indent=prefix,
         subsequent_indent=prefix,
         break_long_words=False,
@@ -186,6 +196,68 @@ CH32V003F4P6 = Chip(
     ),
     # RM §1.2 (facts.md memory map); the F4P6 bonds ports A, C, D — no B.
     {"A": 0x40010800, "C": 0x40011000, "D": 0x40011400},
+)
+
+
+#: First ADC-carrying GPIO on the RP2040 (GPIO26-29 are ADC0-3, DS
+#: §1.4.3 Table 2).
+_RP2040_ADC_BASE = 26
+
+
+def _rp2040_gpio(pin: int, n: int, *signals: str) -> Pad:
+    """Build one RP2040 GPIO pad: name, bit, and presence-only channels.
+
+    Every listed signal is presence-only (``None``) — the RP2040's
+    SPI/UART/I2C functions carry no channel number the firmware needs;
+    GPIO26-29 additionally carry ``adc`` with the AINSEL value.
+    """
+    channels: dict[str, int | None] = dict.fromkeys(signals)
+    if n >= _RP2040_ADC_BASE:
+        channels["adc"] = n - _RP2040_ADC_BASE
+    return Pad(name=f"GPIO{n}", pin=pin, port="SIO", bit=n, channels=channels)
+
+
+# RP2040 (QFN-56), the §5/§6 supervisor MCU. Pad numbers from
+# datasheets/RP2040/notes/pinout.md (DS §5.5.2.2), signal channels from
+# the GPIO mux table (DS §1.4.3 Table 2) — F1 SPI, F2 UART, F3 I2C; F4
+# PWM, F8/F9 clock/USB, and the always-on F5 SIO / F6 PIO0 / F7 PIO1
+# are untabulated (any pad serves). One GPIO bank: port "SIO", base
+# 0xD0000000 (DS §2.3.1).
+RP2040 = Chip(
+    "RP2040",
+    (
+        _rp2040_gpio(2, 0, "spi0_rx", "uart0_tx", "i2c0_sda"),
+        _rp2040_gpio(3, 1, "spi0_csn", "uart0_rx", "i2c0_scl"),
+        _rp2040_gpio(4, 2, "spi0_sck", "uart0_cts", "i2c1_sda"),
+        _rp2040_gpio(5, 3, "spi0_tx", "uart0_rts", "i2c1_scl"),
+        _rp2040_gpio(6, 4, "spi0_rx", "uart1_tx", "i2c0_sda"),
+        _rp2040_gpio(7, 5, "spi0_csn", "uart1_rx", "i2c0_scl"),
+        _rp2040_gpio(8, 6, "spi0_sck", "uart1_cts", "i2c1_sda"),
+        _rp2040_gpio(9, 7, "spi0_tx", "uart1_rts", "i2c1_scl"),
+        _rp2040_gpio(11, 8, "spi1_rx", "uart1_tx", "i2c0_sda"),
+        _rp2040_gpio(12, 9, "spi1_csn", "uart1_rx", "i2c0_scl"),
+        _rp2040_gpio(13, 10, "spi1_sck", "uart1_cts", "i2c1_sda"),
+        _rp2040_gpio(14, 11, "spi1_tx", "uart1_rts", "i2c1_scl"),
+        _rp2040_gpio(15, 12, "spi1_rx", "uart0_tx", "i2c0_sda"),
+        _rp2040_gpio(16, 13, "spi1_csn", "uart0_rx", "i2c0_scl"),
+        _rp2040_gpio(17, 14, "spi1_sck", "uart0_cts", "i2c1_sda"),
+        _rp2040_gpio(18, 15, "spi1_tx", "uart0_rts", "i2c1_scl"),
+        _rp2040_gpio(27, 16, "spi0_rx", "uart0_tx", "i2c0_sda"),
+        _rp2040_gpio(28, 17, "spi0_csn", "uart0_rx", "i2c0_scl"),
+        _rp2040_gpio(29, 18, "spi0_sck", "uart0_cts", "i2c1_sda"),
+        _rp2040_gpio(30, 19, "spi0_tx", "uart0_rts", "i2c1_scl"),
+        _rp2040_gpio(31, 20, "spi0_rx", "uart1_tx", "i2c0_sda"),
+        _rp2040_gpio(32, 21, "spi0_csn", "uart1_rx", "i2c0_scl"),
+        _rp2040_gpio(34, 22, "spi0_sck", "uart1_cts", "i2c1_sda"),
+        _rp2040_gpio(35, 23, "spi0_tx", "uart1_rts", "i2c1_scl"),
+        _rp2040_gpio(36, 24, "spi1_rx", "uart1_tx", "i2c0_sda"),
+        _rp2040_gpio(37, 25, "spi1_csn", "uart1_rx", "i2c0_scl"),
+        _rp2040_gpio(38, 26, "spi1_sck", "uart1_cts", "i2c1_sda"),
+        _rp2040_gpio(39, 27, "spi1_tx", "uart1_rts", "i2c1_scl"),
+        _rp2040_gpio(40, 28, "spi1_rx", "uart0_tx", "i2c0_sda"),
+        _rp2040_gpio(41, 29, "spi1_csn", "uart0_rx", "i2c0_scl"),
+    ),
+    {"SIO": 0xD0000000},
 )
 
 
@@ -473,4 +545,77 @@ def emit_pin_header(
             )
     lines.append("")
     lines.append("} // namespace pins")
+    return "\n".join(lines) + "\n"
+
+
+def emit_pin_module(
+    pin_map: PinMap,
+    *,
+    source: str,
+    regenerate: str,
+    title: str,
+) -> str:
+    """Emit the pin map as a MicroPython-consumable module.
+
+    The supervisor target runs MicroPython, and this module is its view
+    of the same pin table the firmware header carries: one GPIO-bit
+    constant per function (``machine.Pin(pot)`` addresses the pad), in
+    request order, plus channel constants for the used signals and the
+    capture-supplied ``const`` entries. Emission is byte-identical
+    across runs (no dates, no paths beyond the caller's ``source``)
+    and requires a clean, fully bound map: the check's errors raise,
+    and unbound requests are a ``DefinitionError`` here — the module
+    is where the pads must exist.
+    """
+    raise_on_errors(check_pin_map(pin_map))
+    unbound = [name for name in pin_map.requests if name not in pin_map.assignments]
+    if unbound:
+        msg = f"unbound pin functions: {', '.join(unbound)}"
+        raise DefinitionError(msg)
+    chip = pin_map.chip
+    bound = {pad.name for pad in pin_map.assignments.values()}
+    spare = [
+        pad
+        for pad in chip.gpio_pads
+        if pad.name not in bound and pad.name not in pin_map.reservations
+    ]
+    used = len(pin_map.requests) + len(pin_map.reservations)
+    if spare:
+        pads = ", ".join(f"{pad.name} (pin {pad.pin})" for pad in spare)
+        budget = f"{used} of {chip.gpio_count} GPIO assigned; spare: {pads}."
+    else:
+        budget = f"{used} of {chip.gpio_count} GPIO assigned; no spare pads."
+    lines = [
+        f"# Generated by oparroy-dsl from {source} — do not edit.",
+        f"# Regenerate: {regenerate}",
+        "#",
+        *_comment(title, prefix="# ", width=_PY_COMMENT_WIDTH),
+        *_comment(budget, prefix="# ", width=_PY_COMMENT_WIDTH),
+    ]
+    for name, req in pin_map.requests.items():
+        pad = pin_map.assignments[name]
+        assert pad.bit is not None  # noqa: S101 — check passed: bound GPIO
+        lines.append("")
+        if req.doc:
+            lines.extend(
+                _comment(f"{name} — {req.doc}", prefix="# ", width=_PY_COMMENT_WIDTH)
+            )
+        lines.append(f"{name} = {pad.bit}")
+        lines.extend(
+            f"{name}_{signal} = {pad.channels[signal]}"
+            for signal in req.uses
+            if pad.channels[signal] is not None
+        )
+        lines.extend(f"{name}_{key} = {value}" for key, value in req.const.items())
+    if pin_map.reservations:
+        lines.append("")
+        lines.append("# Reserved — counted in the GPIO budget, never firmware GPIO:")
+        for pad_name, reason in pin_map.reservations.items():
+            lines.extend(
+                _comment(
+                    f"  {pad_name} (pin {chip.pad(pad_name).pin}): {reason}",
+                    prefix="# ",
+                    width=_PY_COMMENT_WIDTH,
+                )
+            )
     return "\n".join(lines) + "\n"
