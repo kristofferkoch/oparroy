@@ -422,6 +422,33 @@ def test_power_rails_accept_scan_plane_loading(symbols: StubSymbols) -> None:
     assert errors(report) == []
 
 
+def test_power_input_rail_accepts_control_plane_loading(
+    symbols: StubSymbols,
+) -> None:
+    """An externally-fed rail (only power-input pins) is still a rail."""
+
+    def with_load(board: Circuit) -> None:
+        load = board.part("L1", symbol="Stub:LOAD", footprint="StubFP:LOAD_SIP")
+        board.connect(board.nets["GND"], load[1])
+
+    base = build_base(symbols)
+    with_load(base)
+    instrumented = build_instrumented(symbols)
+    with_load(instrumented)
+    # GND's only power-class pin is the load's power input — no driver,
+    # no power symbol (the CI board's cable-fed GND). The control
+    # plane's ground pin loads it: rails exist to be loaded.
+    instrumented.connect("GND", instrumented.parts["SCAN"][3])
+    report = check_equivalent(
+        base,
+        instrumented,
+        [PerInstance(("T0",), (f1(), b1()))],
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert errors(report) == []
+
+
 def test_per_tile_composes_over_instances(symbols: StubSymbols) -> None:
     def build(symbols: StubSymbols) -> Circuit:
         board = Circuit("base", symbols)
