@@ -28,6 +28,12 @@ target-version = "py314"
 # Import roots: the package (src), the tests, and the repo root itself
 # so `design` resolves as first-party.
 src = ["src", "tests", "."]
+# Generated files, marked "do not edit" in their provenance header:
+# the MicroPython pin modules (emit_pin_module) and their goldens.
+extend-exclude = [
+    "firmware/supervisor/pins.py",
+    "tests/golden/supervisor-pins.py",
+]
 
 [tool.ruff.lint]
 # Strict: everything on, minus the rules ruff itself flags as conflicting
