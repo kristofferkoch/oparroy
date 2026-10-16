@@ -760,14 +760,20 @@ in — CC sink pull-downs only (5.1 kΩ Rd ×2), no PD negotiation; the
 load (8 tiles at tens of mA each, §2.1, plus RP2040 and the scan
 plane) sits trivially inside baseline USB-C delivery — and an on-board
 **3.3 V regulator**, the AMS1117-3.3 (LCSC C6186, SOT-223), feeds the
-ring rail (§2.1) and all board logic. The §2.1 unregulated payload
+ring rail (§2.1) and all board logic. The architecture is Raspberry
+Pi's own: the RP2040 board-design app note's minimal reference design
+is the same USB-5 V → 1117-family LDO → 3.3 V rail
+(`datasheets/RP2040/notes/power-design.md`, AN §2.1.1). The §2.1
+unregulated payload
 rail is **omitted on this board**: no 5 V copper past the regulator
 input. The power tree is captured in the DSL (`design/ci_power.py`;
 the ceramic-vs-tantalum output-cap mismatch and its bench-verify
 obligation live in `datasheets/AMS1117/notes/quirks.md`; the per-tile
 3V3/3V3N split stays the board capture's transform). The receptacle's
 D+/D− wire to the RP2040's USB (it keeps its 12 MHz crystal for
-exactly this, §5), so one cable is power, host channel, and debug
+exactly this, §5 — series termination and ~90 Ω differential routing
+live at the RP2040 end, `datasheets/RP2040/notes/power-design.md`
+AN §2.4.1), so one cable is power, host channel, and debug
 transport uplink. The per-node
 power-cut switches of the fault complement sit between the rail and
 each tile — P-FET high-side per tile (above), so the bypass switch

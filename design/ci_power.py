@@ -12,13 +12,17 @@ through as ports for the supervisor capture to pick up. The per-tile
 
 Ports (the subcircuit interface):
 
-- ``5V`` — sink, 4.5..5.5 V. The floor is the LDO's worst-case input
-  requirement (3.4 V max output + ~1.1 V dropout at the CI load; the
-  datasheet's 1.3 V max dropout is at 0.8 A), the ceiling is USB 5 V
-  +10 %. A compliant USB-C VBUS (4.75..5.25 V at the device) sits
-  inside with margin; the LDO itself tolerates 15 V.
+- ``5V`` — sink, 4.5..5.5 V. The floor tracks the LDO's worst-case
+  input requirement: 3.4 V max output + dropout (1.1 V typ / 1.3 V
+  max, the max specified at 0.8 A, lower at the CI load) puts the true
+  worst-case floor nearer 4.6 V — a compliant USB-C VBUS (4.75..5.25 V
+  at the device) clears either number; the ceiling is USB 5 V +10 %,
+  and the LDO itself tolerates 15 V.
 - ``3V3`` — source, 3.2..3.4 V: the AMS1117-3.3's full-range output
-  band (3.201..3.399 V, ±3 %).
+  band (3.201..3.399 V, ±3 %). Static band only — the DSL models no
+  transients, so load-step undershoot on top of this band is the
+  decoupling's and the bench-verify list's concern, not this
+  interval's.
 - ``GND``.
 - ``USB_DP``/``USB_DM`` — pass-through (both faces declared), 0..3.6 V:
   full-speed USB data levels toward the supervisor's USB pins.

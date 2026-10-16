@@ -55,3 +55,11 @@ ADJ network — pin 1 is plain ground.
 - Ripple-rejection numbers are all measured with COUT = 22 µF tantalum.
 - See `quirks.md` for the ceramic-vs-tantalum mismatch the CI board
   capture accepts.
+
+## Third-party corroboration
+
+Raspberry Pi's RP2040 board-design application note uses the same
+architecture for its minimal reference design: USB 5 V VBUS in, an
+external fixed-3.3 V **1117-family LDO** (an NCP1117, 10 µF in /
+10 µF out per its datasheet), 3.3 V rail out to the MCU and board
+logic (`datasheets/RP2040/notes/power-design.md`, AN §2.1.1).
