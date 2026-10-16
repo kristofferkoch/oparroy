@@ -292,9 +292,54 @@ real work — **move**, don't copy. Reference, don't duplicate.
   belongs in the transform engine (create the board net in the tile's
   immediate parent, or teach flatten to resolve upward) when nested
   tiles arrive.
+- **Executable-laws gate over the DSL** (mined from i2cjak/Backplane):
+  their `LAWS.bend` states invariants as executable laws over the real
+  code, `PROOF.bend` discharges every one, CI has a dedicated proof
+  job, and their AGENTS.md encodes "an agent may add laws, but never
+  weaken or delete one." Oparroy's analogue: promote the reset-state
+  equivalence proof and the DSL invariants (validation-pass rules,
+  flatten/annotate identities) into a single named, first-class
+  artifact with its own CI gate and the same never-weaken social
+  contract — pytest already enforces them; the change is framing and
+  gate structure, not new machinery.
+- **Manifest-checked test coverage** (mined from i2cjak/Backplane's
+  `scripts/check.sh`): instead of running checks file by file, generate
+  a manifest importing every tracked source file exactly once, then
+  mechanically prove the manifest equals the tracked file list — a new
+  module that no check imports fails loudly. Oparroy's analogue: a
+  conftest/pytest-collected manifest over `src/oparroy/dsl/` modules
+  (and the `design/` captures), self-audited against git ls-files.
+  Companion to `scripts/check-sparse`, which already audits CI's
+  declared inputs the same way.
+- **Checklist-gated releases** (mined from i2cjak/Backplane's Review
+  tab): a checked-in release checklist plus machine-readable custom
+  checks, with release outputs via `git archive` and a manifest.
+  Oparroy has `scripts/check-reproducible` but no release gate at all
+  yet — file until the first board release is on the horizon.
+- **Snapshot-per-action design-history diffing** (mined from
+  i2cjak/Backplane): a board/netlist file is text no one reviews by
+  reading, so they snapshot KiCad files into a shadow git repo after
+  every agent action and color-compare any two versions. If agent-driven
+  layout turns become routine (the layout replication generator idea
+  above), this checkpoint-sidecar pattern is the proven review surface.
+  Their pure-text KiCad S-expression parser (MIT, no pcbnew) is also a
+  reference implementation for reading `.kicad_pcb`/`.kicad_sch`
+  without KiCad — though oparroy's pcbnew-pinned Python already covers
+  that.
 
 ## Related projects to mine
 
+- **i2cjak/Backplane** (github.com/i2cjak/Backplane, MIT) —
+  researched. An agentic-hardware hub driving coding agents against
+  KiCad/FreeCAD projects with live board/schematic/3D viewers, despite
+  the name no hardware backplane or I2C anywhere. Written in Bend 2, a
+  dependent-type language pitching compiler-checked laws for AI-written
+  code — no adoption fit (no Python target, would sever the pcbnew
+  anchor; no freestanding/cross-compile story for the firmware), but
+  its laws-plus-proof development model validates oparroy's existing
+  verification culture. Mined ideas filed under Tooling above: the
+  executable-laws gate, manifest-checked coverage, checklist-gated
+  releases, snapshot-per-action design history.
 - **Bela platform** (bela.io) — via Bernt. Researched:
   [docs/bela-lessons.md](docs/bela-lessons.md).
   Key transfers: frozen-blob PHY engine (PRU⇒PIO), smart nodes with
