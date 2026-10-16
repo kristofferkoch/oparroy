@@ -33,6 +33,12 @@
   editing the `changes` filters in `.github/workflows/ci.yml`, run
   `scripts/check-sparse <gate>` to rehearse the gate against a sparse
   worktree before pushing.
+- **Evidence over assertion.** Tool and check output is derived from
+  verified state, never echoed from inputs or assumed — a check that
+  didn't run reports "not checked", never "passed". Every guard
+  carries a negative-control test: neutralize the guard, prove the
+  test fails, restore. (Adopted from Konnect's reliability contract —
+  [konnect-lessons.md §5](docs/konnect-lessons.md#5-serving-tools-to-llm-agents).)
 
 ## Documentation — the IDEAS / KANBAN / DESIGN split
 
