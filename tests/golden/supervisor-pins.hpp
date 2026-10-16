@@ -5,9 +5,10 @@
 //
 // oparroy supervisor pin map — RP2040 (QFN-56). Function requests, pads bound late as refinement
 // data (DESIGN.md §5/§6).
-// 18 of 30 GPIO assigned; spare: GPIO13 (pin 16), GPIO14 (pin 17), GPIO15 (pin 18), GPIO16 (pin
-// 27), GPIO17 (pin 28), GPIO23 (pin 35), GPIO24 (pin 36), GPIO25 (pin 37), GPIO26 (pin 38), GPIO27
-// (pin 39), GPIO28 (pin 40), GPIO29 (pin 41).
+// 11 of 30 GPIO assigned; spare: GPIO0 (pin 2), GPIO1 (pin 3), GPIO2 (pin 4), GPIO3 (pin 5), GPIO4
+// (pin 6), GPIO5 (pin 7), GPIO6 (pin 8), GPIO7 (pin 9), GPIO14 (pin 17), GPIO15 (pin 18), GPIO16
+// (pin 27), GPIO17 (pin 28), GPIO23 (pin 35), GPIO24 (pin 36), GPIO25 (pin 37), GPIO26 (pin 38),
+// GPIO27 (pin 39), GPIO28 (pin 40), GPIO29 (pin 41).
 
 #include <cstdint>
 
@@ -58,22 +59,8 @@ inline constexpr Pad commit{.port_base = gpio_sio_base, .bit = 21, .package_pin 
 // word is latched, then driven low (scan-plane §4).
 inline constexpr Pad oe_n{.port_base = gpio_sio_base, .bit = 22, .package_pin = 34};
 
-// Reserved — counted in the GPIO budget, never firmware GPIO:
-//   GPIO0 (pin 2): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
-//   GPIO1 (pin 3): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
-//   GPIO2 (pin 4): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
-//   GPIO3 (pin 5): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
-//   GPIO4 (pin 6): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
-//   GPIO5 (pin 7): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
-//   GPIO6 (pin 8): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
-//   GPIO7 (pin 9): debug transport (DESIGN.md §9) reservation: per-node UART worst case (8
-// consecutive for one-PIO wide sample).
+// dbg_rx — debug UART return: root of the 8:1 tree ganged to the flash tree's selects, leaves on
+// the tiles' PD5 debug_tx (§6, scan-plane §5).
+inline constexpr Pad dbg_rx{.port_base = gpio_sio_base, .bit = 13, .package_pin = 16};
 
 } // namespace pins

@@ -33,7 +33,6 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
     T32[T32 supervisor firmware] --> T12
@@ -43,23 +42,36 @@ ______________________________________________________________________
 
 ## Next
 
-- **T33 — Debug transport decision.** *Shape: decision.* Settles the
-  §6/§9 open question — per-node UART vs shared bus vs
-  scan-observe-only — for runtime debug output from the eight nodes:
-  bandwidth need (assert reports; the §4 `lib::verify_failed` wiring
-  point reports over this transport), RP2040 pin/PIO cost (the
-  supervisor pin map reserves 8 consecutive GPIOs pending this
-  decision — the surplus is reclaimable on resolution), connector or
-  pogo style, and interaction with the SWIO
-  flash mux (does debug ride the same mux?). The encoding is settled
-  in direction already: dictionary-based (defmt-style) — format
-  strings interned in a non-loaded ELF section, the wire carrying the
-  record address plus raw binary arguments, the host decoding with the
-  ELF as the string table; no strings or formatting code on the target
-  ([code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain)'s
-  no-strings rule), and a `consteval` format-string parse makes
-  placeholder/argument mismatches compile errors. Recorded into
-  DESIGN.md §6 on resolution. **Blocked by:** — · **Unblocks:** T10
+- **T10 — Test board design.** 8 ring nodes + supervisor, full fault
+  injection (per-segment open/short, per-node power cut, keep-alive
+  cut),
+  all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
+  (§6): a subset of nodes carries human-facing I/O (potentiometer,
+  buttons, LEDs, buzzer), each input overridable from the supervisor
+  (mux/DAC substitution, button paralleling) so scripted runs stay
+  hands-off regardless of knob positions. Includes the
+  **instrumented boundary node**: the supervisor-adjacent node's RX/TX
+  ring segments (plus comparator-output and working-LED taps) wired to
+  RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
+  §6). Nodes tile the settled node-board design (`boards/node/`);
+  captured in the DSL, layout in KiCad. Bench-verify early with the §6
+  CI flash fan-out: deselected-port noise margin (per-node 10 kΩ
+  pull-ups fitted) and SDI false-trigger recovery — a
+  false-triggered node drives its own stub and must resync clean
+  on reselect, before the control plane is committed.
+  Bela lesson (docs/bela-lessons.md §5): the test rig is a
+  first-class deliverable with its own schedule risk — budget for it,
+  and test at the cheapest rework stage (post-SMT, pre-through-hole).
+  Fabs **first**, ahead of the standalone node board: its eight tiles
+  are the first bench articles for the §2/§4 claims.
+  Supervisor-side work splits out: the RP2040 subcircuit (landed:
+  `design/supervisor.py`, `design/supervisor_pins.py`) and the debug
+  transport (settled: DESIGN.md §6 — PD5 USART through a tree ganged
+  to the flash mux's selects); the scan
+  control/observe plane is settled (docs/scan-plane.md) and the
+  supervisor image itself is T32.
+  **Blocked by:** — ·
+  **Unblocks:** T12, T15
 - **T34 — CI board block diagram.** *Shape: docs.* One page showing
   the whole CI board as blocks and the wires between them: the USB-C
   inlet → 5 V → 3.3 V regulator power tree (T35), the RP2040
@@ -228,35 +240,6 @@ ______________________________________________________________________
   arithmetic. Extends the T8 check machinery (the ports' limit ranges
   already carry an optional current interval). **Blocked by:** — ·
   **Unblocks:** —
-- **T10 — Test board design.** 8 ring nodes + supervisor, full fault
-  injection (per-segment open/short, per-node power cut, keep-alive
-  cut),
-  all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
-  (§6): a subset of nodes carries human-facing I/O (potentiometer,
-  buttons, LEDs, buzzer), each input overridable from the supervisor
-  (mux/DAC substitution, button paralleling) so scripted runs stay
-  hands-off regardless of knob positions. Includes the
-  **instrumented boundary node**: the supervisor-adjacent node's RX/TX
-  ring segments (plus comparator-output and working-LED taps) wired to
-  RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
-  §6). Nodes tile the settled node-board design (`boards/node/`);
-  captured in the DSL, layout in KiCad. Bench-verify early with the §6
-  CI flash fan-out: deselected-port noise margin (per-node 10 kΩ
-  pull-ups fitted) and SDI false-trigger recovery — a
-  false-triggered node drives its own stub and must resync clean
-  on reselect, before the control plane is committed.
-  Bela lesson (docs/bela-lessons.md §5): the test rig is a
-  first-class deliverable with its own schedule risk — budget for it,
-  and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  Fabs **first**, ahead of the standalone node board: its eight tiles
-  are the first bench articles for the §2/§4 claims.
-  Supervisor-side work splits out: the RP2040 subcircuit (landed:
-  `design/supervisor.py`, `design/supervisor_pins.py`),
-  debug-transport decision (T33); the scan
-  control/observe plane is settled (docs/scan-plane.md) and the
-  supervisor image itself is T32.
-  **Blocked by:** T33 ·
-  **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10,

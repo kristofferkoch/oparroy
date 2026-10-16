@@ -28,17 +28,13 @@ GOLDEN_PY = Path(__file__).parent / "golden" / "supervisor-pins.py"
 FIRMWARE_HPP = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.hpp"
 FIRMWARE_PY = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.py"
 
-# 10 function requests + the debug-transport reservation (DESIGN.md
-# §9; 8 consecutive GPIOs) = 18 of 30 GPIO spent; GPIO13..17 and
-# GPIO23..29 (12 of 30) are the spares.
-REQUEST_COUNT = 10
-USED_COUNT = 18
+# 11 function requests, no reservations = 11 of 30 GPIO spent;
+# GPIO0..7, GPIO14..17 and GPIO23..29 (19 of 30) are the spares —
+# GPIO0..7 are the reclaimed debug-transport reservation (settled,
+# DESIGN.md §6: one tree-root GPIO instead of eight dedicated RX).
+REQUEST_COUNT = 11
+USED_COUNT = 11
 GPIO_COUNT = 30
-
-DBG_RESERVATION = (
-    "debug transport (DESIGN.md §9) reservation: per-node UART worst "
-    "case (8 consecutive for one-PIO wide sample)."
-)
 
 
 def emit_hpp() -> str:
@@ -55,7 +51,7 @@ def test_capture_checks_clean() -> None:
     assert check_pin_map(capture()) == []
 
 
-def test_budget_lands_at_18_of_30() -> None:
+def test_budget_lands_at_11_of_30() -> None:
     pin_map = capture()
     assert len(pin_map.requests) == REQUEST_COUNT
     used = len(pin_map.requests) + len(pin_map.reservations)
@@ -68,7 +64,14 @@ def test_budget_lands_at_18_of_30() -> None:
         if pad.name not in bound and pad.name not in pin_map.reservations
     }
     assert spare == {
-        "GPIO13",
+        "GPIO0",
+        "GPIO1",
+        "GPIO2",
+        "GPIO3",
+        "GPIO4",
+        "GPIO5",
+        "GPIO6",
+        "GPIO7",
         "GPIO14",
         "GPIO15",
         "GPIO16",
@@ -87,7 +90,7 @@ def test_peripheral_forced_bindings() -> None:
     pads = {name: pad.name for name, pad in capture().assignments.items()}
     # The scan chain rides the SPI0-capable pads so the hardware-SPI
     # option stays open; the rest of the binding follows the pin map's
-    # one-PIO-region layout (GPIO8..12 for taps + SWIO).
+    # one-PIO-region layout (GPIO8..13 for taps + SWIO + debug return).
     assert pads["srclk"] == "GPIO18"  # SPI0 SCK
     assert pads["sdo"] == "GPIO19"  # SPI0 TX
     assert pads["sdi"] == "GPIO20"  # SPI0 RX
@@ -96,16 +99,9 @@ def test_peripheral_forced_bindings() -> None:
     assert pads["tap_comp"] == "GPIO10"
     assert pads["tap_led"] == "GPIO11"
     assert pads["swio"] == "GPIO12"
+    assert pads["dbg_rx"] == "GPIO13"
     assert pads["commit"] == "GPIO21"
     assert pads["oe_n"] == "GPIO22"
-
-
-def test_debug_transport_reservation() -> None:
-    pin_map = capture()
-    assert pin_map.reservations == {f"GPIO{n}": DBG_RESERVATION for n in range(8)}
-    assert not {pad.name for pad in pin_map.assignments.values()} & set(
-        pin_map.reservations
-    )
 
 
 def test_hpp_matches_golden() -> None:

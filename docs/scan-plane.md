@@ -245,6 +245,17 @@ SWIO(RP2040) ─┬─ SW ──────┬─ SW ────────�
   (instrumented-ci.md §3): the harness powers a node and selects its
   leaf under the same transaction discipline; live SWIO debugging parks
   the tree on tile 0 for the GDB session (§6).
+- **Debug return tree (DESIGN.md §6).** A second 8:1 tree of the same
+  stocked 3157 line gangs to `SWIO_A2`/`A1`/`A0` — the debug
+  collection point is always the flash-selected node, which is exactly
+  the "watch this tile" discipline, and the sharing costs zero chain
+  bits. Leaves land on each tile's PD5 (the node pin map's
+  `debug_tx`); the root is a dedicated RP2040 GPIO outside this plane
+  (the supervisor pin map's `dbg_rx`, a PIO UART RX). No pull-ups on
+  this tree: leaves are actively driven push-pull, and a power-cut
+  node's leaf is isolated unless selected — a selected dead node
+  reads as garbage, which the emit-and-forget contract already
+  tolerates.
 
 ## 6. RP2040 interface
 

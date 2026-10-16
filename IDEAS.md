@@ -60,12 +60,12 @@ real work — **move**, don't copy. Reference, don't duplicate.
   plug (3M 3433-class) into the matching socket hole, PC-floppy
   style. GND×4 keeps the power budget (~0.16 Ω/m loop). Redundant on
   the CI board — the shrouded DC3/FC system already keys reverse and
-  offset mating — but two future uses: (a) dropping to a plain
+  offset mating — but one future use: dropping to a plain
   unshrouded 2x5 header (~$0.02 vs $0.068, lower profile) on
-  production nodes, where the blind pin is the *only* keying; (b)
-  **connector-type discrimination** once the §6 debug transport
-  lands — different blind-pin patterns keep a segment cable out of a
-  debug header that will likely also be a pin header. Costs to
+  production nodes, where the blind pin is the *only* keying. (A
+  second use — connector-type discrimination against a debug header —
+  died with the settled §6 debug transport: it is intra-board copper,
+  no header to discriminate against.) Costs to
   remember: a manual pin-pull the netlist/layout checker can't see,
   one plug per cable end, and the loss of the shroud's retention and
   pin protection on the connector we deliberately yank (§6).

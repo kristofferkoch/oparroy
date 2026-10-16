@@ -24,13 +24,21 @@ from oparroy.dsl import (
 
 GOLDEN = Path(__file__).parent / "golden" / "supervisor.net"
 
-#: The spare GPIOs (GPIO13..17, GPIO23..29) plus SWCLK/SWDIO, reporting
+#: The spare GPIOs (GPIO0..7 — the reclaimed debug-transport
+#: reservation, GPIO14..17, GPIO23..29) plus SWCLK/SWDIO, reporting
 #: by pin number on U1 — deliberate NCs, and the list pins them so
 #: nothing else hides among them.
 EXPECTED_NC_WARNINGS = {
     f"U1.{pin} is not connected"
     for pin in (
-        "16",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
         "17",
         "18",
         "24",
@@ -46,9 +54,6 @@ EXPECTED_NC_WARNINGS = {
         "41",
     )
 }
-
-#: The debug-transport reservation's port-array width (GPIO0..7).
-DBG_WIDTH = 8
 
 #: The decoupling set (AN §2.1.2/§2.1.3): ten 100 nF (six IOVDD,
 #: USB_VDD, ADC_AVDD, two DVDD) plus the two mandatory 1 µF VREG caps.
@@ -70,6 +75,7 @@ SIGNAL_PORTS = {
     "sdi",
     "commit",
     "oe_n",
+    "dbg_rx",
 }
 
 
@@ -79,10 +85,7 @@ def board_driving(kicad_libs: KiCadLibraries, v3v3_source: Interval) -> Circuit:
     v3v3 = board.port("RAIL_3V3", source=Limits(voltage=v3v3_source))
     gnd = board.port("GND")
     signals = {name: board.port(name) for name in SIGNAL_PORTS}
-    dbg = [board.port(f"DBG{n}") for n in range(DBG_WIDTH)]
-    board.instance(
-        "SUP1", Supervisor(), **{"3V3": v3v3, "GND": gnd, **signals, "dbg": dbg}
-    )
+    board.instance("SUP1", Supervisor(), **{"3V3": v3v3, "GND": gnd, **signals})
     return board
 
 
@@ -96,11 +99,8 @@ def nets_of(circuit: Circuit) -> dict[str, set[str]]:
 
 def test_capture_declares_its_ports(kicad_libs: KiCadLibraries) -> None:
     circuit = capture(kicad_libs)
-    assert set(circuit.ports) == (
-        {"3V3", "GND"} | SIGNAL_PORTS | {f"dbg[{n}]" for n in range(DBG_WIDTH)}
-    )
-    assert set(circuit.port_arrays) == {"dbg"}
-    assert len(circuit.port_arrays["dbg"]) == DBG_WIDTH
+    assert set(circuit.ports) == {"3V3", "GND"} | SIGNAL_PORTS
+    assert not circuit.port_arrays
 
 
 def test_flash_and_strap_wiring(kicad_libs: KiCadLibraries) -> None:
@@ -158,13 +158,12 @@ def test_gpio_binding_matches_pin_map(kicad_libs: KiCadLibraries) -> None:
     assert nets["tap_comp"] == {"U1.13"}
     assert nets["tap_led"] == {"U1.14"}
     assert nets["swio"] == {"U1.15"}
+    assert nets["dbg_rx"] == {"U1.16"}
     assert nets["srclk"] == {"U1.29"}
     assert nets["sdo"] == {"U1.30"}
     assert nets["sdi"] == {"U1.31"}
     assert nets["commit"] == {"U1.32"}
     assert nets["oe_n"] == {"U1.34"}
-    for n in range(DBG_WIDTH):
-        assert nets[f"dbg[{n}]"] == {f"U1.{n + 2}"}
 
 
 def test_part_values(kicad_libs: KiCadLibraries) -> None:

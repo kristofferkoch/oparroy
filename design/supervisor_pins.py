@@ -1,11 +1,10 @@
 """Supervisor pin map: the authoritative pin table for the RP2040.
 
 Every function the CI-board supervisor carries — the §6 PIO SWIO flash
-channel, the instrumented boundary node's four taps, and the
-scan-plane control chain — requested by name, with pads bound below as
-refinement data: 10 of 30 GPIO spent, plus 8 consecutive GPIOs
-reserved for the undecided debug transport (DESIGN.md §9), verified by
-``check_pin_map``. The one table feeds the firmware headers
+channel, the instrumented boundary node's four taps, the §6 debug
+transport's tree root, and the scan-plane control chain — requested by
+name, with pads bound below as refinement data: 11 of 30 GPIO spent,
+verified by ``check_pin_map``. The one table feeds the firmware headers
 (``emit_pin_header`` → ``firmware/supervisor/pins.hpp``,
 ``emit_pin_module`` → ``firmware/supervisor/pins.py`` for the
 MicroPython bringup stack) and that budget check.
@@ -106,18 +105,15 @@ def capture() -> PinMap:
         "low (scan-plane §4).",
     )
 
-    # The debug transport (DESIGN.md §9, undecided): 8 consecutive
-    # GPIOs reserved —
-    # the per-node-UART worst case, one RX per node, positioned so one
-    # PIO block can wide-sample all eight. Reclaimed or rebound when
-    # the decision lands.
-    for n in range(8):
-        gpio.reserve(
-            f"GPIO{n}",
-            reason="debug transport (DESIGN.md §9) reservation: "
-            "per-node UART worst case (8 consecutive for one-PIO "
-            "wide sample).",
-        )
+    # §6 runtime debug transport: the root of the second 8:1 tree
+    # ganged to the flash tree's SWIO selects (docs/scan-plane.md §5) —
+    # a PIO UART RX hearing whichever tile the selects point at.
+    gpio.request(
+        "dbg_rx",
+        doc="debug UART return: root of the 8:1 tree ganged to the "
+        "flash tree's selects, leaves on the tiles' PD5 debug_tx "
+        "(§6, scan-plane §5).",
+    )
 
     # The refinement data: one pad per function. Comments name the
     # binding reason — peripheral-forced pads cite the signal.
@@ -127,13 +123,15 @@ def capture() -> PinMap:
         tap_comp="GPIO10",
         tap_led="GPIO11",
         swio="GPIO12",  # adjacent to the taps — one PIO covers GPIO8-12
+        dbg_rx="GPIO13",  # extends the PIO region to GPIO8-13
         srclk="GPIO18",  # SPI0 SCK
         sdo="GPIO19",  # SPI0 TX
         sdi="GPIO20",  # SPI0 RX
         commit="GPIO21",
         oe_n="GPIO22",
     )
-    # The spares: GPIO13-17 and GPIO23-29 (12 of 30).
+    # The spares: GPIO0-7 (the reclaimed debug-transport reservation —
+    # settled, DESIGN.md §6), GPIO14-17 and GPIO23-29 (19 of 30).
     return gpio
 
 
