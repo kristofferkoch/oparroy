@@ -187,3 +187,23 @@ def test_pcbnew_loads_the_committed_node_board() -> None:
         }
     )
     assert parsed_nets == pcbnew_nets
+
+
+def test_pcbnew_loads_the_committed_ci_skeleton() -> None:
+    """The CI board's seed: 4-layer, 1.6 mm, the Power-class nets (§6)."""
+    import pcbnew  # noqa: PLC0415 — dev-shell only, see the module docstring
+
+    from design.ci_pcb import spec as ci_spec  # noqa: PLC0415
+
+    ci_pcb = Path(__file__).parent.parent / "boards" / "ci" / "oparroy-ci.kicad_pcb"
+    board = pcbnew.LoadBoard(str(ci_pcb))
+    board_spec = ci_spec()
+
+    # The §6 4-layer build: signal/GND plane/power/signal.
+    assert board_spec.copper_layers == ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
+    assert board.GetCopperLayerCount() == len(board_spec.copper_layers)
+    assert board.GetDesignSettings().GetBoardThickness() == round(
+        board_spec.thickness_mm * _NM_PER_MM
+    )
+    net_names = {net.GetNetname() for net in board.GetNetsByName().values()}
+    assert _spec_nets(board_spec) <= net_names

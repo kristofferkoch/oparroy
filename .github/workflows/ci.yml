@@ -96,6 +96,7 @@ jobs:
               - 'firmware/supervisor/pins.hpp'
               - 'firmware/supervisor/pins.py'
               - 'boards/node/**'
+              - 'boards/ci/**'
               - 'datasheets/**'
             firmware:
               - '.github/workflows/ci.yml'
@@ -184,6 +185,7 @@ jobs:
             firmware/supervisor/pins.hpp
             firmware/supervisor/pins.py
             boards/node/**
+            boards/ci/**
             datasheets/**
 
       - uses: cachix/install-nix-action@v31
