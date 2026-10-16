@@ -573,7 +573,9 @@ Decided: **8 ring nodes + 1 supervisor** (supervisor = MCU or USB bridge
 that can power-cycle nodes, inject faults, collect debug UART).
 **Full fault injection**: per-segment open/short switches, per-node
 power cut, keep-alive cut — everything scriptable from the supervisor so
-test runs are fully hands-off (design below).
+test runs are fully hands-off (design below). Board-level overview:
+[docs/ci-block-diagram.md](docs/ci-block-diagram.md) — the whole board
+as blocks and wires, drawn from this section.
 
 Dual role: the CI board is also the **demonstrator**. Beyond hands-off
 test runs, it must show the protocol to a human — so the tiles carry
