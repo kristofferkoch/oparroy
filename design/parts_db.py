@@ -399,6 +399,205 @@ PARTS = PartsDb(
                 "datasheets/AMS1117/notes/quirks.md"
             ),
         ),
+        PartRecord(
+            name="74hc595-nexperia",
+            kind="shift-register",
+            lcsc="C5947",
+            symbol="74xx:74HC595",
+            footprint="Package_SO:SOIC-16_3.9x9.9mm_P1.27mm",
+            value="74HC595",
+            tier=Tier.BASIC,
+            stock=Stock(
+                218_335,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Basic tier "
+                "confirmed on the jlcpcb.com part page",
+            ),
+            area_mm2=38.61,
+            datasheet="datasheets/SN74HC595",
+            note=(
+                "Nexperia 74HC595D,118, $0.1124 @5 — the scan-plane "
+                "control register, 10 per CI board (docs/scan-plane.md "
+                "§1); the pick is settled in scan-plane.md §7: the sole "
+                "Basic-tier 74HC595 listing in any package. Pin mapping "
+                "per SCLS041J §3, cross-checked against the KiCad "
+                "74xx:74HC595 symbol (datasheets/SN74HC595/notes/"
+                "facts.md). No silicon POR state — the constructed-zero "
+                "discipline is scan-plane.md §4"
+            ),
+        ),
+        PartRecord(
+            name="74hc165-nexperia",
+            kind="shift-register",
+            lcsc="C5613",
+            symbol="74xx:74HC165",
+            footprint="Package_SO:SOIC-16_3.9x9.9mm_P1.27mm",
+            value="74HC165",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                207_160,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Extended "
+                "tier confirmed on the jlcpcb.com part page",
+            ),
+            area_mm2=38.61,
+            datasheet="datasheets/SN74HC165",
+            note=(
+                "Nexperia 74HC165D,653, $0.1113 @5 — the scan-plane "
+                "observe register, 2 per CI board (docs/scan-plane.md "
+                "§1); the pick is settled in scan-plane.md §7: no "
+                "Basic-tier 74HC165 exists in any package, so the board "
+                "pays one Extended-line fee for its two observe stages. "
+                "KiCad symbol pins D0-D7 are the datasheet's parallel "
+                "inputs A-H (D0 = A = bit 0, scan-plane.md §3; "
+                "datasheets/SN74HC165/notes/facts.md)"
+            ),
+        ),
+        PartRecord(
+            name="ao3401a",
+            kind="p-mosfet",
+            lcsc="C15127",
+            symbol="Transistor_FET:AO3401A",
+            footprint="Package_TO_SOT_SMD:SOT-23",
+            value="AO3401A",
+            tier=Tier.BASIC,
+            stock=Stock(
+                231_435,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Basic tier "
+                "confirmed on the jlcpcb.com part page",
+            ),
+            area_mm2=3.77,
+            datasheet="datasheets/AO3401A",
+            note=(
+                "AOS AO3401A, $0.1030 @5 — the per-tile power-cut "
+                "high-side switch (instrumented-ci.md §3, transform F8): "
+                "-30 V / -4 A, RDS(on) ≤ 85 mΩ @ VGS = -2.5 V "
+                "(datasheets/AO3401A/notes/facts.md). SOT-23 pin order "
+                "1 = G, 2 = S, 3 = D, matching the KiCad "
+                "Transistor_FET:AO3401A symbol"
+            ),
+        ),
+        PartRecord(
+            name="2n7002",
+            kind="n-mosfet",
+            lcsc="C8545",
+            symbol="Transistor_FET:2N7002",
+            footprint="Package_TO_SOT_SMD:SOT-23",
+            value="2N7002",
+            tier=Tier.BASIC,
+            stock=Stock(
+                2_030_150,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Basic tier "
+                "confirmed on the jlcpcb.com part page",
+            ),
+            area_mm2=3.77,
+            datasheet="datasheets/2N7002",
+            note=(
+                "JSCJ 2N7002, $0.0176 @50 — the button-override N-FET "
+                "paralleled across the input tiles' tactile buttons "
+                "(instrumented-ci.md §6, transforms H2/H3): 60 V / "
+                "115 mA, RDS(on) ≤ 5 Ω @ VGS = 10 V against the 10 kΩ "
+                "pull-up — millivolt levels (residual R8, "
+                "instrumented-ci.md §9). SOT-23 pin order 1 = G, 2 = S, "
+                "3 = D printed on the JSCJ datasheet "
+                "(datasheets/2N7002/notes/facts.md)"
+            ),
+        ),
+        PartRecord(
+            name="pot-10k-rk09k",
+            kind="potentiometer",
+            lcsc="C209770",
+            symbol="Device:R_Potentiometer",
+            footprint="Potentiometer_THT:Potentiometer_Alps_RK09K_Single_Vertical",
+            value="10k",
+            tier=Tier.NONE,
+            stock=Stock(
+                2_143,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; JLCPCB "
+                "lists it manual-weld only — hand-soldered post-PCBA "
+                "with the back-side connectors (conn-idc-02x05 "
+                "precedent)",
+            ),
+            area_mm2=112.4,
+            datasheet="datasheets/RK09K",
+            note=(
+                "ALPS RK09K1130A6S, $0.5967 @1 — the input tiles' demo "
+                "knob (instrumented-ci.md §6, transform H1): 10 kΩ, "
+                "taper 1B (linear), 9 mm snap-in vertical THT, pin 2 = "
+                "wiper (datasheets/RK09K/notes/facts.md), matching the "
+                "KiCad footprint's middle pad and Device:R_Potentiometer's "
+                "wiper pin. Rejected: SMD trimmers (JIERR JER33X-1-14 "
+                "C48997896, 79.6k stock, $0.10 — screwdriver-adjust, no "
+                "demo knob, and Extended tier anyway), ALPS horizontal "
+                "RK09 variants (≤ 2.4k stock). A rotary knob is the "
+                "demo-facing part; no assembler-placed rotary pot "
+                "exists at JLCPCB"
+            ),
+        ),
+        PartRecord(
+            name="btn-tact-ts1187a",
+            kind="switch",
+            lcsc="C318884",
+            symbol="Switch:SW_Push",
+            footprint="Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
+            value="TS-1187A-B-A-B",
+            tier=Tier.BASIC,
+            stock=Stock(
+                40_860,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Basic tier "
+                "confirmed on the jlcpcb.com part page",
+            ),
+            area_mm2=26.0,
+            datasheet="datasheets/TS-1187A",
+            note=(
+                "XKB TS-1187A-B-A-B, $0.0207 @20 — the input tiles' "
+                "tactile buttons (instrumented-ci.md §6): SMD-4P "
+                "5.1x5.1 mm, 160 gf, 100k cycles, 50 mA/12 V contact "
+                "(datasheets/TS-1187A/notes/facts.md); four terminals "
+                "in two commoned pairs, merged to pads 1/2 on the "
+                "KiCad footprint. Basic tier and a stocked KiCad-lib "
+                "footprint. Rejected: XUNPU TS-1088-AR02016 (C720477 — "
+                "Basic, 408k stock, but 4x3 mm is finger-hostile at "
+                "demo scale and 2.5x the price), 6x6 mm gull-wing "
+                "clones (C2837531 — Extended tier)"
+            ),
+        ),
+        PartRecord(
+            name="buzzer-pklcs1212e",
+            kind="buzzer",
+            lcsc="C113159",
+            symbol="Device:Buzzer",
+            footprint="Buzzer_Beeper:Buzzer_Murata_PKLCS1212E",
+            value="PKLCS1212E4001-R1",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                7_671,
+                date(2026, 10, 16),
+                "LCSC product page, fetched live 2026-10-16; Extended "
+                "tier confirmed on the jlcpcb.com part page",
+            ),
+            area_mm2=144.0,
+            datasheet="datasheets/PKLCS1212E",
+            note=(
+                "Murata PKLCS1212E4001-R1, $0.8028 @1 — the output "
+                "tiles' passive piezo buzzer (instrumented-ci.md §6, "
+                "PC4 → 470 Ω → piezo → GND): 4 kHz, 75 dB min at the "
+                "spec's own ±1.5 Vo-p measuring condition, which the "
+                "3.3 V GPIO drive exceeds; max input ±12.5 Vo-p "
+                "(datasheets/PKLCS1212E/notes/facts.md). Extended tier "
+                "— every buzzer on JLCPCB's parts list is Extended. "
+                "Rejected: XHXDZ SMD9018 (C49246958 — 3 V/65 dB and "
+                "half the price, but no KiCad-lib footprint and a "
+                "spec-thin datasheet), TDK PS1240P02BT (C76871 — THT, "
+                "breaks single-side SMT), magnetic MLT-class passives "
+                "(16 Ω coils — wrong drive impedance against the §6 "
+                "470 Ω series R; the design wants piezo)"
+            ),
+        ),
     ]
 )
 
