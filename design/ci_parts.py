@@ -3,7 +3,7 @@
 Referenced from DESIGN.md §6 and docs/scan-plane.md.
 
 The typed-part declarations the CI board capture draws on: the scan
-plane's shift registers (10 x 74HC595 control + 2 x 74HC165 observe,
+plane's shift registers (11 x 74HC595 control + 2 x 74HC165 observe,
 scan-plane.md §1), the per-tile power-cut P-FET and the
 button-override N-FET (instrumented-ci.md §3/§6), and the demo I/O
 parts (potentiometer, tactile buttons, piezo buzzer,
@@ -128,10 +128,31 @@ class Sn74hc165(TypedPart):
     its complement, ``ser`` the cascade input (DS), ``clk`` the shift
     clock (CP), ``clk_inh`` the clock inhibit (~CE — tied low on the
     CI board), ``sh_ld`` the asynchronous parallel-load strobe (~PL —
-    the COMMIT net).
+    the COMMIT net). The complementary output is unused on the CI
+    board: ``qh_n`` is optional and the checker reports the NC pin by
+    name.
     """
 
     symbol = "74xx:74HC165"
+    required_pins: ClassVar[frozenset[str]] = frozenset(
+        {
+            "sh_ld",
+            "clk",
+            "d0",
+            "d1",
+            "d2",
+            "d3",
+            "d4",
+            "d5",
+            "d6",
+            "d7",
+            "gnd",
+            "qh",
+            "ser",
+            "clk_inh",
+            "vcc",
+        }
+    )
     pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
         "sh_ld": "1",
         "clk": "2",
@@ -169,34 +190,32 @@ class Sn74hc165(TypedPart):
         clk_inh: Net | str,
         sh_ld: Net | str,
         qh: Net | str,
-        qh_n: Net | str,
         vcc: Net | str,
         gnd: Net | str,
+        qh_n: Net | str | None = None,
         value: str | None = None,
         footprint: str | None = None,
     ) -> None:
-        super().__init__(
-            value,
-            footprint,
-            {
-                "d0": d0,
-                "d1": d1,
-                "d2": d2,
-                "d3": d3,
-                "d4": d4,
-                "d5": d5,
-                "d6": d6,
-                "d7": d7,
-                "ser": ser,
-                "clk": clk,
-                "clk_inh": clk_inh,
-                "sh_ld": sh_ld,
-                "qh": qh,
-                "qh_n": qh_n,
-                "vcc": vcc,
-                "gnd": gnd,
-            },
-        )
+        nets: dict[str, Net | str] = {
+            "d0": d0,
+            "d1": d1,
+            "d2": d2,
+            "d3": d3,
+            "d4": d4,
+            "d5": d5,
+            "d6": d6,
+            "d7": d7,
+            "ser": ser,
+            "clk": clk,
+            "clk_inh": clk_inh,
+            "sh_ld": sh_ld,
+            "qh": qh,
+            "vcc": vcc,
+            "gnd": gnd,
+        }
+        if qh_n is not None:
+            nets["qh_n"] = qh_n
+        super().__init__(value, footprint, nets)
 
 
 class Ao3401a(TypedPart):

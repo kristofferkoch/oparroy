@@ -39,3 +39,9 @@ Matches the KiCad `Transistor_FET:2N7002` symbol (1 = G, 2 = S,
   low hard enough for the node's VIL.
 - Gate leakage IGSS ≤ ±80 nA, IDSS ≤ 80 nA @ VDS = 60 V — the
   released-state pull-up droop is negligible.
+- Capacitances (VDS = 25 V, VGS = 0, 1 MHz, max): Ciss ≤ 50 pF,
+  Coss ≤ 25 pF, Crss ≤ 5 pF. The released FET loads the button line
+  with its drain capacitance — Coss-class, ≤ 25 pF (the §9 R8
+  register's "~5 pF" is the Crss figure; the drain-node loading is
+  the Coss one, and either is noise on a slow GPIO behind a 10 kΩ
+  pull-up).
