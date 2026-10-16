@@ -117,6 +117,19 @@ def tampered_tile_capture(circuit: Circuit) -> None:
     circuit.part("Dat", Resistor("470", a=tx, b=gnd, footprint="StubFP:R_0603"))
 
 
+class Tile(Subcircuit):
+    """The tile as a subcircuit, for per-tile keying (the replicated DUT class).
+
+    The tap screen guards nets carried by ``PerTile``-matched instances;
+    the singly-scoped (``PerInstance``) fixtures above the screen tests
+    predate that rule and exercise the transform mechanics only.
+    """
+
+    def capture(self, circuit: Circuit) -> None:
+        """Build the minimal tile."""
+        tile_capture(circuit)
+
+
 def build_base(
     symbols: StubSymbols, tile: Callable[[Circuit], None] = tile_capture
 ) -> Circuit:
@@ -326,14 +339,15 @@ def test_nonzero_reset_level_errors(symbols: StubSymbols) -> None:
 
 
 def test_undeclared_observer_pin_errors(symbols: StubSymbols) -> None:
-    board = build_base(symbols)
-    apply_transforms(board, [PerInstance(("T0",), (f1(),))])
+    plan = [PerTile(Tile, (f1(),))]
+    board = build_base(symbols, Tile())
+    apply_transforms(board, plan)
     # An observer hung on the segment net with no tap declared.
     board.part("PROBE", StubProbe(sense=board.nets["SEG"]))
     report = check_equivalent(
-        build_base(symbols),
+        build_base(symbols, Tile()),
         board,
-        [PerInstance(("T0",), (f1(),))],
+        plan,
         reset_levels=RESET_LEVELS,
         budgets=BUDGETS,
     )
@@ -344,8 +358,9 @@ def test_undeclared_observer_pin_errors(symbols: StubSymbols) -> None:
 
 
 def test_non_input_tap_pin_errors(symbols: StubSymbols) -> None:
-    board = build_base(symbols)
-    handles = apply_transforms(board, [PerInstance(("T0",), (f1(), b1()))])
+    plan = [PerTile(Tile, (f1(), b1()))]
+    board = build_base(symbols, Tile())
+    handles = apply_transforms(board, plan)
     # The tap wired to a passive pin, not an input-class one.
     board.part(
         "PROBE",
@@ -355,9 +370,9 @@ def test_non_input_tap_pin_errors(symbols: StubSymbols) -> None:
     )
     board.connect(handles[TileNet(("T0",), "sense")], board.parts["PROBE"][1])
     report = check_equivalent(
-        build_base(symbols),
+        build_base(symbols, Tile()),
         board,
-        [PerInstance(("T0",), (f1(), b1()))],
+        plan,
         reset_levels=RESET_LEVELS,
         budgets=BUDGETS,
     )
@@ -408,12 +423,6 @@ def test_power_rails_accept_scan_plane_loading(symbols: StubSymbols) -> None:
 
 
 def test_per_tile_composes_over_instances(symbols: StubSymbols) -> None:
-    class Tile(Subcircuit):
-        """The tile as a subcircuit, for per-tile keying."""
-
-        def capture(self, circuit: Circuit) -> None:
-            tile_capture(circuit)
-
     def build(symbols: StubSymbols) -> Circuit:
         board = Circuit("base", symbols)
         seg_a = board.net("SEG_A")
@@ -503,5 +512,223 @@ def test_port_passthrough_chain_resolves(symbols: StubSymbols) -> None:
 
     report = check_equivalent(
         build(symbols), build(symbols), [], reset_levels={}, budgets={}
+    )
+    assert errors(report) == []
+
+
+def test_extra_hierarchy_outside_scoped_tiles_is_allowed(
+    symbols: StubSymbols,
+) -> None:
+    """The scan plane composes as its own instance — not tile drift."""
+
+    class Plane(Subcircuit):
+        """A scan-plane stand-in: one part in its own board-level instance."""
+
+        def capture(self, circuit: Circuit) -> None:
+            ctl = circuit.port("ctl")
+            circuit.part("R1", Resistor("47k", a=ctl, b=ctl, footprint="StubFP:R_0603"))
+
+    plan = [PerTile(Tile, (f1(), b1()))]
+    instrumented = build_base(symbols, Tile())
+    handles = apply_transforms(instrumented, plan)
+    instrumented.part("PROBE", StubProbe(sense=handles[TileNet(("T0",), "sense")]))
+    instrumented.instance("PLANE", Plane(), ctl=instrumented.net("ctl"))
+    report = check_equivalent(
+        build_base(symbols, Tile()),
+        instrumented,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert errors(report) == []
+
+
+def test_untagged_part_inside_a_scoped_tile_fails(symbols: StubSymbols) -> None:
+    plan = [PerTile(Tile, (f1(),))]
+    instrumented = build_base(symbols, Tile())
+    apply_transforms(instrumented, plan)
+    tile = instrumented.instances["T0"].circuit
+    tile.part(
+        "EXTRA",
+        Resistor(
+            "1k", a=tile.nets["sense"], b=tile.nets["GND"], footprint="StubFP:R_0603"
+        ),
+    )
+    report = check_equivalent(
+        build_base(symbols, Tile()),
+        instrumented,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert any(
+        "T0/EXTRA: untagged part inside a transform-scoped tile" in m
+        for m in errors(report)
+    )
+
+
+def test_stub_net_accepts_control_plane_wiring(symbols: StubSymbols) -> None:
+    """A base net touching no per-tile instance is infrastructure — unscreened.
+
+    The supervisor-side stubs (srclk, swio, dbg_rx on the plain board)
+    exist for the scan plane and mux trees to wire to; the tap screen
+    guards the replicated tiles' nets, not the instrument's own.
+    """
+
+    def build(symbols: StubSymbols) -> Circuit:
+        board = build_base(symbols, Tile())
+        board.part(
+            "SUP", symbol="Stub:CONN6", value="Sup", footprint="StubFP:CONN_1x06"
+        )
+        board.connect(board.net("ctl"), board.parts["SUP"][1])
+        return board
+
+    plan = [PerTile(Tile, (f1(), b1()))]
+    instrumented = build(symbols)
+    handles = apply_transforms(instrumented, plan)
+    instrumented.part("PROBE", StubProbe(sense=handles[TileNet(("T0",), "sense")]))
+    # The scan plane's clock pin lands on the supervisor-only stub net.
+    instrumented.part("PLANE", StubProbe(sense=instrumented.nets["ctl"]))
+    report = check_equivalent(
+        build(symbols),
+        instrumented,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert errors(report) == []
+
+
+def test_base_pin_riding_a_declared_tap(symbols: StubSymbols) -> None:
+    """The supervisor's observe pin re-binds from its plain-board stub to the tap."""
+    plan = [PerTile(Tile, (f1(), b1()))]
+    instrumented = build_base(symbols, Tile())
+    handles = apply_transforms(instrumented, plan)
+    instrumented.part("SUP", StubProbe(sense=handles[TileNet(("T0",), "sense")]))
+    base = build_base(symbols, Tile())
+    base.part("SUP", StubProbe(sense=base.net("tap_stub")))
+    report = check_equivalent(
+        base,
+        instrumented,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert errors(report) == []
+
+
+def test_base_pin_riding_a_tap_needs_input_class_or_citation(
+    symbols: StubSymbols,
+) -> None:
+    plan = [PerTile(Tile, (f1(), b1()))]
+    instrumented = build_base(symbols, Tile())
+    handles = apply_transforms(instrumented, plan)
+    instrumented.part(
+        "SUP", symbol="Stub:CONN6", value="Sup", footprint="StubFP:CONN_1x06"
+    )
+    instrumented.connect(
+        handles[TileNet(("T0",), "sense")], instrumented.parts["SUP"][1]
+    )
+    base = build_base(symbols, Tile())
+    base.part("SUP", symbol="Stub:CONN6", value="Sup", footprint="StubFP:CONN_1x06")
+    base.connect(base.net("tap_stub"), base.parts["SUP"][1])
+    report = check_equivalent(
+        base,
+        instrumented,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert any(
+        "SUP.1 rides the declared tap on 'T0/sense'" in m for m in errors(report)
+    )
+
+
+def test_base_pin_riding_a_cited_tap(symbols: StubSymbols) -> None:
+    """The tap's non-input-consumers justification covers the riding pin."""
+    tap = AddTap(
+        label="B1",
+        net="sense",
+        non_input_consumers="the passive probe pin is Hi-Z in reset state (test)",
+    )
+    plan = [PerTile(Tile, (f1(), tap))]
+    instrumented = build_base(symbols, Tile())
+    handles = apply_transforms(instrumented, plan)
+    instrumented.part(
+        "SUP", symbol="Stub:CONN6", value="Sup", footprint="StubFP:CONN_1x06"
+    )
+    instrumented.connect(
+        handles[TileNet(("T0",), "sense")], instrumented.parts["SUP"][1]
+    )
+    base = build_base(symbols, Tile())
+    base.part("SUP", symbol="Stub:CONN6", value="Sup", footprint="StubFP:CONN_1x06")
+    base.connect(base.net("tap_stub"), base.parts["SUP"][1])
+    report = check_equivalent(
+        base,
+        instrumented,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert errors(report) == []
+
+
+def test_non_input_consumers_declaration_accepts_passive_tap_pin(
+    symbols: StubSymbols,
+) -> None:
+    """The mux-tree case: bidirectional/passive consumer pins, cited."""
+    tap = AddTap(
+        label="B1",
+        net="sense",
+        non_input_consumers="mux leaf channel pins are Hi-Z in reset state (test)",
+    )
+    plan = [PerTile(Tile, (f1(), tap))]
+    board = build_base(symbols, Tile())
+    handles = apply_transforms(board, plan)
+    board.part(
+        "PROBE",
+        symbol="Stub:CONN6",
+        value="Probe",
+        footprint="StubFP:CONN_1x06",
+    )
+    board.connect(handles[TileNet(("T0",), "sense")], board.parts["PROBE"][1])
+    report = check_equivalent(
+        build_base(symbols, Tile()),
+        board,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
+    )
+    assert errors(report) == []
+
+
+def test_base_pin_rebound_to_an_escaped_control(symbols: StubSymbols) -> None:
+    """The supervisor's substitute-source pin re-binds from its stub to the escape.
+
+    The escaped control net is absent in reset state (the reduction's
+    drop set), so a base pin riding it is no re-connection.
+    """
+    plan = [PerTile(Tile, (f1(),))]
+    instrumented = build_base(symbols, Tile())
+    handles = apply_transforms(instrumented, plan)
+    instrumented.part(
+        "SCAN",
+        StubSwitch(
+            a=instrumented.net("SCAN_A"),
+            b1=instrumented.net("SCAN_B"),
+            s=handles[TileNet(("T0",), "BRK")],
+        ),
+    )
+    base = build_base(symbols, Tile())
+    base.part(
+        "SCAN",
+        StubSwitch(a=base.net("SCAN_A"), b1=base.net("SCAN_B"), s=base.net("stub_clk")),
+    )
+    report = check_equivalent(
+        base,
+        instrumented,
+        plan,
+        reset_levels=RESET_LEVELS,
+        budgets=BUDGETS,
     )
     assert errors(report) == []

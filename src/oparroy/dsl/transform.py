@@ -104,10 +104,14 @@ class InsertSeries:
 
     ``pins`` names the base-net pins of the detached side (the tile
     side, ``#a``); the remaining pins stay on the interface side
-    (``#b``). A port base net keeps its name and flag as the ``#b``
-    side — the parent binding holds; an internal base net is replaced
-    by fresh ``net#a``/``net#b`` nets. The part wires ``@a``/``@b`` for
-    the two sides; ``control`` names an escaped control port for the
+    (``#b``). Detaching every pin is legal only on a port base net —
+    the interface side of a port cut is the parent binding, not the
+    pin list (the CI board's connector-less tiles cut a port whose only
+    pin is the PHY's); an internal net must keep pins on both sides. A
+    port base net keeps its name and flag as the ``#b`` side — the
+    parent binding holds; an internal base net is replaced by fresh
+    ``net#a``/``net#b`` nets. The part wires ``@a``/``@b`` for the two
+    sides; ``control`` names an escaped control port for the
     ``@control`` placeholder; ``name`` overrides the detached side's
     net name (the rail-split ``3V3`` → ``3V3N``). ``extra`` places
     auxiliary parts of the same transform (the keep-alive cut's
@@ -152,10 +156,19 @@ class AddTap:
     supervisor. A tile-internal net is exported in place and bound; a
     port net rides its existing binding. The handle key is ``net`` as
     written — including the ``#b`` alias of a port split.
+
+    The equivalence proof screens the tap's consumers to input-class
+    pins — nothing a tap adds may drive the net. ``non_input_consumers``
+    is the declared exception for consumers outside that class (a mux
+    tree's bidirectional channel pins, a pull-up's passive pins, an
+    MCU's bidirectional GPIOs): the string is the reset-state
+    justification — a proof input (memo Q2), never assumed — and the
+    proof accepts the consumers it names in the pin-type screen's place.
     """
 
     label: str
     net: str
+    non_input_consumers: str | None = None
 
 
 @dataclass(frozen=True)
@@ -388,7 +401,7 @@ class _TileTransforms:
             msg = f"transform {label!r}: a series cut needs its detached-side pins"
             raise DefinitionError(msg)
         base = self._net(label, net)
-        if len(pins) >= len(base.pins):
+        if len(pins) >= len(base.pins) and not base.is_port:
             msg = (
                 f"transform {label!r}: the cut leaves no pins on the "
                 f"interface side of {base.name!r}"
