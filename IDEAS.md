@@ -324,8 +324,8 @@ real work — **move**, don't copy. Reference, don't duplicate.
   above), this checkpoint-sidecar pattern is the proven review surface.
   Their pure-text KiCad S-expression parser (MIT, no pcbnew) is also a
   reference implementation for reading `.kicad_pcb`/`.kicad_sch`
-  without KiCad — though oparroy's pcbnew-pinned Python already covers
-  that.
+  without KiCad — though oparroy's hand-rolled parser
+  (`src/oparroy/dsl/kicad_pcb.py`) already covers that.
 
 ## Related projects to mine
 
