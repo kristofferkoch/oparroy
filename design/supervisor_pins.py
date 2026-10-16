@@ -1,10 +1,12 @@
 """Supervisor pin map: the authoritative pin table for the RP2040.
 
-Every function the CI-board supervisor carries — the §6 PIO SWIO flash
+Every function the CI-board supervisor carries — the §2/§3 ring
+closure (the supervisor is the ring's only frame originator and
+drainer, on both counter-rotating rings), the §6 PIO SWIO flash
 channel, the instrumented boundary node's four taps, the §6 debug
 transport's tree root, the scan-plane control chain, and the four
 pot-override PWM channels — requested by
-name, with pads bound below as refinement data: 15 of 30 GPIO spent,
+name, with pads bound below as refinement data: 19 of 30 GPIO spent,
 verified by ``check_pin_map``. The one table feeds the firmware headers
 (``emit_pin_header`` → ``firmware/supervisor/pins.hpp``,
 ``emit_pin_module`` → ``firmware/supervisor/pins.py`` for the
@@ -40,6 +42,38 @@ TITLE = (
 def capture() -> PinMap:
     """Build the supervisor pin map: requests by function, then the binding."""
     gpio = PinMap(RP2040)
+
+    # §2/§3 ring closure: the supervisor is the only frame originator
+    # and drainer, on both counter-rotating rings — four wires: the
+    # originator port toward tile 0 (TX_A drive, RX_B sample; the
+    # board's one connectorized segment) and the drain from tile 7
+    # (RX_A sample, TX_B drive). §5's PIO is the re-timing PHY engine:
+    # each port's drive+sample pair binds adjacent so one state
+    # machine covers its port from a single in/out base, and the four
+    # extend the GPIO8-13 taps/SWIO/debug region into one contiguous
+    # GPIO4-13 region — a PIO `in`/`out` covers up to 32 pins from any
+    # base, so one logic-analyzer program can capture the ring traffic
+    # and the §6 boundary taps in a single FIFO stream.
+    gpio.request(
+        "ring_txa",
+        doc="ring-A drive toward tile 0 — the originator port "
+        "(DESIGN.md §2/§3), a §5 PIO PHY output.",
+    )
+    gpio.request(
+        "ring_rxb",
+        doc="ring-B sample from tile 0 — the originator port's return "
+        "(DESIGN.md §2/§3), a §5 PIO PHY input.",
+    )
+    gpio.request(
+        "ring_rxa",
+        doc="ring-A sample from tile 7 — the drain port "
+        "(DESIGN.md §2/§3), a §5 PIO PHY input.",
+    )
+    gpio.request(
+        "ring_txb",
+        doc="ring-B drive toward tile 7 — the drain port's return "
+        "(DESIGN.md §2/§3), a §5 PIO PHY output.",
+    )
 
     # §6 instrumented boundary node: four taps on consecutive GPIO so
     # one PIO `in` instruction samples the set per clock (8 ns at the
@@ -131,6 +165,10 @@ def capture() -> PinMap:
     # The refinement data: one pad per function. Comments name the
     # binding reason — peripheral-forced pads cite the signal.
     gpio.bind(
+        ring_txa="GPIO4",  # ring ports: GPIO4-7, originator pair first —
+        ring_rxb="GPIO5",  # drive+sample adjacent, one SM per port
+        ring_rxa="GPIO6",  # drain pair
+        ring_txb="GPIO7",  # joins the taps' region: one GPIO4-13 PIO block
         tap_rx="GPIO8",  # taps start here: GPIO8-11 consecutive
         tap_tx="GPIO9",
         tap_comp="GPIO10",
@@ -147,8 +185,8 @@ def capture() -> PinMap:
         pot_pwm5="GPIO16",  # PWM0A
         pot_pwm7="GPIO17",  # PWM0B
     )
-    # The spares: GPIO0-7 (the reclaimed debug-transport reservation —
-    # settled, DESIGN.md §6) and GPIO23-29 (15 of 30).
+    # The spares: GPIO0-3 (the tail of the reclaimed debug-transport
+    # reservation — settled, DESIGN.md §6) and GPIO23-29 (11 of 30).
     return gpio
 
 

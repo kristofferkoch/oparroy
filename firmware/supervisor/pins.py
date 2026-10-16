@@ -3,10 +3,25 @@
 #
 # oparroy supervisor pin map — RP2040 (QFN-56). Function requests, pads bound late as
 # refinement data (DESIGN.md §5/§6).
-# 15 of 30 GPIO assigned; spare: GPIO0 (pin 2), GPIO1 (pin 3), GPIO2 (pin 4), GPIO3 (pin
-# 5), GPIO4 (pin 6), GPIO5 (pin 7), GPIO6 (pin 8), GPIO7 (pin 9), GPIO23 (pin 35),
-# GPIO24 (pin 36), GPIO25 (pin 37), GPIO26 (pin 38), GPIO27 (pin 39), GPIO28 (pin 40),
-# GPIO29 (pin 41).
+# 19 of 30 GPIO assigned; spare: GPIO0 (pin 2), GPIO1 (pin 3), GPIO2 (pin 4), GPIO3 (pin
+# 5), GPIO23 (pin 35), GPIO24 (pin 36), GPIO25 (pin 37), GPIO26 (pin 38), GPIO27 (pin
+# 39), GPIO28 (pin 40), GPIO29 (pin 41).
+
+# ring_txa — ring-A drive toward tile 0 — the originator port (DESIGN.md §2/§3), a §5
+# PIO PHY output.
+ring_txa = 4
+
+# ring_rxb — ring-B sample from tile 0 — the originator port's return (DESIGN.md §2/§3),
+# a §5 PIO PHY input.
+ring_rxb = 5
+
+# ring_rxa — ring-A sample from tile 7 — the drain port (DESIGN.md §2/§3), a §5 PIO PHY
+# input.
+ring_rxa = 6
+
+# ring_txb — ring-B drive toward tile 7 — the drain port's return (DESIGN.md §2/§3), a
+# §5 PIO PHY output.
+ring_txb = 7
 
 # tap_rx — boundary node's ring RX tap, PIO logic-analyzer input and glitch-stimulus
 # output (§6).
