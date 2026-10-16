@@ -469,6 +469,7 @@ PARTS = PartsDb(
             ),
             area_mm2=3.77,
             datasheet="datasheets/AO3401A",
+            residuals=Residuals(on_resistance_ohm=0.085),
             note=(
                 "AOS AO3401A, $0.1030 @5 — the per-tile power-cut "
                 "high-side switch (instrumented-ci.md §3, transform F8): "
@@ -494,6 +495,9 @@ PARTS = PartsDb(
             ),
             area_mm2=3.77,
             datasheet="datasheets/2N7002",
+            residuals=Residuals(
+                on_resistance_ohm=5.0, off_capacitance_pf=25.0, leakage_ua=0.08
+            ),
             note=(
                 "JSCJ 2N7002, $0.0176 @50 — the button-override N-FET "
                 "paralleled across the input tiles' tactile buttons "
