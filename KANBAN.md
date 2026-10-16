@@ -33,8 +33,10 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T10 --> T12[T12 test-hw harness]
-    T10 --> T15[T15 cable reach: bench + §2 adoption]
+    T10a[T10a CI parts + subcircuits] --> T10b[T10b CI board composition]
+    T10b --> T10c[T10c CI layout + fab]
+    T10c --> T12[T12 test-hw harness]
+    T10c --> T15[T15 cable reach: bench + §2 adoption]
     T32[T32 supervisor firmware] --> T12
 ```
 
@@ -42,36 +44,25 @@ ______________________________________________________________________
 
 ## Next
 
-- **T10 — Test board design.** 8 ring nodes + supervisor, full fault
-  injection (per-segment open/short, per-node power cut, keep-alive
-  cut),
-  all scriptable (DESIGN.md §6). **Dual role — CI + demonstrator**
-  (§6): a subset of nodes carries human-facing I/O (potentiometer,
-  buttons, LEDs, buzzer), each input overridable from the supervisor
-  (mux/DAC substitution, button paralleling) so scripted runs stay
-  hands-off regardless of knob positions. Includes the
-  **instrumented boundary node**: the supervisor-adjacent node's RX/TX
-  ring segments (plus comparator-output and working-LED taps) wired to
-  RP2040 GPIOs for PIO logic analysis and glitch stimulus (DESIGN.md
-  §6). Nodes tile the settled node-board design (`boards/node/`);
-  captured in the DSL, layout in KiCad. Bench-verify early with the §6
-  CI flash fan-out: deselected-port noise margin (per-node 10 kΩ
-  pull-ups fitted) and SDI false-trigger recovery — a
-  false-triggered node drives its own stub and must resync clean
-  on reselect, before the control plane is committed.
-  Bela lesson (docs/bela-lessons.md §5): the test rig is a
-  first-class deliverable with its own schedule risk — budget for it,
-  and test at the cheapest rework stage (post-SMT, pre-through-hole).
-  Fabs **first**, ahead of the standalone node board: its eight tiles
-  are the first bench articles for the §2/§4 claims.
-  Supervisor-side work splits out: the RP2040 subcircuit (landed:
-  `design/supervisor.py`, `design/supervisor_pins.py`) and the debug
-  transport (settled: DESIGN.md §6 — PD5 USART through a tree ganged
-  to the flash mux's selects); the scan
-  control/observe plane is settled (docs/scan-plane.md) and the
-  supervisor image itself is T32.
-  **Blocked by:** — ·
-  **Unblocks:** T12, T15
+- **T10a — CI board parts + instrumentation subcircuits.** Split from
+  T10. The capture-side building blocks the CI board composes: typed
+  parts and parts-DB entries for the scan plane (SN74HC595 control,
+  SN74HC165 observe — datasheets vendored), the AO3401A-class
+  power-cut P-FET and the 2N7002-class override N-FETs, and the
+  demonstrator I/O complement (potentiometer, buttons, buzzer) —
+  inventory-driven (DESIGN.md §6), datasheet extraction per the
+  standing rule. Then the subcircuit captures,
+  each consuming the instrumentation-transform machinery with
+  provenance tags: the four-state segment injector (three
+  SN74LVC1G3157 + 470 Ω shunt legs, docs/instrumented-ci.md §2), the
+  per-tile power cut with the 3V3/3V3N rail split (§3), the
+  keep-alive cut (§4), the human-I/O overrides (§6), the per-tile
+  scan slice plus the supervisor aux stages (docs/scan-plane.md
+  §2-3), and the ganged SWIO/debug 3157 trees (§5). The supervisor
+  pin map (`design/supervisor_pins.py`) gains the four pot-override
+  PWM channels — one per input tile, never allocated when the
+  subcircuit landed.
+  **Blocked by:** — · **Unblocks:** T10b
 - **T34 — CI board block diagram.** *Shape: docs.* One page showing
   the whole CI board as blocks and the wires between them: the USB-C
   inlet → 5 V → 3.3 V regulator power tree (T35), the RP2040
@@ -85,7 +76,7 @@ ______________________________________________________________________
   review artifact for the instrumentation / scan-plane / test-board
   conversations — revised as those
   settle, and retired in favor of T26's generated block view once the
-  T10 capture exists. **Blocked by:** — · **Unblocks:** —
+  CI board capture exists. **Blocked by:** — · **Unblocks:** —
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
   `circuits/watchdog-supervisor/` in the DSL — the charge pump's
@@ -240,9 +231,38 @@ ______________________________________________________________________
   arithmetic. Extends the T8 check machinery (the ports' limit ranges
   already carry an optional current interval). **Blocked by:** — ·
   **Unblocks:** —
+- **T10b — CI board composition + netlist.** Split from T10.
+  `design/ci_board.py`: the `Node` subcircuit (`design/node.py`) tiled
+  eight times — four input tiles alternating with four output around
+  the ring, the boundary tile an output tile (DESIGN.md §6) —
+  composed with the supervisor subcircuit (`design/supervisor.py`),
+  the scan plane, the fault injectors, the human-I/O overrides, the
+  power tree (`design/ci_power.py`), and the instrumented boundary
+  node's tap set and watchdog defeat. Inter-tile segments are board
+  copper; the supervisor→tile-0 segment carries the one §3 connector
+  pair (the demo's yankable connector and the cable-reach bench's
+  insertion point). Emits the KiCad netlist, golden-tested like the
+  node capture; the reset-state equivalence proof's residual register
+  (docs/instrumented-ci.md §9) checks out.
+  **Blocked by:** T10a · **Unblocks:** T10c
+- **T10c — CI board layout + fab.** Split from T10. *Shape: chore —
+  the fab step needs a human.* 4-layer KiCad layout of the composed
+  board (DESIGN.md §6), silkscreen self-documentation (§6: connector
+  pinout voltages, test-point labels — layout-checkable per §7), the
+  §7 placement contracts (short boundary-node tap stubs, TVS
+  adjacency at the boundary connector). Bench-verify at the cheapest
+  rework stage (post-SMT, pre-through-hole — docs/bela-lessons.md
+  §5): the §6 CI flash fan-out (deselected-port noise margin with the
+  per-node 10 kΩ pull-ups fitted, SDI false-trigger recovery — a
+  false-triggered node drives its own stub and must resync clean on
+  reselect) plus the docs/instrumented-ci.md §10 and
+  docs/scan-plane.md §8 lists, before the control plane is committed.
+  Fabs **first**, ahead of the standalone node board: its eight tiles
+  are the first bench articles for the §2/§4 claims.
+  **Blocked by:** T10b · **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
-  CI-platform integration is a later card. **Blocked by:** T10,
+  CI-platform integration is a later card. **Blocked by:** T10c,
   T32 ·
   **Unblocks:** —
 - **T15 — Cable reach: bench confirmation and §2 adoption.** *Shape:
@@ -259,4 +279,4 @@ ______________________________________________________________________
   fast-edge spec). On shipping: adopt the doc's proposed DESIGN.md §2
   block, resolve the §9 cable-reach open question, and decide the
   broken-loop power policy (≤ 5 m segments vs §2.1 second-tap
-  injection). **Blocked by:** T10 · **Unblocks:** —
+  injection). **Blocked by:** T10c · **Unblocks:** —
