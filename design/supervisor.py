@@ -35,16 +35,34 @@ Ports (the subcircuit interface):
 - ``dbg_rx`` — the §6 runtime debug transport: root of the second 8:1
   tree ganged to the flash tree's selects (docs/scan-plane.md §5),
   hearing the selected tile's PD5 debug UART stream.
+- ``TX_A``/``RX_B`` — the ring-closure **originator port** toward
+  tile 0 (DESIGN.md §2/§3: the supervisor is the only frame
+  originator, on both counter-rotating rings), and ``RX_A``/``TX_B``
+  — the **drain port** from tile 7. §5's PIO is the PHY engine, so the
+  port is digital drive/sample with the §7 terminal-protection
+  contract mirrored from the node PHY (`design/phy_frontend.py`):
+  a 470 Ω series resistor per wire (the §2 swept baseline assumes the
+  470 Ω TX series R), connector-adjacent TVS only on the originator
+  pair — the supervisor→tile-0 segment is the board's one
+  connectorized segment; the drain faces board copper
+  (docs/instrumented-ci.md §2). The refs mirror the node's
+  ``Rat``/``Rar``/``Rbt``/``Rbr`` so the §7 injector plan's split
+  points (``TX_A``: ``Rat.b`` ↔ downstream, ``RX_B``: ``Rbr.a`` ↔
+  downstream) read the same at both segment ends; the connector pair
+  itself lands with the board composition.
 
 The GPIO binding is exactly ``design/supervisor_pins.py``'s pin map:
+gpio4..7 → the ring wires (originator pair, then drain pair),
 gpio8..11 → the taps, gpio12 → ``swio``, gpio13 → ``dbg_rx``,
 gpio18..22 → the scan chain (SRCLK/SDO/SDI on the SPI0-capable pads).
-gpio0..7 stay spare — the reclaimed debug-transport reservation
-(DESIGN.md §6 settled the transport at one GPIO).
+gpio0..3 stay spare — the tail of the reclaimed debug-transport
+reservation (DESIGN.md §6 settled the transport at one GPIO).
 
-Expected unconnected-pin warnings: the nineteen spare GPIOs
-(GPIO0..7, GPIO14..17, GPIO23..29) and SWCLK/SWDIO, all on U1. SWD
-stays unwired on the board
+Expected unconnected-pin warnings: the fifteen spare-or-board-level
+GPIOs (GPIO0..3, GPIO14..17, GPIO23..29) and SWCLK/SWDIO, all on U1.
+GPIO14..17 bind to the pot-override PWMs in the pin map and escape
+with the board composition; in this standalone capture they report
+NC like the spares. SWD stays unwired on the board
 — the §6 flash channel is PIO SWIO through the 3157 tree; the pads
 report by name so nothing else hides among them.
 
@@ -60,6 +78,7 @@ import argparse
 import sys
 from typing import TYPE_CHECKING, ClassVar
 
+from design.bins import TvsSod323
 from design.parts_db import C0603, PARTS, R0603
 from design.rp2040 import Rp2040 as _Rp2040
 from oparroy.dsl import (
@@ -170,6 +189,40 @@ W25q16jvssiq = PARTS.bind(
 Abm8272t3 = PARTS.bind("crystal-abm8-272-t3", _Abm8272t3, class_name="Abm8272t3")
 
 
+def _ring_ports(circuit: Circuit) -> tuple[Net, Net, Net, Net]:
+    """Build the ring-closure ports with their §7 terminal protection.
+
+    The originator port (``TX_A``/``RX_B``, toward tile 0) and the
+    drain port (``RX_A``/``TX_B``, from tile 7) — DESIGN.md §2/§3's
+    closure discipline: the supervisor is the only frame originator
+    and drainer, on both counter-rotating rings. Placement mirrors the
+    node PHY (design/phy_frontend.py): the 470 Ω series R sits between
+    the GPIO and the wire, the TVS connector-adjacent on the wire —
+    and only on the originator pair: the supervisor→tile-0 segment is
+    the board's one connectorized segment, the drain is board copper
+    (instrumented-ci.md §2). The refs mirror the node's
+    Rat/Rar/Rbt/Rbr so the injector's split points — ``Rat.b`` on
+    ``TX_A``, ``Rbr.a`` on ``RX_B`` — read the same at both segment
+    ends. Returns the four MCU-side nets for the U1 binding.
+    """
+    tx_a = circuit.port("TX_A")
+    rx_b = circuit.port("RX_B")
+    rx_a = circuit.port("RX_A")
+    tx_b = circuit.port("TX_B")
+    gnd = circuit.nets["GND"]
+    ring_txa = circuit.net("ring_txa")
+    ring_rxb = circuit.net("ring_rxb")
+    ring_rxa = circuit.net("ring_rxa")
+    ring_txb = circuit.net("ring_txb")
+    circuit.part("Rat", R0603("470", a=ring_txa, b=tx_a))
+    circuit.part("Dat", TvsSod323(a=tx_a, b=gnd))
+    circuit.part("Rbr", R0603("470", a=rx_b, b=ring_rxb))
+    circuit.part("Dbr", TvsSod323(a=rx_b, b=gnd))
+    circuit.part("Rar", R0603("470", a=rx_a, b=ring_rxa))
+    circuit.part("Rbt", R0603("470", a=ring_txb, b=tx_b))
+    return ring_txa, ring_rxb, ring_rxa, ring_txb
+
+
 class Supervisor(Subcircuit):
     """The RP2040 minimal system on the 3.3 V board rail, as a subcircuit."""
 
@@ -199,6 +252,7 @@ class Supervisor(Subcircuit):
         commit = circuit.port("commit")
         oe_n = circuit.port("oe_n")
         dbg_rx = circuit.port("dbg_rx")
+        ring_txa, ring_rxb, ring_rxa, ring_txb = _ring_ports(circuit)
 
         dvdd = circuit.net("dvdd")
         qspi_ss = circuit.net("qspi_ss")
@@ -223,6 +277,10 @@ class Supervisor(Subcircuit):
                 vreg_vout=dvdd,
                 usb_vdd=v3v3,
                 adc_avdd=v3v3,
+                gpio4=ring_txa,
+                gpio5=ring_rxb,
+                gpio6=ring_rxa,
+                gpio7=ring_txb,
                 gpio8=tap_rx,
                 gpio9=tap_tx,
                 gpio10=tap_comp,

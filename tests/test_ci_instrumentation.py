@@ -2,9 +2,8 @@
 
 The fixtures are CI-board-shaped at minimal size: one or two tile
 instances of the CI variants (`design/ci_tiles.py`) chained on segment
-nets, plus a stand-in for the supervisor's ring originator port (the
-full board capture owns the real one) to exercise the F1-F6 injector
-parameterization.
+nets, plus the real `Supervisor` capture to exercise the F1-F6
+injector against its ring originator port.
 The equivalence tests run the reset-state proof
 (`src/oparroy/dsl/equivalence.py`) of the instrumented tile against the
 uninstrumented variant with the §9 residual register as the
@@ -15,7 +14,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from design.bins import R0603, TvsSod323
 from design.ci_instrumentation import (
     BUDGETS,
     boundary_taps,
@@ -26,13 +24,13 @@ from design.ci_instrumentation import (
     segment_injector,
 )
 from design.ci_tiles import InputNode, OutputNode
+from design.supervisor import Supervisor
 from oparroy.dsl import (
     AddShunt,
     Circuit,
     EquivalenceReport,
     InsertSeries,
     Severity,
-    Subcircuit,
     Substitute,
     TileNet,
     apply_transforms,
@@ -55,27 +53,41 @@ if TYPE_CHECKING:
 #: B1-B4 observe taps on the boundary tile (§7); B5 is a rail shunt.
 BOUNDARY_TAP_COUNT = 4
 
+#: The Supervisor ports the injector fixture doesn't exercise, tied to
+#: their own board nets so the instance binds its full interface.
+SUPERVISOR_TIE_OFF_PORTS = (
+    "usb_dp",
+    "usb_dm",
+    "usb_boot",
+    "swio",
+    "tap_rx",
+    "tap_tx",
+    "tap_comp",
+    "tap_led",
+    "srclk",
+    "sdo",
+    "sdi",
+    "commit",
+    "oe_n",
+    "dbg_rx",
+)
 
-class OriginatorPort(Subcircuit):
-    """Stand-in for the supervisor's ring originator port.
-
-    Two ring wires behind 470 Ω protection with boundary TVS, named
-    like the tile PHY's downstream interface so the F1-F6 injector
-    records apply unchanged.
-    """
-
-    def capture(self, circuit: Circuit) -> None:
-        """Build the port: TX_A/RX_B each behind a series R with TVS."""
-        tx_a = circuit.port("TX_A")
-        rx_b = circuit.port("RX_B")
-        circuit.port("3V3")  # the injector switches' always rail
-        gnd = circuit.port("GND")
-        drv = circuit.net("drv")
-        rcv = circuit.net("rcv")
-        circuit.part("Rtx", R0603("470", a=drv, b=tx_a))
-        circuit.part("Dtx", TvsSod323(a=tx_a, b=gnd))
-        circuit.part("Rrx", R0603("470", a=rx_b, b=rcv))
-        circuit.part("Drx", TvsSod323(a=rx_b, b=gnd))
+#: The originator injector's parts (§7): six 3157s + four 470 Ω legs.
+SUP_INJECTOR_REFS = {
+    f"FI1/{ref}"
+    for ref in (
+        "SWAB",
+        "SWAG",
+        "SWAV",
+        "SWBB",
+        "SWBG",
+        "SWBV",
+        "RAG",
+        "RAV",
+        "RBG",
+        "RBV",
+    )
+}
 
 
 def ci_board(libs: KiCadLibraries, tiles: list[tuple[str, type]]) -> Circuit:
@@ -288,29 +300,37 @@ def test_supervisor_port_injector(kicad_libs: KiCadLibraries) -> None:
     board = ci_board(kicad_libs, [("T0", OutputNode)])
     board.instance(
         "SUP",
-        OriginatorPort(),
+        Supervisor(),
         TX_A=board.nets["SEG0_A"],
         RX_B=board.nets["SEG0_B"],
+        RX_A=board.net("SEG8_A"),
+        TX_B=board.net("SEG8_B"),
         GND=board.nets["GND"],
+        **{name: board.net(f"SUP_{name}") for name in SUPERVISOR_TIE_OFF_PORTS},
         **{"3V3": board.nets["3V3"]},
     )
     plan = ci_transform_plan(
         supervisor_port=("SUP",),
-        supervisor_nets=("TX_A", "Rtx.b", "RX_B", "Rrx.a"),
+        supervisor_nets=("TX_A", "Rat.b", "RX_B", "Rbr.a"),
     )
     handles = apply_transforms(board, plan)
     sup = board.instances["SUP"].circuit
-    assert net_pins(sup, "TX_A#a") == {"Rtx.2", "FI1/SWAB.4"}
+    assert net_pins(sup, "TX_A#a") == {"Rat.2", "FI1/SWAB.4"}
     assert net_pins(sup, "TX_A") == {
-        "Dtx.1",
+        "Dat.1",
         "FI1/SWAB.3",
         "FI1/SWAG.4",
         "FI1/SWAV.4",
     }
+    assert net_pins(sup, "RX_B#a") == {"Rbr.1", "FI1/SWBB.4"}
     for bit in ("BRK_A", "SHG_A", "SHV_A", "BRK_B", "SHG_B", "SHV_B"):
         assert handles[TileNet(("SUP",), bit)].name == f"SUP/{bit}"
-    # The drain port stays bare: no injector parts beyond the six.
-    assert not any(ref.startswith("FI2/") for ref in sup.parts)
+    # The drain port stays bare (§7: tile 7's injector covers that
+    # segment) — no injector parts beyond the originator's set.
+    assert net_pins(sup, "RX_A") == {"Rar.1"}
+    assert net_pins(sup, "TX_B") == {"Rbt.2"}
+    extras = {ref for ref in sup.parts if ref.startswith("FI1/")} - SUP_INJECTOR_REFS
+    assert not extras
 
 
 def test_instrumented_fixture_passes_check(kicad_libs: KiCadLibraries) -> None:
