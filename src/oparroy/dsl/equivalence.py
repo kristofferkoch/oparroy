@@ -601,11 +601,16 @@ def _check_base_bijection(  # noqa: PLR0913 — the reduction context threaded t
     issues: list[Issue],
 ) -> None:
     """Check the anti-drift bijection: every base part and net survives."""
+    # Rails are the nets power-class pins ride: a driven rail carries a
+    # power output (or a power symbol), an externally-fed one only power
+    # inputs — GND included. Both exist to be loaded, so both exempt an
+    # extra part's pin from the tap screen.
     power_nets = {
         net.name
         for net in base_flat.nets.values()
         if any(
-            pin.part.symbol.is_power or pin.type is PinType.POWER_OUT
+            pin.part.symbol.is_power
+            or pin.type in {PinType.POWER_IN, PinType.POWER_OUT}
             for pin in net.pins
         )
     }
@@ -769,10 +774,12 @@ def _check_extra_part(  # noqa: PLR0913 — the bijection context threaded throu
     input-class pin type (memo obligation 2) — except on power rails,
     which exist to be loaded (the rail's budget is the power tree's,
     not this proof's), and unless the tap declares its
-    non-input-class consumers with a reset-state justification. Base
-    nets that touch no per-tile instance are board infrastructure (the
-    supervisor-side stubs the plane and trees wire to) — outside the
-    screen.
+    non-input-class consumers with a reset-state justification. A rail
+    classifies by its power-class pins, driven or not: an
+    externally-fed net (GND from the cable) carries only power inputs
+    and is still a rail. Base nets that touch no per-tile instance are
+    board infrastructure (the supervisor-side stubs the plane and trees
+    wire to) — outside the screen.
     """
     if part.provenance is not None:
         return
