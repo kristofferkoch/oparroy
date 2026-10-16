@@ -350,24 +350,15 @@ real work — **move**, don't copy. Reference, don't duplicate.
   protocol + copyleft reference + trademarked name) vs our settled
   plain MIT — revisit only if the standard/tooling framing resonates.
 - **Konnect** ([github.com/mixelpixx/Konnect](https://github.com/mixelpixx/Konnect))
-  — AI-assisted KiCad 10 plugin: one static Rust binary serving MCP
-  tools for schematic capture, layout, routing, and manufacturing
-  export. AGPL-3.0, so mine the architecture, not the code.
-  Transfers:
-  - **KiCad's IPC API as the pcbnew/SWIG escape hatch.** Konnect edits
-    the live board through KiCad 10's official IPC API (protobuf over
-    NNG) — the interface KiCad is investing in while deprecating the
-    SWIG Python bindings we currently script through. Our whole
-    Python-3.14-pinned-to-nixpkgs-pcbnew dance exists only to make
-    `import pcbnew` work; an IPC client runs out of process in any
-    language and drops that coupling. Directly relevant to the layout
-    replication generator and any future pcbnew-side tooling.
-  - **Defensive Specctra round-trip.** Revision-bound DSN export,
-    external Freerouting, strict one-transaction SES import that
-    rejects unsupported geometry before mutating the board.
-  - **Local JLCPCB catalog search** (a bundled 2.5M-part snapshot) —
-    overlaps the parts-DB stock refresh idea; their approach to
-    caching the catalog locally may beat hitting the API live.
-  - Non-transfers: schematic S-expression editing and AI-driven
-    capture — our DSL is the source of truth and emits netlists;
-    Konnect's capture path targets hand/LLM-driven KiCad schematics.
+  — AI-assisted KiCad 10 plugin: one static Rust binary driving KiCad
+  via the official IPC API. AGPL-3.0 — mine ideas, not code.
+  Researched: [docs/konnect-lessons.md](docs/konnect-lessons.md).
+  Key transfers: IPC API as the pcbnew/SWIG escape hatch (probe-don't-
+  sniff capabilities, typed failure classification, never blind-retry
+  uncertain outcomes); hash-bound defensive round-trips against
+  external tools; targeted text edits + compare-and-swap for KiCad
+  file edits; the kicad-jlcpcb-tools feed as a no-auth parts catalog —
+  settles the stock-refresh idea's open questions (overlay cache +
+  proposed-edit diffs, snapshot-date provenance); conformance-oracle
+  testing against KiCad's shipped demo corpus. Non-transfer: AI-driven
+  schematic capture — the DSL stays the source of truth.
