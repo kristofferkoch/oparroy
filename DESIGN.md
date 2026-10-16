@@ -780,7 +780,41 @@ each tile — P-FET high-side per tile (above), so the bypass switch
 and the fault injectors stay on the always-on rail per §4 while the
 MCU domain is cut.
 
-Open: runtime debug transport (UART per node? shared bus?). The
+Runtime debug transport — **settled.** The node's hardware USART TX
+(PD5, TX-only — the pin map's `debug_tx`; RX stays unwired) feeds a
+**second 8:1 3157 tree ganged to the flash tree's `SWIO_A2..A0`
+selects** ([docs/scan-plane.md](docs/scan-plane.md) §5), its root on a
+dedicated RP2040 GPIO sampled as a PIO UART RX. Collection is muxed —
+one node at a time — which suffices: reports are rare, frames are
+tiny, and parking the combined select on one tile *is* the "watch this
+node" case. Encoding is dictionary-based (defmt-style): format strings
+interned in a non-loaded ELF section, the wire carrying the record
+address plus raw binary arguments, the host decoding against the ELF
+as the string table — no strings or formatting code on the target
+([code-std-cpp.md#1-language-and-toolchain](code-std-cpp.md#1-language-and-toolchain)'s
+no-strings rule), and a `consteval` format-string parse makes
+placeholder/argument mismatches compile errors. Discipline is
+**emit-and-forget, best effort**: TX-only means no downlink to ACK
+with, so nodes emit blind and a burst that lands while the tree sits
+elsewhere is lost. The §4 `lib::verify_failed` wiring point reports
+over this channel; when a specific node's state must not be lost,
+SWIO memory reads (halt + program buffer — sdi-debug notes) drain it
+directly, GDB being the reliable channel of last resort. Debug output
+is a development convenience, never required to be ring-timing-neutral.
+CI board only: no connector, no pogo — the transport is intra-board
+copper; the standalone node board keeps PD5 NC (§9's payload-terminal
+question is untouched) and the programming jig is unchanged. The
+supervisor pin map's 8-GPIO reservation is reclaimed — the transport
+costs one GPIO (the tree root) and zero scan-chain bits. Rejected:
+eight dedicated RX pins (spends 8 GPIO and PIO state machines on
+simultaneity nothing needs); bit-banging PD1 into the flash tree (PD1
+re-use is the documented brick recipe, and UART low phases mimic the
+SDI wire protocol's pulse-width encoding —
+[quirks](datasheets/CH32V003/notes/quirks.md) §Debug); a shared
+open-drain bus (§2's positional addressing gives nodes no identity to
+arbitrate with, and a faulted node wedges the very channel whose job
+is reporting faults); scan-observe-only (the assert report needs a
+real channel). The
 segment connector is settled (§3) — and stays deliberately fragile:
 it is the failure mode under test.
 
@@ -1541,8 +1575,11 @@ resolves each is in KANBAN.md):
 - **Intermittent connector faults** (§3) — protocol re-route vs hardware
   auto-bypass vs both; the dual-ring substrate is settled (§3), the
   direction-flap policy is not.
-- **Debug transport** (§6) — per-node UART vs shared bus, connector
-  style.
+- **Debug transport** (§6) — **resolved:** the node's PD5 hardware
+  USART TX feeds a second 8:1 3157 tree ganged to the flash mux's
+  selects; muxed one-at-a-time collection, TX-only, emit-and-forget
+  (§6). No connector — the transport is intra-board copper, and the
+  supervisor pin map's 8-GPIO reservation is reclaimed.
 - **Node-board stackup and thickness** (§6) — **resolved: 2-layer,
   0.8 mm.** The §1 cost driver won: the board is tiny, single-sided,
   and its back is two connectors plus pass-through, so 4-layer's

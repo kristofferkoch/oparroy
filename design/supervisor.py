@@ -32,16 +32,19 @@ Ports (the subcircuit interface):
   node's four taps.
 - ``srclk``, ``sdo``, ``sdi``, ``commit``, ``oe_n`` — the scan-plane
   control/observe chain (docs/scan-plane.md §6).
-- ``dbg[0..7]`` — a port array (``Circuit.port_array``): the
-  debug-transport reservation (DESIGN.md §9), GPIO0..7, one port net
-  per pad so the parent binds the vector element-wise.
+- ``dbg_rx`` — the §6 runtime debug transport: root of the second 8:1
+  tree ganged to the flash tree's selects (docs/scan-plane.md §5),
+  hearing the selected tile's PD5 debug UART stream.
 
 The GPIO binding is exactly ``design/supervisor_pins.py``'s pin map:
-gpio0..7 → ``dbg[0..7]``, gpio8..11 → the taps, gpio12 → ``swio``,
+gpio8..11 → the taps, gpio12 → ``swio``, gpio13 → ``dbg_rx``,
 gpio18..22 → the scan chain (SRCLK/SDO/SDI on the SPI0-capable pads).
+gpio0..7 stay spare — the reclaimed debug-transport reservation
+(DESIGN.md §6 settled the transport at one GPIO).
 
-Expected unconnected-pin warnings: the twelve spare GPIOs (GPIO13..17,
-GPIO23..29) and SWCLK/SWDIO, all on U1. SWD stays unwired on the board
+Expected unconnected-pin warnings: the nineteen spare GPIOs
+(GPIO0..7, GPIO14..17, GPIO23..29) and SWCLK/SWDIO, all on U1. SWD
+stays unwired on the board
 — the §6 flash channel is PIO SWIO through the 3157 tree; the pads
 report by name so nothing else hides among them.
 
@@ -195,7 +198,7 @@ class Supervisor(Subcircuit):
         sdi = circuit.port("sdi")
         commit = circuit.port("commit")
         oe_n = circuit.port("oe_n")
-        dbg = circuit.port_array("dbg", 8)
+        dbg_rx = circuit.port("dbg_rx")
 
         dvdd = circuit.net("dvdd")
         qspi_ss = circuit.net("qspi_ss")
@@ -220,19 +223,12 @@ class Supervisor(Subcircuit):
                 vreg_vout=dvdd,
                 usb_vdd=v3v3,
                 adc_avdd=v3v3,
-                gpio0=dbg[0],
-                gpio1=dbg[1],
-                gpio2=dbg[2],
-                gpio3=dbg[3],
-                gpio4=dbg[4],
-                gpio5=dbg[5],
-                gpio6=dbg[6],
-                gpio7=dbg[7],
                 gpio8=tap_rx,
                 gpio9=tap_tx,
                 gpio10=tap_comp,
                 gpio11=tap_led,
                 gpio12=swio,
+                gpio13=dbg_rx,
                 gpio18=srclk,
                 gpio19=sdo,
                 gpio20=sdi,

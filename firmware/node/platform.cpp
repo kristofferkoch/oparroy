@@ -21,8 +21,10 @@
 namespace lib {
 
 [[noreturn]] void verify_failed(SourceLocation location) {
-    // No debug transport yet (a settled-open question owned by a later
-    // slice): the line-only location is recoverable host-side — the
+    // The debug transport is settled (DESIGN.md §6: PD5 USART TX into
+    // the CI board's ganged debug tree) but the reporting hook lands
+    // with a later firmware slice: the line-only location is
+    // recoverable host-side — the
     // build is reproducible, so addr2line on this ELF maps the trap
     // site's PC, and the source line is the condition text
     // (verify.hpp spells out the mechanism).
