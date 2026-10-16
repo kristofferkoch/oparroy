@@ -33,7 +33,6 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T30[T30 RP2040 supervisor subcircuit] --> T10
     T33[T33 debug transport decision] --> T10
     T10 --> T12[T12 test-hw harness]
     T10 --> T15[T15 cable reach: bench + §2 adoption]
@@ -44,28 +43,14 @@ ______________________________________________________________________
 
 ## Next
 
-- **T30 — RP2040 supervisor subcircuit.** DSL capture of the §5
-  supervisor: RP2040 minimal system — QSPI flash, 12 MHz crystal (§5:
-  the supervisor keeps its crystal for USB), decoupling, boot/reset —
-  with D+/D− from the board's single USB-C receptacle (shared with
-  power, §6) — the pair wants its 27 Ω series resistors close to the
-  RP2040 and ~90 Ω differential routing over unbroken ground
-  (`datasheets/RP2040/notes/power-design.md`, AN §2.4.1). Carries the
-  GPIO/PIO budget: the SWIO flash channel and
-  its mux select (§6), the boundary node's
-  four taps (RX, TX, comparator-out, working-LED — §6), scan-chain
-  clock/data/latch (docs/scan-plane.md), and whatever the
-  debug-transport decision
-  (§9) adds — capture proceeds with those pins reserved, the budget
-  finalizes with the decision. Pin-scarcity-checked like the T9 node
-  pin map; at 30 GPIO the IDEAS scarcity lint starts to apply.
-  **Blocked by:** — · **Unblocks:** T10
 - **T33 — Debug transport decision.** *Shape: decision.* Settles the
   §6/§9 open question — per-node UART vs shared bus vs
   scan-observe-only — for runtime debug output from the eight nodes:
   bandwidth need (assert reports; the §4 `lib::verify_failed` wiring
-  point reports over this transport), RP2040 pin/PIO cost (feeds the
-  T30 budget), connector or pogo style, and interaction with the SWIO
+  point reports over this transport), RP2040 pin/PIO cost (the
+  supervisor pin map reserves 8 consecutive GPIOs pending this
+  decision — the surplus is reclaimable on resolution), connector or
+  pogo style, and interaction with the SWIO
   flash mux (does debug ride the same mux?). The encoding is settled
   in direction already: dictionary-based (defmt-style) — format
   strings interned in a non-loaded ELF section, the wire carrying the
@@ -78,7 +63,7 @@ ______________________________________________________________________
 - **T34 — CI board block diagram.** *Shape: docs.* One page showing
   the whole CI board as blocks and the wires between them: the USB-C
   inlet → 5 V → 3.3 V regulator power tree (T35), the RP2040
-  supervisor and its PIO roles (T30), the scan control/observe chain
+  supervisor and its PIO roles, the scan control/observe chain
   and the mux hierarchy it drives (settled: docs/scan-plane.md), the eight node tiles with
   their fault-injection complement (settled:
   `docs/instrumented-ci.md`), the instrumented boundary
@@ -143,7 +128,11 @@ ______________________________________________________________________
   capture + glitch stimulus on the boundary node's taps (§6).
   Developed against a stock Pico-class board from the first commit —
   the PIO programs and scan driver are board-agnostic — so it does not
-  wait for T10 hardware. **Blocked by:** — · **Unblocks:** T12
+  wait for T10 hardware. **Stack undecided:** bringup and rapid
+  development in MicroPython first (the supervisor pin map emits
+  `firmware/supervisor/pins.py` for exactly this), the freestanding
+  C++ image when things screw down later (`pins.hpp` is emitted
+  alongside). **Blocked by:** — · **Unblocks:** T12
 - **T8 — DSL constraint checking: board-level property checks.**
   Partially shipped: range-carrying typed ports, the per-net
   interval-containment check, and waivers-as-data are landed
@@ -261,11 +250,12 @@ ______________________________________________________________________
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
-  Supervisor-side work splits out: RP2040 subcircuit (T30),
+  Supervisor-side work splits out: the RP2040 subcircuit (landed:
+  `design/supervisor.py`, `design/supervisor_pins.py`),
   debug-transport decision (T33); the scan
   control/observe plane is settled (docs/scan-plane.md) and the
   supervisor image itself is T32.
-  **Blocked by:** T30, T33 ·
+  **Blocked by:** T33 ·
   **Unblocks:** T12, T15
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
