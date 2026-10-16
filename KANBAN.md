@@ -48,10 +48,14 @@ ______________________________________________________________________
   supervisor: RP2040 minimal system — QSPI flash, 12 MHz crystal (§5:
   the supervisor keeps its crystal for USB), decoupling, boot/reset —
   with D+/D− from the board's single USB-C receptacle (shared with
-  power, §6). Carries the GPIO/PIO budget: the SWIO flash channel and
+  power, §6) — the pair wants its 27 Ω series resistors close to the
+  RP2040 and ~90 Ω differential routing over unbroken ground
+  (`datasheets/RP2040/notes/power-design.md`, AN §2.4.1). Carries the
+  GPIO/PIO budget: the SWIO flash channel and
   its mux select (§6), the boundary node's
   four taps (RX, TX, comparator-out, working-LED — §6), scan-chain
-  clock/data/latch (docs/scan-plane.md), and whatever the debug-transport decision
+  clock/data/latch (docs/scan-plane.md), and whatever the
+  debug-transport decision
   (§9) adds — capture proceeds with those pins reserved, the budget
   finalizes with the decision. Pin-scarcity-checked like the T9 node
   pin map; at 30 GPIO the IDEAS scarcity lint starts to apply.
@@ -257,7 +261,8 @@ ______________________________________________________________________
   and test at the cheapest rework stage (post-SMT, pre-through-hole).
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
-  Supervisor-side work splits out: RP2040 subcircuit (T30), debug-transport decision (T33); the scan
+  Supervisor-side work splits out: RP2040 subcircuit (T30),
+  debug-transport decision (T33); the scan
   control/observe plane is settled (docs/scan-plane.md) and the
   supervisor image itself is T32.
   **Blocked by:** T30, T33 ·
