@@ -114,6 +114,7 @@ class StubSymbols:
                 ),
                 make_symbol("R", passive, ("R_*",), lib="Device"),
                 make_symbol("C", passive, ("C_*",), lib="Device"),
+                make_symbol("L", passive, ("L_*",), lib="Device"),
                 make_symbol(
                     "D_TVS",
                     passive,

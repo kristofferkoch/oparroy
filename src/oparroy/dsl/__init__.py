@@ -124,6 +124,7 @@ from oparroy.dsl.parts import (
     Capacitor,
     Diode,
     DiodeSocket,
+    Inductor,
     Led,
     MultiUnitPart,
     Resistor,
@@ -163,6 +164,7 @@ from oparroy.dsl.pinmap import (
     emit_pin_header,
     emit_pin_module,
 )
+from oparroy.dsl.sim import SimSymbols
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 from oparroy.dsl.transform import (
@@ -214,6 +216,7 @@ __all__ = [
     "FootprintSetRule",
     "FootprintTable",
     "HolePadClearanceRule",
+    "Inductor",
     "InsertSeries",
     "Instance",
     "Interval",
@@ -258,6 +261,7 @@ __all__ = [
     "Segment",
     "Severity",
     "SheetPartsRule",
+    "SimSymbols",
     "SocketSpec",
     "SpiceModel",
     "StackupLayer",

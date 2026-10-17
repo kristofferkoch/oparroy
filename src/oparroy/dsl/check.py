@@ -207,8 +207,9 @@ def _check_part(part: Part, footprints: FootprintTable | None) -> list[Issue]:
     issues: list[Issue] = []
     if part.value is None:
         issues.append(Issue(Severity.WARNING, f"{part.ref} has no value"))
-    if part.symbol.is_power:
-        # Schematic-only net marker: never reaches the board, no footprint.
+    if part.symbol.is_power or part.symbol.is_sim:
+        # Schematic-only net markers and simulation-only parts (external
+        # subcircuit instances): never reach the board, no footprint.
         pass
     elif part.footprint is None:
         issues.append(
