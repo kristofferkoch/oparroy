@@ -115,7 +115,23 @@ search knobs. `PartsDb` — `find(key)`, `select(filter)`,
 `resolve(filter)` (exactly-one), `bind(key, base, class_name=...)`
 → a typed part class carrying the record's symbol/value/footprint and
 residuals (how `design/parts_db.py` produces `R0603`/`C0603`),
-`check_stock()`. `PartsDbError`.
+`check_stock()`. `PartsDbError`. `check_stock(cache=...)` takes a
+`FeedCache` — the read view over the feed overlay cache (`FeedRow`,
+`tier_from_library_type`; `Preferred` maps to Extended) — and audits
+committed snapshots against the cache's feed snapshot date instead of
+the bare age budget.
+
+## Stock refresh (`oparroy/stock.py`)
+
+`python -m oparroy.stock fetch` mirrors the kicad-jlcpcb-tools parts
+feed (GitHub Pages, no auth — [konnect-lessons.md
+§4](konnect-lessons.md#4-jlcpcb-catalog-without-the-api)) into the
+overlay
+cache `build/stock-cache.sqlite` (schema-validated re-import, atomic
+install); `python -m oparroy.stock diff` emits proposed edits to
+`design/parts_db.py` as a unified diff — the table stays
+hand-authored, the script never rewrites it, and a committed snapshot
+newer than the feed is flagged, never replaced.
 
 ## KiCad libraries (`kicadlib.py`)
 

@@ -131,6 +131,8 @@ from oparroy.dsl.parts import (
     TypedPart,
 )
 from oparroy.dsl.parts_db import (
+    FeedCache,
+    FeedRow,
     PartFilter,
     PartRecord,
     PartsDb,
@@ -138,6 +140,7 @@ from oparroy.dsl.parts_db import (
     SpiceModel,
     Stock,
     Tier,
+    tier_from_library_type,
 )
 from oparroy.dsl.pcb_emit import (
     BoardMinimums,
@@ -205,6 +208,8 @@ __all__ = [
     "Edge",
     "EdgeKind",
     "EquivalenceReport",
+    "FeedCache",
+    "FeedRow",
     "Footprint",
     "FootprintSetRule",
     "FootprintTable",
@@ -300,5 +305,6 @@ __all__ = [
     "raise_on_errors",
     "sheet_parts_rules",
     "terminal_protection_rules",
+    "tier_from_library_type",
     "to_dot",
 ]

@@ -20,7 +20,12 @@ of re-declaring symbol/footprint pairs per capture.
 than the budget is stale (re-query the assembler), a never-queried
 part and an unverified tier are flagged, and a stock-out surfaces for
 the checker's unsourcable-part check. Stock numbers are snapshots with
-provenance, never live data.
+provenance, never live data. Given a :class:`FeedCache` — the local
+overlay mirror of the kicad-jlcpcb-tools parts feed that
+``oparroy.stock`` maintains (docs/konnect-lessons.md §4) — staleness
+becomes machine-sourced: a committed snapshot older than the feed
+snapshot is stale, a tier disagreement is drift, and an LCSC number
+absent from the feed is flagged outright.
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, Protocol, TypeVar, cast
 
 from oparroy.dsl.check import Issue, Severity
 from oparroy.dsl.ir import Residuals
@@ -81,6 +86,59 @@ class Stock:
     def age_days(self, today: date) -> int:
         """Days from the snapshot to ``today`` (negative if ``today`` precedes it)."""
         return (today - self.as_of).days
+
+
+#: The feed's verbatim Library Type strings onto the assembly tier.
+#: ``Preferred`` maps to Extended: it is an Extended-class listing, so
+#: the §6 per-line fee budget treats it as one — a DB/feed disagreement
+#: surfaces as drift in :meth:`PartsDb.check_stock`.
+_LIBRARY_TYPE_TIERS = {
+    "Basic": Tier.BASIC,
+    "Extended": Tier.EXTENDED,
+    "Preferred": Tier.EXTENDED,
+}
+
+
+def tier_from_library_type(library_type: str) -> Tier | None:
+    """Map a feed Library Type string onto the assembly tier; None if unknown.
+
+    >>> tier_from_library_type("Preferred") is Tier.EXTENDED
+    True
+    >>> tier_from_library_type("") is None
+    True
+    """
+    return _LIBRARY_TYPE_TIERS.get(library_type)
+
+
+@dataclass(frozen=True)
+class FeedRow:
+    """One LCSC row of the feed overlay cache.
+
+    ``library_type`` is the feed's verbatim Library Type string;
+    ``stock=None`` means the feed carries no figure — unknown, never
+    zero (docs/konnect-lessons.md §4).
+    """
+
+    library_type: str
+    stock: int | None
+
+
+class FeedCache(Protocol):
+    """Read view over the local feed overlay cache (``oparroy.stock``).
+
+    ``snapshot_date`` is the feed snapshot's own date (the archive's
+    HTTP Last-Modified, or the fetch date when the server omits it) —
+    the staleness yardstick for committed :class:`Stock` snapshots.
+    """
+
+    @property
+    def snapshot_date(self) -> date:
+        """The feed snapshot's own date — the staleness yardstick."""
+        ...
+
+    def row(self, lcsc: str) -> FeedRow | None:
+        """Return the cache row for an LCSC number; None when the feed lacks it."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -276,6 +334,7 @@ class PartsDb:
         *,
         today: date | None = None,
         max_age_days: int = STOCK_MAX_AGE_DAYS,
+        cache: FeedCache | None = None,
     ) -> list[Issue]:
         """Audit the freshness of the table's stock snapshots (§6).
 
@@ -285,6 +344,14 @@ class PartsDb:
         (feeds the checker's unsourcable-part check). Tier-NONE parts are not
         assembler-placed and are skipped. All findings are warnings;
         the per-capture gate is the check pass's.
+
+        With a ``cache`` (the local feed overlay mirror), LCSC-carrying
+        records are audited against it instead of the age budget: a
+        committed snapshot older than the cache's feed snapshot is
+        stale (refresh via ``python -m oparroy.stock diff``), a mapped
+        feed Library Type disagreeing with the record's tier is drift,
+        and an LCSC number the feed does not list is flagged. Records
+        without an LCSC number keep the age-based audit.
         """
         if today is None:
             today = date.today()  # noqa: DTZ011 — stock snapshots are calendar dates
@@ -292,29 +359,103 @@ class PartsDb:
         for record in self._records:
             if record.tier is Tier.NONE:
                 continue
-            if record.tier is None:
-                issues.append(
-                    Issue(Severity.WARNING, f"{record.name}: assembly tier unverified")
+            issues.extend(
+                _record_stock_issues(
+                    record, today=today, max_age_days=max_age_days, cache=cache
                 )
-            if record.stock is None:
-                issues.append(
-                    Issue(Severity.WARNING, f"{record.name}: stock never queried")
-                )
-                continue
-            if record.stock.count == 0:
-                issues.append(
-                    Issue(
-                        Severity.WARNING,
-                        f"{record.name}: out of stock (0 as of {record.stock.as_of})",
-                    )
-                )
-            elif (age := record.stock.age_days(today)) > max_age_days:
-                issues.append(
-                    Issue(
-                        Severity.WARNING,
-                        f"{record.name}: stock snapshot stale — {age} days old "
-                        f"(as of {record.stock.as_of}, budget {max_age_days} days); "
-                        "re-query the assembler",
-                    )
-                )
+            )
         return issues
+
+
+def _record_stock_issues(
+    record: PartRecord,
+    *,
+    today: date,
+    max_age_days: int,
+    cache: FeedCache | None,
+) -> list[Issue]:
+    """All freshness findings for one record, cache-aware when given."""
+    issues: list[Issue] = []
+    if record.tier is None:
+        issues.append(
+            Issue(Severity.WARNING, f"{record.name}: assembly tier unverified")
+        )
+    row: FeedRow | None = None
+    snapshot: date | None = None
+    if cache is not None and record.lcsc is not None:
+        row = cache.row(record.lcsc)
+        snapshot = cache.snapshot_date
+        if row is None:
+            issues.append(
+                Issue(
+                    Severity.WARNING,
+                    f"{record.name}: {record.lcsc} absent from the feed cache "
+                    f"(snapshot {snapshot}) — not listed at the assembler",
+                )
+            )
+    if record.stock is None:
+        issues.append(Issue(Severity.WARNING, f"{record.name}: stock never queried"))
+        return issues
+    if freshness := _freshness_issue(
+        record, today=today, max_age_days=max_age_days, snapshot=snapshot
+    ):
+        issues.append(freshness)
+    if drift := _tier_drift_issue(record, row, snapshot):
+        issues.append(drift)
+    return issues
+
+
+def _freshness_issue(
+    record: PartRecord, *, today: date, max_age_days: int, snapshot: date | None
+) -> Issue | None:
+    """Return the freshness finding for one record's committed snapshot.
+
+    A feed ``snapshot`` newer than the committed one makes it stale
+    regardless of the age budget; the feed never condemns a newer
+    hand-verified snapshot.
+    """
+    stock = record.stock
+    if stock is None:
+        return None
+    if snapshot is not None and snapshot > stock.as_of:
+        return Issue(
+            Severity.WARNING,
+            f"{record.name}: stock snapshot predates the feed cache — "
+            f"as of {stock.as_of}, cache snapshot {snapshot}; run the stock "
+            "refresh (python -m oparroy.stock diff)",
+        )
+    if stock.count == 0:
+        return Issue(
+            Severity.WARNING,
+            f"{record.name}: out of stock (0 as of {stock.as_of})",
+        )
+    if (age := stock.age_days(today)) > max_age_days:
+        return Issue(
+            Severity.WARNING,
+            f"{record.name}: stock snapshot stale — {age} days old "
+            f"(as of {stock.as_of}, budget {max_age_days} days); "
+            "re-query the assembler",
+        )
+    return None
+
+
+def _tier_drift_issue(
+    record: PartRecord, row: FeedRow | None, snapshot: date | None
+) -> Issue | None:
+    """Return the tier-drift finding when the feed's Library Type is comparable."""
+    if row is None or record.tier is None:
+        return None
+    feed_tier = tier_from_library_type(row.library_type)
+    if feed_tier is None:
+        return Issue(
+            Severity.WARNING,
+            f"{record.name}: feed Library Type {row.library_type!r} not "
+            "understood — tier not checked",
+        )
+    if feed_tier is not record.tier:
+        return Issue(
+            Severity.WARNING,
+            f"{record.name}: tier drift — the DB records {record.tier}, the "
+            f"feed lists {row.library_type!r} (cache snapshot {snapshot})",
+        )
+    return None
