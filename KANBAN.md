@@ -33,7 +33,8 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T10c[T10c CI layout + fab] --> T12[T12 test-hw harness]
+    T40[T40 tile power measurement] --> T10c[T10c CI layout + fab]
+    T10c --> T12[T12 test-hw harness]
     T10c --> T15[T15 cable reach: bench + §2 adoption]
     T32[T32 supervisor firmware] --> T12
 ```
@@ -42,6 +43,31 @@ ______________________________________________________________________
 
 ## Next
 
+- **T40 — CI board tile power measurement.** Dedicate one ring tile to
+  current measurement: a high-side shunt in series with the tile's 3V3
+  feed at the F8 power-cut switch, into a shunt amp + fast external SPI
+  ADC, both powered from the always-on 3V3 domain — the chain survives
+  the per-node power cut, reads the cut-state clamp back-feed (the
+  ≈5.7 mA hazard [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)
+  bounds analytically becomes a measured number), and no sense net
+  crosses the domain boundary (T38's check must pass clean). The tile
+  trades observability/controllability for measurement confidence: it
+  drops its human-I/O role additions (the output-tile buzzer /
+  input-tile pot+buttons would dominate the draw) and its segment
+  injectors, keeping only the rail split + power cut — its own role in
+  the sheet-partition/congruence contract, and the closest current
+  signature to the standalone node board. Bandwidth is the point of
+  the analog route: µs-scale resolution to discern per-frame line
+  activity at 800 kbit/s, boot, and flash-programming signatures — spec
+  the amp ≥1 MHz-class BW and the ADC ≥1 MS/s-class at 12-bit-class
+  resolution; USB full-speed can't stream that continuously, so the
+  supervisor burst-captures to SRAM (264 kB ≈ 60–130 ms at 1–2 MS/s)
+  and uploads after the burst. The fast chain also captures the §10
+  [P-FET-turn-on rail-dip/inrush bench item](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness).
+  Shunt sized so the added drop stays inside what the FET's Rds(on)
+  already spends from the rail budget (`design/ci_power.py`). Confirm
+  amp/ADC assembler stock class at pickup.
+  **Blocked by:** — · **Unblocks:** T10c, T41
 - **T10c — CI board layout + fab.** Split from T10. *Shape: chore —
   the fab step needs a human.* 4-layer KiCad layout of the composed
   board (DESIGN.md §6), silkscreen self-documentation (§6: connector
@@ -56,7 +82,7 @@ ______________________________________________________________________
   docs/scan-plane.md §8 lists, before the control plane is committed.
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
-  **Blocked by:** — · **Unblocks:** T12, T15
+  **Blocked by:** T40 · **Unblocks:** T12, T15
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
@@ -252,3 +278,15 @@ ______________________________________________________________________
   GND-cut position in the §6 fault complement, or a recorded DESIGN.md
   note on why the redundant-GND pinout suffices.
   **Blocked by:** — · **Unblocks:** —
+- **T41 — Tile power reconciliation (bench half).** *Shape: research.*
+  On the fabbed CI board: supervisor burst-capture firmware for the
+  T40 measurement tile (extends T32's scope — PIO SPI + DMA into SRAM,
+  USB upload after the burst), then the signature catalog: boot,
+  SWIO flash programming, idle-listen vs relaying, per-frame activity
+  at 800 kbit/s, the F8-turn-on inrush ([instrumented-ci.md §10](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness)),
+  and the cut-state clamp back-feed as a measured number against
+  [§3's ≈5.7 mA bound](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split).
+  Reconcile against the rail budget (`design/ci_power.py`; T36's
+  machine-checked successor) and record the measured numbers where
+  the budget can cite them. **Blocked by:** T10c, T32 ·
+  **Unblocks:** —
