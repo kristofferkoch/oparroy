@@ -33,7 +33,9 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T40[T40 tile power measurement] --> T10c[T10c CI layout + fab]
+    T40a[T40a measurement chain selection] --> T40b[T40b measurement tile capture]
+    T38[T38 power-domain crossing check] --> T40b
+    T40b --> T10c[T10c CI layout + fab]
     T10c --> T12[T12 test-hw harness]
     T10c --> T15[T15 cable reach: bench + §2 adoption]
     T32[T32 supervisor firmware] --> T12
@@ -43,31 +45,43 @@ ______________________________________________________________________
 
 ## Next
 
-- **T40 — CI board tile power measurement.** Dedicate one ring tile to
-  current measurement: a high-side shunt in series with the tile's 3V3
-  feed at the F8 power-cut switch, into a shunt amp + fast external SPI
-  ADC, both powered from the always-on 3V3 domain — the chain survives
-  the per-node power cut, reads the cut-state clamp back-feed (the
-  ≈5.7 mA hazard [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)
-  bounds analytically becomes a measured number), and no sense net
-  crosses the domain boundary (T38's check must pass clean). The tile
-  trades observability/controllability for measurement confidence: it
-  drops its human-I/O role additions (the output-tile buzzer /
-  input-tile pot+buttons would dominate the draw) and its segment
-  injectors, keeping only the rail split + power cut — its own role in
-  the sheet-partition/congruence contract, and the closest current
-  signature to the standalone node board. Bandwidth is the point of
-  the analog route: µs-scale resolution to discern per-frame line
-  activity at 800 kbit/s, boot, and flash-programming signatures — spec
-  the amp ≥1 MHz-class BW and the ADC ≥1 MS/s-class at 12-bit-class
+- **T40a — CI board tile power measurement: chain selection.** Split
+  from T40. *Shape: research.* Pick the dedicated tile's measurement
+  chain: a high-side shunt amp and a fast external SPI ADC, both
+  powered from the always-on 3V3 domain so the chain survives the
+  per-node power cut. Bandwidth is the point of the analog route:
+  µs-scale resolution to discern per-frame line activity at
+  800 kbit/s, boot, and flash-programming signatures — spec the amp
+  ≥1 MHz-class BW and the ADC ≥1 MS/s-class at 12-bit-class
   resolution; USB full-speed can't stream that continuously, so the
   supervisor burst-captures to SRAM (264 kB ≈ 60–130 ms at 1–2 MS/s)
-  and uploads after the burst. The fast chain also captures the §10
-  [P-FET-turn-on rail-dip/inrush bench item](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness).
-  Shunt sized so the added drop stays inside what the FET's Rds(on)
-  already spends from the rail budget (`design/ci_power.py`). Confirm
-  amp/ADC assembler stock class at pickup.
-  **Blocked by:** — · **Unblocks:** T10c, T41
+  and uploads after the burst. Confirm both parts' assembler stock
+  class, extract the datasheets (`datasheets/<PART>/notes/` with the
+  SDK cross-check, per the standing instruction), and bind the parts
+  DB records. Size the shunt so the added drop stays inside what the
+  FET's Rds(on) already spends from the rail budget
+  (`design/ci_power.py`), and record the selection and the sizing
+  arithmetic where T40b's capture can cite them.
+  **Blocked by:** — · **Unblocks:** T40b
+- **T38 — DSL power-domain crossing check.** *Shape: implementation.*
+  Captures declare power domains (the `design/ci_power.py` transform's
+  `3V3` always / `3V3N` switched split) and a check pass audits every
+  net crossing a domain boundary: each crossing carries a declared
+  disposition — **dies-with-domain** (the `Rth1` divider must die with
+  the MCU or it back-feeds the op-amp pin), **always-domain** (the
+  no-Ioff placement rule: parts with no partial-power-down spec —
+  [1G3157 facts](datasheets/SN74LVC1G3157/notes/facts.md) — sit on the
+  always rail), or **bounded back-feed** with a current budget and a
+  doc citation (the 470 Ω / ≈5.7 mA clamp-injection analysis,
+  [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)).
+  An undeclared crossing fails the check — the machine-checked
+  successor of the hand enumeration in instrumented-ci.md §3 and
+  [scan-plane.md §5](docs/scan-plane.md#5-the-swio-flash-mux-a-3157-binary-tree)
+  (SWIO pull-ups tied to `3V3N`, never `3V3`). Extends the T8 check
+  machinery; negative control per the reliability contract: a planted
+  undeclared crossing must fail. Promoted to Next: T40b's measurement
+  tile is its first audit client.
+  **Blocked by:** — · **Unblocks:** T40b
 - **T10c — CI board layout + fab.** Split from T10. *Shape: chore —
   the fab step needs a human.* 4-layer KiCad layout of the composed
   board (DESIGN.md §6), silkscreen self-documentation (§6: connector
@@ -82,7 +96,7 @@ ______________________________________________________________________
   docs/scan-plane.md §8 lists, before the control plane is committed.
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
-  **Blocked by:** T40 · **Unblocks:** T12, T15
+  **Blocked by:** T40b · **Unblocks:** T12, T15
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
@@ -222,23 +236,6 @@ ______________________________________________________________________
   arithmetic. Extends the T8 check machinery (the ports' limit ranges
   already carry an optional current interval). **Blocked by:** — ·
   **Unblocks:** —
-- **T38 — DSL power-domain crossing check.** *Shape: implementation.*
-  Captures declare power domains (the `design/ci_power.py` transform's
-  `3V3` always / `3V3N` switched split) and a check pass audits every
-  net crossing a domain boundary: each crossing carries a declared
-  disposition — **dies-with-domain** (the `Rth1` divider must die with
-  the MCU or it back-feeds the op-amp pin), **always-domain** (the
-  no-Ioff placement rule: parts with no partial-power-down spec —
-  [1G3157 facts](datasheets/SN74LVC1G3157/notes/facts.md) — sit on the
-  always rail), or **bounded back-feed** with a current budget and a
-  doc citation (the 470 Ω / ≈5.7 mA clamp-injection analysis,
-  [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)).
-  An undeclared crossing fails the check — the machine-checked
-  successor of the hand enumeration in instrumented-ci.md §3 and
-  [scan-plane.md §5](docs/scan-plane.md#5-the-swio-flash-mux-a-3157-binary-tree)
-  (SWIO pull-ups tied to `3V3N`, never `3V3`). Extends the T8 check
-  machinery; negative control per the reliability contract: a planted
-  undeclared crossing must fail. **Blocked by:** — · **Unblocks:** —
 - **T12 — `test-hw` harness.** Local, scriptable test runs against the
   bench board: flash all nodes, inject faults, assert ring behavior.
   CI-platform integration is a later card. **Blocked by:** T10c,
@@ -278,9 +275,25 @@ ______________________________________________________________________
   GND-cut position in the §6 fault complement, or a recorded DESIGN.md
   note on why the redundant-GND pinout suffices.
   **Blocked by:** — · **Unblocks:** —
+- **T40b — CI board tile power measurement: the capture.** Split from
+  T40. Dedicate one ring tile to current measurement: T40a's shunt in
+  series with the tile's 3V3 feed at the F8 power-cut switch, into the
+  shunt amp + SPI ADC on the always-on 3V3 domain — the chain survives
+  the per-node power cut and reads the cut-state clamp back-feed (the
+  ≈5.7 mA hazard [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)
+  bounds analytically becomes a measured number). The capture declares
+  every domain crossing's disposition, and T38's check must pass
+  clean. The tile trades observability/controllability for measurement
+  confidence: it drops its human-I/O role additions (the output-tile
+  buzzer / input-tile pot+buttons would dominate the draw) and its
+  segment injectors, keeping only the rail split + power cut — its own
+  role in the sheet-partition/congruence contract, and the closest
+  current signature to the standalone node board. The fast chain also
+  captures the §10 [P-FET-turn-on rail-dip/inrush bench item](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness).
+  **Blocked by:** T40a, T38 · **Unblocks:** T10c, T41
 - **T41 — Tile power reconciliation (bench half).** *Shape: research.*
   On the fabbed CI board: supervisor burst-capture firmware for the
-  T40 measurement tile (extends T32's scope — PIO SPI + DMA into SRAM,
+  T40b measurement tile (extends T32's scope — PIO SPI + DMA into SRAM,
   USB upload after the burst), then the signature catalog: boot,
   SWIO flash programming, idle-listen vs relaying, per-frame activity
   at 800 kbit/s, the F8-turn-on inrush ([instrumented-ci.md §10](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness)),
