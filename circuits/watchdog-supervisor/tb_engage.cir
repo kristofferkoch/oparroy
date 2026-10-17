@@ -46,6 +46,10 @@ meas tran a2 avg v(down) from=4m to=4.5m
 meas tran a3 avg v(wdob)  from=5.6m to=5.7m
 meas tran a4 avg v(wdob)  from=7m to=7.5m
 meas tran a5 avg v(down) from=9.5m to=10.5m
+meas tran t_strobe when v(wdif)=1.65 rise=5
+meas tran t_trip when v(wdob)=1.65 fall=1
+let engage_ms = (t_trip - t_strobe)*1e3
+echo "MEAS vth=0.99 timeout_engage_ms=$&engage_ms"
 if (a1 > 1.4) & (a2 < 0.5) & (a3 > 2.4) & (a4 < 0.5) & (a5 > 1.4)
   echo "PASS vth=0.99"
 else
@@ -60,6 +64,10 @@ meas tran a2 avg v(down) from=4m to=4.5m
 meas tran a3 avg v(wdob)  from=5.6m to=5.7m
 meas tran a4 avg v(wdob)  from=7m to=7.5m
 meas tran a5 avg v(down) from=9.5m to=10.5m
+meas tran t_strobe when v(wdif)=1.65 rise=5
+meas tran t_trip when v(wdob)=1.65 fall=1
+let engage_ms = (t_trip - t_strobe)*1e3
+echo "MEAS vth=2.31 timeout_engage_ms=$&engage_ms"
 if (a1 > 1.4) & (a2 < 0.5) & (a3 > 2.4) & (a4 < 0.5) & (a5 > 1.4)
   echo "PASS vth=2.31"
 else
