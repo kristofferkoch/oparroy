@@ -125,7 +125,9 @@ jobs:
               - 'scripts/spice-emit'
               # DSL-captured DUTs are regenerated at build time
               # (circuits/meson.build custom_targets) — the codegen
-              # inputs are the Python project's.
+              # inputs are the Python project's (README.md: uv builds
+              # the project, pyproject's readme field).
+              - 'README.md'
               - 'pyproject.toml'
               - 'uv.lock'
               - '.python-version'
@@ -285,10 +287,11 @@ jobs:
       # parses every subdir meson.build (circuits/, firmware/*/).
       # firmware/** and the bare (recursive) 'meson.build' pattern:
       # setup walks every subdir and checks its sources exist, even
-      # for a sim-only run. The Python project (pyproject/uv.lock/
-      # .python-version, src/, design/): the DSL-captured DUTs are
-      # regenerated at build time (circuits/meson.build custom_targets
-      # via scripts/spice-emit).
+      # for a sim-only run. The Python project (README.md — uv builds
+      # the project, pyproject's readme field — plus pyproject/
+      # uv.lock/.python-version, src/, design/): the DSL-captured DUTs
+      # are regenerated at build time (circuits/meson.build
+      # custom_targets via scripts/spice-emit).
       - uses: actions/checkout@v5
         with:
           sparse-checkout-cone-mode: false
@@ -302,6 +305,7 @@ jobs:
             circuits/**
             firmware/**
             scripts/**
+            README.md
             pyproject.toml
             uv.lock
             .python-version
