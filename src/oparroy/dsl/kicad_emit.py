@@ -19,7 +19,13 @@ against capture identities, so the emitted text carries board refdes.
 
 import uuid
 
-from oparroy.dsl.ir import Circuit, Part, natural_key, resolve_note_refs
+from oparroy.dsl.ir import (
+    Circuit,
+    DefinitionError,
+    Part,
+    natural_key,
+    resolve_note_refs,
+)
 
 _TOOL = "oparroy-dsl"
 _TSTAMP_NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://oparroy.koch.no/dsl/tstamp")
@@ -56,6 +62,13 @@ def emit_netlist(circuit: Circuit) -> str:
         part = circuit.parts[ref]
         if part.symbol.is_power:
             continue
+        if part.symbol.is_sim:
+            msg = (
+                f"{part.ref} ({part.symbol.ref}) is a simulation-only part — "
+                "Sim: parts instantiate external subcircuits for the spice "
+                "emitter and never reach the board netlist"
+            )
+            raise DefinitionError(msg)
         lines.extend(_emit_part(circuit, part, identities))
     lines.append("  )")
     lines.append("  (nets")

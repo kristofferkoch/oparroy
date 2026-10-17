@@ -14,7 +14,13 @@ small symbol-keyed table (``_BINDINGS``) maps KiCad symbols to element
 forms, and the caller passes the ``.model`` definitions (``models=``)
 a model-backed part references — the part's value names its model, as
 in any hand-written deck. Power-library symbols are schematic-only and
-excluded, matching the KiCad emitter.
+excluded, matching the KiCad emitter. Simulation-only ``Sim:`` symbols
+(``oparroy.dsl.sim``) instantiate external subcircuits as X-elements
+whose nets emit in the registered port order; hand-written device
+models arrive through caller-passed ``.include`` lines
+(``includes=``), and a DUT's tunables ride the ``.subckt`` line's
+``params:`` continuation (``params=``), so benches sweep them with
+``alterparam`` exactly as against a hand-written DUT.
 
 Emission is byte-identical across runs (DESIGN.md §8): parts and
 models iterate in natural sorted order and nothing dated or
@@ -23,7 +29,7 @@ flattened names carry ``/`` (``WD1/Rs``), which ngspice accepts
 verbatim in element and node names.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from oparroy.dsl.ir import Circuit, DefinitionError, Part, Pin, natural_key
 
@@ -33,15 +39,23 @@ def emit_spice(
     *,
     name: str | None = None,
     models: Mapping[str, str] | None = None,
+    includes: Sequence[str] = (),
+    params: Mapping[str, str] | None = None,
 ) -> str:
     """Emit the circuit as an ngspice DUT netlist.
 
     ``name`` is the ``.subckt`` name (default: the circuit name) — set
     it to match the interface the bench decks instantiate. Ports land
-    on the ``.subckt`` line in declaration order. ``models`` maps
-    model name → definition body (``"d(is=200n …)"``); only models a
-    placed part actually references are emitted, and a reference
-    without a definition raises.
+    on the ``.subckt`` line in declaration order. ``params`` adds a
+    ``+ params: k=default …`` continuation to that line, so benches can
+    override the DUT's parameters per instance (``Xphy … params:
+    cseg={cseg}``). ``models`` maps model name → definition body
+    (``"d(is=200n …)"``); only models a placed part actually references
+    are emitted, and a reference without a definition raises.
+    ``includes`` emits verbatim ``.include`` lines before the
+    ``.subckt`` — the hand-written device models of
+    ``circuits/lib/*.spi`` arrive through them, resolved by ngspice
+    against the bench's working directory.
     """
     if circuit.instances:
         circuit = circuit.flatten()
@@ -65,8 +79,13 @@ def emit_spice(
             f"* {subckt} — ngspice DUT netlist emitted by the oparroy DSL; "
             "regenerate, do not edit."
         ),
-        f".subckt {subckt}{_port_list(circuit)}",
     ]
+    lines.extend(f".include {include}" for include in includes)
+    subckt_line = f".subckt {subckt}{_port_list(circuit)}"
+    if params:
+        joined = " ".join(f"{key}={value}" for key, value in params.items())
+        subckt_line += f"\n+ params: {joined}"
+    lines.append(subckt_line)
     lines.extend(
         f".model {model} {definitions[model]}"
         for model in sorted(referenced, key=natural_key)
@@ -84,6 +103,8 @@ def _port_list(circuit: Circuit) -> str:
 def _emit_part(part: Part, referenced: set[str]) -> list[str]:
     if part.symbol.is_power:
         return []
+    if part.symbol.is_sim:
+        return _sim_subckt(part)
     binding = _BINDINGS.get(part.symbol.ref)
     if binding is None:
         msg = (
@@ -92,6 +113,24 @@ def _emit_part(part: Part, referenced: set[str]) -> list[str]:
         )
         raise DefinitionError(msg)
     return binding(part, referenced)
+
+
+def _sim_subckt(part: Part) -> list[str]:
+    """Emit a simulation-only part as an X-element of its subcircuit.
+
+    Nets emit in the subcircuit's port order — the synthesized symbol
+    numbers pins 1..N along the registered port list
+    (``oparroy.dsl.sim``) — and the part's value is the instance's
+    ``params:`` tail verbatim, as in a hand-written deck.
+    """
+    pins = sorted(part.pins, key=lambda pin: int(pin.number))
+    line = (
+        f"{_element_name('X', part.ref)} "
+        f"{' '.join(_net_of(pin) for pin in pins)} {part.symbol.name}"
+    )
+    if part.value is not None:
+        line += f" {part.value}"
+    return [line]
 
 
 def _two_pin(kind: str) -> Callable[[Part, set[str]], list[str]]:
@@ -151,6 +190,7 @@ def _led(part: Part, referenced: set[str]) -> list[str]:
 _BINDINGS: dict[str, Callable[[Part, set[str]], list[str]]] = {
     "Device:R": _two_pin("R"),
     "Device:C": _two_pin("C"),
+    "Device:L": _two_pin("L"),
     "Device:LED": _led,
     "Diode:BAT54S": _bat54s,
 }

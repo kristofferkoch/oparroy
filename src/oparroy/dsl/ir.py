@@ -149,6 +149,7 @@ def resolve_note_refs(note: str, identities: Mapping[str, str]) -> str:
 
 
 _SOCKET_LIB = "socket"
+_SIM_LIB = "Sim"
 
 
 def _pin_numbers(numbers: str | tuple[str, ...]) -> tuple[str, ...]:
@@ -421,6 +422,17 @@ class Symbol:
         or the parent-placed package unit the parent directed.
         """
         return self.lib == _SOCKET_LIB
+
+    @property
+    def is_sim(self) -> bool:
+        """True for simulation-only symbols (``Sim:ch32v003_tx_pin``).
+
+        Sim symbols stand for external ngspice subcircuits
+        (``oparroy.dsl.sim``): they exist so the spice emitter can place
+        X-elements, and never reach the board — no footprint, excluded
+        from the KiCad netlist.
+        """
+        return self.lib == _SIM_LIB
 
     def pin(self, number: str) -> SymbolPin | None:
         """Look up a pin by number, or None if the symbol has no such pin."""

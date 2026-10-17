@@ -122,6 +122,23 @@ class Capacitor(TypedPart):
         super().__init__(value, footprint, {"a": a, "b": b})
 
 
+class Inductor(TypedPart):
+    """Unpolarized inductor (``Device:L``); pins ``a``/``b`` are 1/2."""
+
+    symbol = "Device:L"
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {"a": "1", "b": "2"}
+
+    def __init__(
+        self,
+        value: str,
+        *,
+        a: Net | str,
+        b: Net | str,
+        footprint: str | None = None,
+    ) -> None:
+        super().__init__(value, footprint, {"a": a, "b": b})
+
+
 class Diode(TypedPart):
     """Single diode (``Device:D``); ``anode`` is pin 2, ``cathode`` pin 1.
 

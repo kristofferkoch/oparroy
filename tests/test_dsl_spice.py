@@ -23,7 +23,12 @@ from oparroy.dsl import (
     Capacitor,
     Circuit,
     DefinitionError,
+    Inductor,
     Resistor,
+    SimSymbols,
+    UnknownSymbolError,
+    check,
+    emit_netlist,
     emit_spice,
 )
 
@@ -179,6 +184,108 @@ def test_hierarchy_flattens_with_prefixed_names(symbols: StubSymbols) -> None:
     assert ".subckt board in out" in rendered
     # Flattened names carry '/' — ngspice accepts them verbatim.
     assert "RU1/R1 in out 1k" in rendered
+
+
+def test_includes_emit_before_subckt(symbols: StubSymbols) -> None:
+    rendered = emit_spice(
+        build_pump(symbols),
+        models=PUMP_MODELS,
+        includes=["../lib/sn74lvc1g3157.spi", "../lib/ch32v003.spi"],
+    )
+    assert (
+        "* pump — ngspice DUT netlist emitted by the oparroy DSL; "
+        "regenerate, do not edit.\n"
+        ".include ../lib/sn74lvc1g3157.spi\n"
+        ".include ../lib/ch32v003.spi\n"
+        ".subckt pump ka sel GND\n"
+    ) in rendered
+
+
+def test_subckt_params_continue_the_subckt_line(symbols: StubSymbols) -> None:
+    rendered = emit_spice(
+        build_pump(symbols),
+        models=PUMP_MODELS,
+        params={"cseg": "220p", "vth": "1.65"},
+    )
+    assert ".subckt pump ka sel GND\n+ params: cseg=220p vth=1.65\n" in rendered
+
+
+def test_inductor_binding_emits_l_element(symbols: StubSymbols) -> None:
+    c = Circuit("seg", symbols)
+    a = c.net("a")
+    b = c.net("b")
+    # Brace expressions pass through verbatim: the deck's own parameter
+    # substitution resolves them (tb_noise sweeps lseg via alterparam).
+    c.part("Lseg", Inductor("{lseg}", a=a, b=b))
+    assert "Lseg a b {lseg}" in emit_spice(c, params={"lseg": "1n"})
+
+
+def build_sim_dut(symbols: StubSymbols) -> Circuit:
+    """Build a tiny sim-only DUT: one external-subckt instance, two ports."""
+    sims = SimSymbols(symbols)
+    # X-elements bind nets positionally; the registered port names are
+    # capture-side identifiers only, so they follow the DSL's lowercase
+    # keyword convention (the .spi's "A B1 B2 S VCC GND" uppercasing is
+    # deck-local).
+    switch = sims.subckt("sn74lvc1g3157", ("a", "b1", "b2", "s", "vcc", "gnd"))
+    c = Circuit("dut", sims)
+    a = c.port("a")
+    b = c.port("b")
+    vdd = c.net("vdd")
+    gnd = c.net("gnd")
+    sel = c.net("sel")
+    c.part(
+        "Xsw",
+        switch(a=a, b1=vdd, b2=b, s=sel, vcc=vdd, gnd=gnd, params={"vth": "{vth}"}),
+    )
+    return c
+
+
+def test_sim_subckt_instance_emits_x_element_in_port_order(
+    symbols: StubSymbols,
+) -> None:
+    rendered = emit_spice(build_sim_dut(symbols))
+    assert "Xsw a vdd b sel vdd gnd sn74lvc1g3157 params: vth={vth}" in rendered
+
+
+def test_sim_subckt_without_params_omits_the_tail(symbols: StubSymbols) -> None:
+    sims = SimSymbols(symbols)
+    buf = sims.subckt("buf", ("in", "out"))
+    c = Circuit("dut", sims)
+    a = c.net("a")
+    b = c.net("b")
+    # "in" is a Python keyword — wire the whole port set through the
+    # ** mapping form.
+    c.part("X1", buf(**{"in": a, "out": b}))
+    rendered = emit_spice(c)
+    assert "X1 a b buf\n" in rendered
+
+
+def test_sim_registration_rejects_duplicates(symbols: StubSymbols) -> None:
+    sims = SimSymbols(symbols)
+    sims.subckt("buf", ("in", "out"))
+    with pytest.raises(DefinitionError, match="already registered"):
+        sims.subckt("buf", ("in", "out"))
+    with pytest.raises(DefinitionError, match="duplicate ports"):
+        sims.subckt("bad", ("in", "in"))
+
+
+def test_sim_part_needs_no_footprint(symbols: StubSymbols) -> None:
+    issues = check(build_sim_dut(symbols))
+    assert not [issue for issue in issues if "footprint" in issue.message]
+
+
+def test_sim_part_in_kicad_netlist_raises(symbols: StubSymbols) -> None:
+    with pytest.raises(DefinitionError, match="simulation-only"):
+        emit_netlist(build_sim_dut(symbols))
+
+
+def test_unknown_sim_subckt_falls_through_to_the_base_table(
+    symbols: StubSymbols,
+) -> None:
+    sims = SimSymbols(symbols)
+    with pytest.raises(UnknownSymbolError, match="stub symbol table has no"):
+        sims.lookup("Sim:unregistered")
 
 
 @pytest.mark.skipif(shutil.which("ngspice") is None, reason="ngspice not provisioned")
