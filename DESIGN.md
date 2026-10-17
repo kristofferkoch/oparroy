@@ -1014,7 +1014,7 @@ sorted iteration, content-derived UUID tstamps, no dates or paths;
 power symbols excluded like eeschema's own export),
 `dot.py` (Graphviz dump), `kicadlib.py` + `sexpr.py` (KiCad 10 library
 access, `extends`-aware), `parts.py` (typed jellybean parts —
-`Resistor`/`Capacitor`/`Bat54s`, keyword-only pin wiring at
+`Resistor`/`Capacitor`/`Inductor`/`Bat54s`, keyword-only pin wiring at
 construction, class-default footprints per bin). Proven by
 `design/watchdog_chargepump.py`:
 the §4 charge pump captured on typed parts against the
@@ -1075,18 +1075,38 @@ as a `.subckt` with ports in declaration order; stimulus and `.meas`
 assertions stay in the external bench decks (`circuits/**/tb_*.cir`) —
 the DSL emits the circuit, benches drive it — so a capture whose ports
 match a hand-written `circuits/` interface drops into the same benches
-unmodified, and either capture can drive the run while the remaining
-DUTs are ported over. Spice bindings are ad hoc until the parts DB
-owns them: a symbol-keyed table (R/C two-pin primitives, the BAT54S
+unmodified. Spice bindings are ad hoc until the parts DB
+owns them: a symbol-keyed table (R/C/L two-pin primitives, the BAT54S
 series-pair expansion) plus caller-passed `.model` definitions, a
-part's value naming its model as in a hand-written deck. Emission is
+part's value naming its model as in a hand-written deck. External
+device-model subcircuits (the hand-written `circuits/lib/*.spi` —
+`ch32v003_tx_pin`, `sn74lvc1g3157`, …) instantiate as sim-only `Sim:`
+parts (`sim.py`'s `SimSymbols.subckt()`), emitted as X-elements with
+nets in the registered port order and the instance's `params=` mapping
+as the deck's `params:` tail; the caller's `includes=` carries the
+`.include` lines and `params=` the DUT's own `.subckt` tunables, so
+benches sweep them via `alterparam` exactly as against a hand-written
+DUT. Emission is
 byte-identical like the KiCad emitter's, hierarchy flattens implicitly
 (ngspice
 accepts `/` in element and node names verbatim), and element names
 keep the ref, gaining a kind-letter prefix only when flattening hid it
-(`WD1/Rs` → `RWD1/Rs`). Proven by `design/watchdog_chargepump.py --spice`: the emitted `wd_chargepump` passes all three §4 benches
-(`tb_engage`, `tb_missed_pulse`, `tb_glitch`) through
-`scripts/sim-run` — the DUT-port equivalence pattern, rehearsed.
+(`WD1/Rs` → `RWD1/Rs`).
+
+The DSL captures are the single source of truth for the simulation
+DUTs: `design/phy_segment.py` and `design/watchdog_chargepump.py` are
+regenerated at build time (`circuits/meson.build` custom_targets via
+`scripts/spice-emit`), and `scripts/sim-run`'s mirror mode drops the
+emission next to the unmodified bench decks — the hand-written
+`phy-segment.cir`/`watchdog-chargepump.cir` are retired. Equivalence
+is proven and pinned in pytest (`tests/test_phy_segment_benches.py`,
+`tests/test_watchdog_supervisor_benches.py`):
+the benches pass against the emission *and* reproduce the §2/§4
+measured numbers (decode margins, noise error, watchdog timings)
+within tolerance. The window-watchdog model (`wd_window`) is pure
+behavioral modeling of a TPS3430-class IC — a device model, not a
+circuit — so it lives in `circuits/lib/wd_window.spi` hand-written,
+like the other lib models.
 
 Port limit ranges and waivers: typed ports carry electrical limit
 **ranges** — `Circuit.port(..., source=…, sink=…)`

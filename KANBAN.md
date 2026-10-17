@@ -57,21 +57,6 @@ ______________________________________________________________________
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
   **Blocked by:** — · **Unblocks:** T12, T15
-- **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
-  netlists of `circuits/phy-segment/` and
-  `circuits/watchdog-supervisor/` in the DSL — the charge pump's
-  capture landed with T7d and its three benches already run unmodified
-  against the DSL emission — with equivalence tests:
-  the existing benches run against the DSL-emitted netlists and
-  reproduce the measured numbers recorded in DESIGN.md §2/§4. Needs
-  spice bindings beyond T7d's R/C/BAT54S set: external-subckt
-  instantiations (`ch32v003_tx_pin`, `sn74lvc1g3157`), `.include` of
-  `circuits/lib/*.spi`, subckt `params:`. Device models stay
-  hand-written includes. On shipping, the hand-written DUT `.cir`
-  files retire — the DSL becomes the single source of truth (§7), not
-  a second copy of it. Lands before the CI board's captures multiply
-  further, so the equivalence pattern is settled first.
-  **Blocked by:** — · **Unblocks:** —
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
