@@ -22,7 +22,7 @@ Everything below imports from the package root — `from oparroy.dsl import ...`
 | Emission                   | `emit_netlist`, `emit_spice`, `to_dot`, `emit_pin_header`                 | IR → KiCad `.net` / ngspice `.subckt` / dot / C++ header | module mains, `python -m design.node_pins` |
 
 There is no installed CLI; entry points are module mains run in the nix
-dev shell (`python -m design.node [--dot|--annotation F|--footprints F|--back-annotate B]`, `python -m design.watchdog_chargepump [--dot|--spice]`). Tests run via `uv run pytest`; doctests in `src/`
+dev shell (`python -m design.node [--dot|--annotation F|--footprints F|--back-annotate B]`, `python -m design.watchdog_chargepump [--dot|--spice]`, `python -m design.phy_segment [--dot|--spice]`). Tests run via `uv run pytest`; doctests in `src/`
 are part of the suite (`--doctest-modules`).
 
 ## Core IR (`ir.py`, `subcircuit.py`)
@@ -171,11 +171,23 @@ geographic renumbering back via the content-derived tstamps.
   symbols excluded; hierarchy survives as each comp's `sheetpath`; a
   part's `note` emits as the comp's Comment field with `{ref}`
   placeholders resolved to refdes (an unknown placeholder raises).
-- `emit_spice(circuit, *, name=None, models=None)` (`spice_emit.py`) —
-  the ngspice DUT `.subckt`; only symbols with a declared binding emit
-  (R, C, LED, BAT54S); the caller passes `.model` bodies and a part's
-  value names its model; flattened refs gain a kind-letter prefix
-  (`WD1/Rs` → `RWD1/Rs`).
+- `emit_spice(circuit, *, name=None, models=None, includes=(), params=None)`
+  (`spice_emit.py`) — the ngspice DUT `.subckt`; only symbols with a
+  declared binding emit (R, C, L, LED, BAT54S); the caller passes
+  `.model` bodies and a part's value names its model; flattened refs
+  gain a kind-letter prefix (`WD1/Rs` → `RWD1/Rs`). `includes=` emits
+  verbatim `.include` lines before the `.subckt` (the hand-written
+  `circuits/lib/*.spi` device models arrive through them); `params=`
+  adds the `.subckt` line's `+ params: k=default …` continuation, so
+  benches sweep the DUT's tunables via `alterparam`.
+- `SimSymbols(base)` (`sim.py`) — SymbolTable wrapper for sim-only
+  captures: `subckt(name, ports)` registers an external ngspice
+  subcircuit and returns its typed part class (ports wire by keyword,
+  `params=` becomes the X-element's `params:` tail verbatim); the
+  emitter renders instances as X-elements with nets in port order.
+  `Sim:` parts carry no footprint and `emit_netlist` refuses them —
+  simulation-only, never board parts. `design/phy_segment.py` is the
+  reference capture.
 - `to_dot(circuit)` (`dot.py`) — the bipartite Graphviz review view.
 - `emit_pin_header` — see pin maps.
 
