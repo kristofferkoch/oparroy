@@ -1,0 +1,9 @@
+#!/bin/sh
+# Emit a DSL-captured simulation DUT netlist (the circuits/meson.build
+# custom_targets): run the capture module's --spice view from the repo
+# root, so the `design` package resolves and the uv project is found.
+# Usage: spice-emit <module>   e.g. spice-emit design.phy_segment
+set -eu
+
+cd "$(dirname "$0")/.."
+exec uv run --frozen python -m "$1" --spice

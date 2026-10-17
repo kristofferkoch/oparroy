@@ -4,19 +4,36 @@
 # assertions and quits nonzero on violation; this wrapper provides a
 # clean work dir and surfaces the log on failure. Mirrors
 # klee-prove/fuzz-run's role for the firmware harnesses.
-# Usage: sim-run <work-dir> <testbench.cir>
+# Usage: sim-run <work-dir> <testbench.cir> [dut.cir]
+#
+# With a DSL-emitted DUT (the meson custom_target output), the circuits/
+# layout is mirrored in the work dir — the generated DUT takes the
+# retired hand-written file's place next to the unmodified bench decks,
+# and ../lib symlinks to the real circuits/lib — so the benches'
+# relative .includes resolve exactly as against a checked-in DUT.
 set -eu
 
 work=$1
 tb=$2
+dut=${3:-}
 
 rm -rf "$work"
 mkdir -p "$work"
 
-# ngspice resolves .include against the CWD, so run from the
-# testbench's own directory; the log lands in the work dir.
 dir=$(dirname "$tb")
 base=$(basename "$tb")
+
+if [ -n "$dut" ]; then
+  bench="$work/$(basename "$dir")"
+  mkdir -p "$bench"
+  cp "$dir"/*.cir "$bench/"
+  cp "$dut" "$bench/$(basename "$dut")"
+  ln -s "$(cd "$dir/../lib" && pwd)" "$work/lib"
+  dir=$bench
+fi
+
+# ngspice resolves .include against the CWD, so run from the
+# testbench's own directory; the log lands in the work dir.
 if ! (cd "$dir" && ngspice -b "$base") > "$work/sim.log" 2>&1; then
   cat "$work/sim.log"
   exit 1
