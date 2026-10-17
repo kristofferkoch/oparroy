@@ -13,10 +13,11 @@ The cache also feeds :meth:`oparroy.dsl.parts_db.PartsDb.check_stock`,
 which audits committed stock snapshots against the cache's feed
 snapshot date instead of a bare age budget.
 
-Run from the repo root:
-
     python -m oparroy.stock fetch   # mirror the feed into the cache
     python -m oparroy.stock diff    # emit proposed parts_db.py edits
+
+``fetch`` runs from anywhere (the cache defaults to the user cache home);
+``diff`` wants the repo root for its relative ``--db`` default.
 """
 
 from __future__ import annotations
@@ -62,8 +63,21 @@ MAX_CHUNKS = 64
 MAX_ARCHIVE_BYTES = 1 << 30
 MAX_DATABASE_BYTES = 8 << 30
 
+
+def default_cache_path() -> Path:
+    """Return the default overlay cache location: ``$XDG_CACHE_HOME/oparroy/``.
+
+    User-level cache home (falling back to ``~/.cache``) so the mirror is
+    shared across git worktrees and survives their removal — a per-repo
+    ``build/`` path meant every worktree started cold.
+    """
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".cache"
+    return base / "oparroy" / "stock-cache.sqlite"
+
+
 #: Where the overlay cache and the hand-authored table live by default.
-DEFAULT_CACHE_PATH = Path("build/stock-cache.sqlite")
+DEFAULT_CACHE_PATH = default_cache_path()
 DEFAULT_DB_PATH = Path("design/parts_db.py")
 
 _HTTP_TIMEOUT_S = 30

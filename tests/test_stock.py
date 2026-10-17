@@ -30,6 +30,7 @@ from oparroy.dsl import (
 from oparroy.stock import (
     SqliteFeedCache,
     StockToolError,
+    default_cache_path,
     install_cache,
     main,
     propose_edits,
@@ -128,6 +129,25 @@ def test_tier_from_library_type() -> None:
 def test_tier_from_library_type_unknown_is_not_checked() -> None:
     assert tier_from_library_type("") is None
     assert tier_from_library_type("Economy") is None
+
+
+# --- default cache path ---
+
+
+def test_default_cache_path_honors_xdg_cache_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    assert default_cache_path() == tmp_path / "oparroy" / "stock-cache.sqlite"
+
+
+def test_default_cache_path_falls_back_to_home_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    assert default_cache_path() == (
+        Path.home() / ".cache" / "oparroy" / "stock-cache.sqlite"
+    )
 
 
 # --- cache install ---
