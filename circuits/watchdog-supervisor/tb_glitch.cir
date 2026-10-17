@@ -54,6 +54,12 @@ tran 100n 11m uic
 meas tran a1 avg v(wdob) from=3.0m to=3.3m
 meas tran a2 avg v(wdob) from=4.0m to=4.5m
 meas tran a3 avg v(wdob) from=8m to=9m
+meas tran t_early when v(wdob)=1.65 fall=1
+let early_us = (t_early - 2.9m)*1e6
+meas tran t_last when v(wdif)=1.65 rise=6
+meas tran t_gtrip when v(wdob)=1.65 fall=2
+let glitch_engage_ms = (t_gtrip - t_last)*1e3
+echo "MEAS vth=0.99 early_latch_us=$&early_us glitch_engage_ms=$&glitch_engage_ms"
 if (a1 < 0.5) & (a2 > 2.4) & (a3 < 0.5)
   echo "PASS vth=0.99"
 else
@@ -66,6 +72,12 @@ tran 100n 11m uic
 meas tran a1 avg v(wdob) from=3.0m to=3.3m
 meas tran a2 avg v(wdob) from=4.0m to=4.5m
 meas tran a3 avg v(wdob) from=8m to=9m
+meas tran t_early when v(wdob)=1.65 fall=1
+let early_us = (t_early - 2.9m)*1e6
+meas tran t_last when v(wdif)=1.65 rise=6
+meas tran t_gtrip when v(wdob)=1.65 fall=2
+let glitch_engage_ms = (t_gtrip - t_last)*1e3
+echo "MEAS vth=2.31 early_latch_us=$&early_us glitch_engage_ms=$&glitch_engage_ms"
 if (a1 < 0.5) & (a2 > 2.4) & (a3 < 0.5)
   echo "PASS vth=2.31"
 else

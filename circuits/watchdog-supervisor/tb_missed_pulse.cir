@@ -41,6 +41,12 @@ tran 100n 9m uic
 meas tran a1 avg v(wdob) from=3.0m to=3.4m
 meas tran a2 avg v(wdob) from=4.2m to=4.5m
 meas tran a3 avg v(wdob) from=6.0m to=6.5m
+meas tran t_strobe when v(wdif)=1.65 rise=3
+meas tran t_trip when v(wdob)=1.65 fall=1
+meas tran t_clear when v(wdob)=1.65 rise=2
+let trip_ms = (t_trip - t_strobe)*1e3
+let blip_ms = (t_clear - t_trip)*1e3
+echo "MEAS vth=0.99 timeout_trip_ms=$&trip_ms blip_ms=$&blip_ms"
 if (a1 > 2.4) & (a2 < 0.5) & (a3 > 2.4)
   echo "PASS vth=0.99"
 else
@@ -53,6 +59,12 @@ tran 100n 9m uic
 meas tran a1 avg v(wdob) from=3.0m to=3.4m
 meas tran a2 avg v(wdob) from=4.2m to=4.5m
 meas tran a3 avg v(wdob) from=6.0m to=6.5m
+meas tran t_strobe when v(wdif)=1.65 rise=3
+meas tran t_trip when v(wdob)=1.65 fall=1
+meas tran t_clear when v(wdob)=1.65 rise=2
+let trip_ms = (t_trip - t_strobe)*1e3
+let blip_ms = (t_clear - t_trip)*1e3
+echo "MEAS vth=2.31 timeout_trip_ms=$&trip_ms blip_ms=$&blip_ms"
 if (a1 > 2.4) & (a2 < 0.5) & (a3 > 2.4)
   echo "PASS vth=2.31"
 else
