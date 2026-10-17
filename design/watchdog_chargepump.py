@@ -1,9 +1,11 @@
 """Charge-pump bypass watchdog, captured in the DSL (DESIGN.md §4, §7).
 
-``WatchdogChargePump`` is the §7 subcircuit form of
-``circuits/watchdog-chargepump/watchdog-chargepump.cir`` — the DSL
-proving circuit, re-cast as a reusable subcircuit. The edge-sensitive
-charge pump: the MCU emits a 20 kHz keep-alive on ``ka``; only
+``WatchdogChargePump`` is the §7 subcircuit form of the charge-pump
+watchdog — the DSL proving circuit, and the single source of truth: the
+hand-written ``circuits/`` DUT retired when the benches switched to
+driving this emission (``circuits/meson.build``'s custom_target). The
+edge-sensitive charge pump: the MCU emits a 20 kHz keep-alive on
+``ka``; only
 transitions pump charge into Cs, so a hung MCU lets Rb pull ``sel``
 below VIL and the bypass switch relaxes closed — bypass is the default
 state. D1 is one BAT54S series pair: pin 3 (COM) is the shared middle
@@ -52,8 +54,8 @@ from oparroy.dsl import (
 
 # Ad-hoc spice model bindings (the parts DB owns the records, but
 # emitter-side model resolution is still open): the BAT54S-class
-# pump diodes, stand-in parameters from
-# circuits/watchdog-chargepump/watchdog-chargepump.cir's dpump model.
+# pump diodes, stand-in parameters from the retired hand-written
+# DUT's dpump model.
 SPICE_MODELS = {"BAT54S": "d(is=200n n=1.0 rs=5 tt=1n bv=30)"}
 
 #: The §4 series pair, bound from the DB's ``bat54s`` record.
