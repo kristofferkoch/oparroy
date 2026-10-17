@@ -28,6 +28,7 @@ from oparroy.dsl import (
     Stock,
     Tier,
 )
+from oparroy.stock import DEFAULT_CACHE_PATH, SqliteFeedCache
 
 #: The pcba-research inventory snapshot date
 #: (docs/pcba-research.md).
@@ -611,8 +612,22 @@ C0603 = PARTS.bind("c-0603", Capacitor, class_name="C0603")
 
 
 def main() -> None:
-    """Print the stock-freshness report."""
-    issues = PARTS.check_stock()
+    """Print the stock-freshness report.
+
+    When the local feed overlay cache exists
+    (``build/stock-cache.sqlite``, written by ``python -m
+    oparroy.stock fetch``), the audit runs against it; otherwise it
+    falls back to the age budget alone.
+    """
+    cache = (
+        SqliteFeedCache(DEFAULT_CACHE_PATH) if DEFAULT_CACHE_PATH.is_file() else None
+    )
+    if cache is None:
+        sys.stderr.write(
+            f"note: no feed cache at {DEFAULT_CACHE_PATH} — age-based audit only "
+            "(python -m oparroy.stock fetch builds it)\n"
+        )
+    issues = PARTS.check_stock(cache=cache)
     for issue in issues:
         sys.stderr.write(f"{issue}\n")
     if not issues:

@@ -57,22 +57,6 @@ ______________________________________________________________________
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
   **Blocked by:** — · **Unblocks:** T12, T15
-- **T37 — Parts-DB stock refresh tooling.** *Shape: implementation.*
-  Konnect lesson ([konnect-lessons.md §4](docs/konnect-lessons.md#4-jlcpcb-catalog-without-the-api))
-  settles the idea's open questions: skip the JLCPCB/LCSC API and its
-  rate-limit/auth unknowns — mirror the kicad-jlcpcb-tools SQLite feed
-  (GitHub Pages, no auth, one bulk download), build a local overlay
-  cache keyed by LCSC code, and emit *proposed edits* to
-  `design/parts_db.py` as a reviewable diff — the data-as-code file
-  stays hand-authored, the script never rewrites it. A refresh updates
-  `Stock` counts and as-of dates, records the feed snapshot date, and
-  flags tier changes (Basic ↔ Extended — §6's $3.07 per Extended
-  line). `check_stock` reads the cache for staleness; the catalog is
-  discovery evidence, not order-time truth. Test the refresh against
-  pinned verbatim feed rows (fixture TSV + provenance README). Serves
-  T22b's pre-order stock re-checks and keeps the parts DB's
-  assembler-stock status current.
-  **Blocked by:** — · **Unblocks:** —
 - **T7e — Port existing spice captures to the DSL.** Re-capture the DUT
   netlists of `circuits/phy-segment/` and
   `circuits/watchdog-supervisor/` in the DSL — the charge pump's

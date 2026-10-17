@@ -1129,7 +1129,18 @@ pairs per capture, retiring the earlier ad-hoc bin classes.
 `PartsDb.check_stock` is the freshness audit: stale snapshots,
 never-queried parts, unverified tiers, and stock-outs surface as
 warnings (`python -m design.parts_db`); the per-capture
-unsourcable-part gate is open work. Stock numbers are as-of-dated
+unsourcable-part gate is open work. Given the local feed overlay cache
+(`build/stock-cache.sqlite`), the audit is machine-sourced: a
+committed snapshot older than the cache's feed snapshot is stale, a
+tier disagreement is drift, an LCSC number the feed does not list is
+flagged. The refresh tooling (`python -m oparroy.stock fetch` /
+`diff`, `src/oparroy/stock.py`) mirrors the kicad-jlcpcb-tools SQLite
+feed — no JLCPCB API, one bulk download
+([konnect-lessons.md §4](docs/konnect-lessons.md#4-jlcpcb-catalog-without-the-api)) —
+into that cache and emits *proposed edits* to `design/parts_db.py` as
+a unified diff; the data-as-code file stays hand-authored and the
+script never rewrites it, and the feed never replaces a newer
+hand-verified snapshot. Stock numbers are as-of-dated
 snapshots with provenance, never live data — re-query JLCPCB before
 ordering. Full emitter-side resolution against value bins —
 the solve pass — is open work (KANBAN.md).
