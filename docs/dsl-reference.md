@@ -127,7 +127,9 @@ the bare age budget.
 feed (GitHub Pages, no auth — [konnect-lessons.md
 §4](konnect-lessons.md#4-jlcpcb-catalog-without-the-api)) into the
 overlay
-cache `build/stock-cache.sqlite` (schema-validated re-import, atomic
+cache `~/.cache/oparroy/stock-cache.sqlite` (`$XDG_CACHE_HOME/oparroy/`
+when set — user-level so git worktrees share the mirror;
+schema-validated re-import, atomic
 install); `python -m oparroy.stock diff` emits proposed edits to
 `design/parts_db.py` as a unified diff — the table stays
 hand-authored, the script never rewrites it, and a committed snapshot

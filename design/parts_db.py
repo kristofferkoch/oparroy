@@ -615,7 +615,7 @@ def main() -> None:
     """Print the stock-freshness report.
 
     When the local feed overlay cache exists
-    (``build/stock-cache.sqlite``, written by ``python -m
+    (``~/.cache/oparroy/stock-cache.sqlite``, written by ``python -m
     oparroy.stock fetch``), the audit runs against it; otherwise it
     falls back to the age budget alone.
     """

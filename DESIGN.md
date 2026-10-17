@@ -1150,7 +1150,8 @@ pairs per capture, retiring the earlier ad-hoc bin classes.
 never-queried parts, unverified tiers, and stock-outs surface as
 warnings (`python -m design.parts_db`); the per-capture
 unsourcable-part gate is open work. Given the local feed overlay cache
-(`build/stock-cache.sqlite`), the audit is machine-sourced: a
+(`~/.cache/oparroy/stock-cache.sqlite` — the user cache home, so git
+worktrees share the mirror), the audit is machine-sourced: a
 committed snapshot older than the cache's feed snapshot is stale, a
 tier disagreement is drift, an LCSC number the feed does not list is
 flagged. The refresh tooling (`python -m oparroy.stock fetch` /
