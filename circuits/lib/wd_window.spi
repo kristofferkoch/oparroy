@@ -1,6 +1,7 @@
-* watchdog-supervisor — bypass watchdog, candidate B (DESIGN.md §4).
-*
-* Behavioral model of a TPS3430-class window watchdog IC: the MCU
+* wd_window — behavioral device model of a TPS3430-class window
+* watchdog IC (the bypass watchdog, candidate B — DESIGN.md §4). A
+* circuits/lib/ device model like sn74lvc1g3157.spi: hand-written,
+* included by the benches, never DSL-captured.
 * strobes WDI; a strobe must land in the open window 0.5–1.5 ms after
 * the previous one. Too early (MCU running fast / corrupted loop) is a
 * violation just like too late (hung). /WDO is open-drain, asserted
@@ -44,7 +45,7 @@
 *   latch — engage 1.70 ms after the last real strobe, latch held
 *   through the train.
 *
-* Sim unit tests (ngspice testbenches tb_*.cir, DESIGN.md §7):
+* Sim unit tests (circuits/watchdog-supervisor/tb_*.cir, DESIGN.md §7):
 * engage timing, single-missed-strobe response, glitch/window
 * violation behavior.
 
