@@ -5,8 +5,10 @@ is a *semantic* check over the finished IR, reported as a batch of
 issues rather than a first-failure exception. Beyond what the emitters
 and pcbnew need to be true, this pass carries the first electrical
 rules: interval containment over port limit ranges (a sink's acceptable
-range must cover the connected source's output range), with waivers as
-explicit, path-addressed capture data.
+range must cover the connected source's output range) and the
+power-domain crossing audit (every net touching two domains, one
+switched, must carry a declared disposition — ``Circuit.crossing``),
+with waivers as explicit, path-addressed capture data.
 """
 
 import fnmatch
@@ -15,12 +17,18 @@ from enum import StrEnum
 from typing import Protocol
 
 from oparroy.dsl.ir import (
+    AlwaysPowered,
     Circuit,
+    Crossing,
+    DiesWith,
     Limits,
     Net,
     Part,
     PinType,
+    PowerDomain,
+    PowerDomainKind,
     Waiver,
+    hierarchical_crossings,
     hierarchical_waivers,
     natural_key,
 )
@@ -30,6 +38,9 @@ _MIN_NET_PINS = 2
 
 #: Check id of the port-range containment check; waivers address it.
 RANGE_CONTAINMENT = "range-containment"
+
+#: Check id of the power-domain crossing check; waivers address it.
+POWER_DOMAIN_CROSSING = "power-domain-crossing"
 
 
 class Severity(StrEnum):
@@ -87,19 +98,23 @@ def check(circuit: Circuit, *, footprints: FootprintTable | None = None) -> list
     (``WD1/Rs``, net ``WD1/x``), bound port nets are checked as the
     merged parent net, and sockets are checked as the part they
     resolve to (standalone default or packed package unit). The
-    port-range containment check runs before flattening, over the
-    instance bindings themselves; the capture's waivers
-    (``Circuit.waive``) apply last.
+    port-range containment check and the port/parent domain-kind
+    agreement check run before flattening, over the instance bindings
+    themselves; the power-domain crossing audit runs on the flat IR;
+    the capture's waivers (``Circuit.waive``) apply last.
     """
     issues: list[Issue] = []
     issues.extend(_check_port_ranges(circuit, ()))
+    issues.extend(_check_port_domain_kinds(circuit, ()))
     waivers = tuple(hierarchical_waivers(circuit))
+    crossings = tuple(hierarchical_crossings(circuit))
     if circuit.instances or circuit.sockets:
         circuit = circuit.flatten()
     for ref in sorted(circuit.parts, key=natural_key):
         issues.extend(_check_part(circuit.parts[ref], footprints))
     for name in sorted(circuit.nets, key=natural_key):
         issues.extend(_check_net(circuit.nets[name]))
+    issues.extend(_check_power_domains(circuit, crossings))
     return _apply_waivers(issues, waivers)
 
 
@@ -200,6 +215,352 @@ def _covers(
                 path=path,
             )
         )
+    return issues
+
+
+def _check_port_domain_kinds(circuit: Circuit, prefix: tuple[str, ...]) -> list[Issue]:
+    """Bound port and parent net power-domain kinds must agree, recursively.
+
+    A port and its parent net may each declare a power domain — the
+    duplicate declarations keep both sides of the binding honest. When
+    both declare, the kinds must match; an undeclared side is no data,
+    not a finding. Runs before flattening, over the instance bindings,
+    like the port-range check.
+    """
+    issues: list[Issue] = []
+    for instance in circuit.instances.values():
+        child_ports = instance.circuit.ports
+        for port_name, parent_net in instance.connections.items():
+            port = child_ports[port_name]
+            if (
+                port.power_domain is None
+                or parent_net.power_domain is None
+                or port.power_domain.kind is parent_net.power_domain.kind
+            ):
+                continue
+            path = "/".join((*prefix, instance.name, port_name))
+            issues.append(
+                Issue(
+                    Severity.ERROR,
+                    f"port {path!r} is declared {port.power_domain.kind} but "
+                    f"its parent net {parent_net.name!r} is declared "
+                    f"{parent_net.power_domain.kind} "
+                    "(domain kinds must agree across a binding)",
+                    check=POWER_DOMAIN_CROSSING,
+                    path=path,
+                )
+            )
+        issues.extend(
+            _check_port_domain_kinds(instance.circuit, (*prefix, instance.name))
+        )
+    return issues
+
+
+def _part_domains(part: Part) -> set[str]:
+    """Collect the rail names powering a part: POWER_IN pins' declared domains.
+
+    Ground rails are domain-neutral — a supply pin on GND contributes
+    nothing; an undeclared rail is no data (rail completeness reports
+    it separately).
+    """
+    return {
+        pin.net.name
+        for pin in part.pins
+        if pin.type is PinType.POWER_IN
+        and pin.net is not None
+        and pin.net.power_domain is not None
+        and pin.net.power_domain.kind is not PowerDomainKind.GROUND
+    }
+
+
+#: Pin count of a series resistor — the resistive reach's hop.
+_SERIES_RESISTOR_PINS = 2
+
+#: A net crosses when its signature holds at least this many distinct domains.
+_CROSSING_MIN_DOMAINS = 2
+
+
+def _is_series_resistor(part: Part) -> bool:
+    """Return True for a two-pin Device-lib part with no power pin — the hop.
+
+    The settled heuristic for the resistive reach (Device:R-class):
+    exactly two pins, no POWER_IN, symbol from the Device library —
+    the same shape the power-symbol rule keys on (``lib == "power"``).
+    """
+    return (
+        len(part.pins) == _SERIES_RESISTOR_PINS
+        and part.symbol.lib == "Device"
+        and all(pin.type is not PinType.POWER_IN for pin in part.pins)
+    )
+
+
+def _resistive_walk(net: Net) -> tuple[list[Net], set[str]]:
+    """Walk a net's resistive reach: the non-rail nets and the rails touched.
+
+    Traversal hops series resistors only. Reaching a declared rail
+    records the rail's name and stops — a rail is a domain owner,
+    never part of the reach. The visited set bounds resistor loops.
+    """
+    nets: list[Net] = []
+    rails: set[str] = set()
+    visited = {net.name}
+    stack = [net]
+    while stack:
+        current = stack.pop()
+        nets.append(current)
+        for pin in current.pins:
+            if not _is_series_resistor(pin.part):
+                continue
+            other = next(p for p in pin.part.pins if p is not pin)
+            target = other.net
+            if target is None or target.name in visited:
+                continue
+            visited.add(target.name)
+            if target.power_domain is not None:
+                rails.add(target.name)
+            else:
+                stack.append(target)
+    return nets, rails
+
+
+def _net_signature(
+    net: Net, rails: dict[str, PowerDomain], part_domains: dict[Part, set[str]]
+) -> set[str]:
+    """Compute the rail names whose domains a net touches.
+
+    The domains of the non-power pins' parts on the net, plus the
+    transitive resistive reach — a reached rail adds its own domain and
+    stops the walk. GROUND rails contribute nothing, so a pull-down to
+    GND is never a crossing.
+    """
+    nets, reached = _resistive_walk(net)
+    signature = {
+        rail for rail in reached if rails[rail].kind is not PowerDomainKind.GROUND
+    }
+    for reach_net in nets:
+        for pin in reach_net.pins:
+            part = pin.part
+            if (
+                part.symbol.is_power
+                or part.symbol.is_sim
+                or _is_series_resistor(part)
+                or pin.type in (PinType.POWER_IN, PinType.POWER_OUT)
+            ):
+                continue
+            signature |= part_domains.get(part, set())
+    return signature
+
+
+def _declared_rails(circuit: Circuit) -> dict[str, PowerDomain]:
+    """Map each rail net's name to its declared domain."""
+    return {
+        name: net.power_domain
+        for name, net in circuit.nets.items()
+        if net.power_domain is not None
+    }
+
+
+def _find_crossings(
+    circuit: Circuit,
+    rails: dict[str, PowerDomain],
+    part_domains: dict[Part, set[str]],
+) -> dict[str, set[str]]:
+    """Find the crossing nets: name → signature rail names.
+
+    A net crosses when its signature holds ``_CROSSING_MIN_DOMAINS`` or
+    more distinct domains, at least one of them SWITCHED — always↔always
+    crossings are out of scope for v1. Rail nets own their domains and
+    are never audited.
+    """
+    crossings: dict[str, set[str]] = {}
+    for name in sorted(circuit.nets, key=natural_key):
+        net = circuit.nets[name]
+        if net.power_domain is not None:
+            continue
+        signature = _net_signature(net, rails, part_domains)
+        if len(signature) >= _CROSSING_MIN_DOMAINS and any(
+            rails[rail].kind is PowerDomainKind.SWITCHED for rail in signature
+        ):
+            crossings[name] = signature
+    return crossings
+
+
+def _undeclared_crossing_error(
+    name: str, signature: set[str], rails: dict[str, PowerDomain]
+) -> Issue:
+    """Build the undeclared-crossing error, naming the net and its domains."""
+    domains = ", ".join(
+        f"{rail!r} ({rails[rail].kind})" for rail in sorted(signature, key=natural_key)
+    )
+    return Issue(
+        Severity.ERROR,
+        f"net {name!r} crosses power domains with no declared disposition: {domains}",
+        check=POWER_DOMAIN_CROSSING,
+        path=name,
+    )
+
+
+def _check_rail_completeness(circuit: Circuit) -> list[Issue]:
+    """Warn on nets that look like rails but carry no declared domain.
+
+    A net with a power-symbol pin or a POWER_OUT pin is driven as a
+    rail (``_check_net``'s rule); without a declared domain it is a
+    rail the capture forgot to declare — visible, never silent.
+    """
+    return [
+        Issue(
+            Severity.WARNING,
+            f"rail net {net.name!r} has no declared power domain",
+            check=POWER_DOMAIN_CROSSING,
+            path=net.name,
+        )
+        for net in circuit.nets.values()
+        if net.power_domain is None
+        and any(
+            pin.type is PinType.POWER_OUT or pin.part.symbol.is_power
+            for pin in net.pins
+        )
+    ]
+
+
+def _check_power_domains(
+    circuit: Circuit, crossings: tuple[Crossing, ...]
+) -> list[Issue]:
+    """Audit power-domain crossings over the flat IR.
+
+    Every crossing net (``_find_crossings``) must carry a declared
+    disposition (``Circuit.crossing``, collected hierarchically), which
+    the audit then verifies; an undeclared crossing is an error, a
+    declaration matching no crossing net warns as stale. Rail
+    completeness warns on undeclared rail nets.
+    """
+    issues: list[Issue] = []
+    rails = _declared_rails(circuit)
+    part_domains = {
+        part: _part_domains(part)
+        for part in circuit.parts.values()
+        if not (part.symbol.is_power or part.symbol.is_sim)
+    }
+    declared: dict[str, list[Crossing]] = {}
+    for crossing in crossings:
+        declared.setdefault(crossing.path, []).append(crossing)
+    for name, signature in _find_crossings(circuit, rails, part_domains).items():
+        matching = declared.pop(name, [])
+        if not matching:
+            issues.append(_undeclared_crossing_error(name, signature, rails))
+        for crossing in matching:
+            issues.extend(_verify_disposition(circuit, crossing, rails, part_domains))
+    issues.extend(
+        Issue(
+            Severity.WARNING,
+            f"crossing declaration at {path!r} matched no crossing net",
+            check=POWER_DOMAIN_CROSSING,
+            path=path,
+        )
+        for path in declared
+    )
+    issues.extend(_check_rail_completeness(circuit))
+    return issues
+
+
+def _verify_disposition(
+    circuit: Circuit,
+    crossing: Crossing,
+    rails: dict[str, PowerDomain],
+    part_domains: dict[Part, set[str]],
+) -> list[Issue]:
+    """Verify one declared crossing's disposition against the flat IR."""
+    net = circuit.nets[crossing.path]
+    if isinstance(crossing.disposition, DiesWith):
+        return _verify_dies_with(net, rails, part_domains)
+    if isinstance(crossing.disposition, AlwaysPowered):
+        return _verify_always_powered(net)
+    # BackFeed: budget and citation are declaration-time data (v1).
+    return []
+
+
+def _verify_dies_with(
+    net: Net, rails: dict[str, PowerDomain], part_domains: dict[Part, set[str]]
+) -> list[Issue]:
+    """Every always-powered pin on the net's reach must be input-class.
+
+    A foreign OUTPUT/BIDIR driver fails — it would drive the dead net
+    (the Rth1 bug shape). Power pins are not signal drivers and are
+    skipped, as are power-symbol and sim parts.
+    """
+    issues: list[Issue] = []
+    nets, _rails = _resistive_walk(net)
+    for reach_net in nets:
+        for pin in reach_net.pins:
+            part = pin.part
+            if (
+                part.symbol.is_power
+                or part.symbol.is_sim
+                or pin.type in (PinType.POWER_IN, PinType.POWER_OUT)
+                or not any(
+                    rails[rail].kind is PowerDomainKind.ALWAYS
+                    for rail in part_domains.get(part, ())
+                )
+                or pin.type in (PinType.INPUT, PinType.PASSIVE)
+            ):
+                continue
+            issues.append(
+                Issue(
+                    Severity.ERROR,
+                    f"net {net.name!r} is declared dies-with-domain but "
+                    f"{part.ref}.{pin.number} ({pin.type}) is powered from "
+                    "an always rail and may drive the dead net",
+                    check=POWER_DOMAIN_CROSSING,
+                    path=net.name,
+                )
+            )
+    return issues
+
+
+def _verify_always_powered(net: Net) -> list[Issue]:
+    """No-Ioff parts on the net's reach must draw power from always rails.
+
+    Every part touching the net or its resistive reach whose parts-DB
+    record says ``partial_power_down`` is False must have all its
+    POWER_IN pins on ALWAYS-domain nets — a ground pin is
+    domain-neutral. Parts with no data (None) are never a finding.
+    """
+    issues: list[Issue] = []
+    nets, _rails = _resistive_walk(net)
+    checked: set[str] = set()
+    for reach_net in nets:
+        for pin in reach_net.pins:
+            part = pin.part
+            if (
+                part.symbol.is_power
+                or part.symbol.is_sim
+                or part.ref in checked
+                or part.partial_power_down is not False
+            ):
+                continue
+            checked.add(part.ref)
+            offenders = [
+                power_pin
+                for power_pin in part.pins
+                if power_pin.type is PinType.POWER_IN
+                and (
+                    power_pin.net is None
+                    or power_pin.net.power_domain is None
+                    or power_pin.net.power_domain.kind is PowerDomainKind.SWITCHED
+                )
+            ]
+            if offenders:
+                pins = ", ".join(f"{part.ref}.{p.number}" for p in offenders)
+                issues.append(
+                    Issue(
+                        Severity.ERROR,
+                        f"net {net.name!r} is declared always-powered but "
+                        f"{part.ref} has no partial-power-down spec and not "
+                        f"all its power pins are on always rails ({pins})",
+                        check=POWER_DOMAIN_CROSSING,
+                        path=net.name,
+                    )
+                )
     return issues
 
 
