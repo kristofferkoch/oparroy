@@ -153,6 +153,29 @@ the flat IR, and applies waivers last. `Issue(severity, message, check, path)`; 
 the containment check's id for waivers. `FootprintTable` is the
 `exists(footprint)` protocol (kicadlib or stubs).
 
+The power-domain audit (check id `POWER_DOMAIN_CROSSING`) runs on the
+flat IR. `circuit.power_domain(net, kind=…)` declares a rail's domain
+— `PowerDomainKind.ALWAYS`, `SWITCHED`, or `GROUND` (domain-neutral: a
+pull-down to GND is never a finding); a bound port's one-sided
+declaration rides the merged flat net, and port/parent kind agreement
+is checked over the bindings before flattening. A signal net's
+*signature* is the domains powering the parts on it plus its resistive
+reach (two-pin `Device` passives hop; a reached rail contributes its
+domain and stops the walk); a net touching ≥2 domains, one of them
+switched, is a *crossing* and must carry a declared disposition:
+`circuit.crossing(net, …)` with `DiesWith()` (verified: every
+always-powered pin on the reach is input-class — a foreign output
+driving the dead net errors), `AlwaysPowered()` (verified: every part
+whose parts-DB record says `partial_power_down=False` — the no-Ioff
+3157 rule — is powered solely from always rails), or
+`BackFeed(budget_ma, citation)` (the live-into-dead bound and its
+analysis as data; the topology behind the budget is not verified).
+Crossing paths prefix hierarchically like waiver paths and may
+forward-reference transform-created nets; an undeclared crossing
+errors, a declaration matching no crossing net warns stale, and a
+rail-shaped net (power-symbol or `POWER_OUT` pin) with no declared
+domain warns.
+
 ## Footprints and annotation (`assign.py`, `annotate.py`)
 
 `footprint_map(circuit)` dumps path → footprint; `assign_footprints( circuit, overrides)` applies the per-instance override table (keys are
@@ -220,6 +243,9 @@ The CI board's instrumentation as data over the plain capture
   ref may carry a `/` group prefix; the spec wires placeholder nets:
   `@a`/`@b` (cut sides), `@control`/`@source` (escaped ports), `@net`
   (a shunt's base net), any other `@name` a fresh shared net.
+  `InsertSeries(name=…, switched_domain=True)` tags the detached net
+  as a SWITCHED power domain deriving from the base net's ALWAYS rail
+  — the [power-domain audit](#validation-checkpy)'s domain pair.
 - Scopes: `PerTile(subcircuit, transforms)` instruments every instance
   of a subcircuit; `PerInstance(path, transforms)` addresses one
   instance. Scopes must not nest.

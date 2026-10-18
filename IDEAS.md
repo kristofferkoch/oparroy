@@ -318,6 +318,15 @@ real work — **move**, don't copy. Reference, don't duplicate.
   reference implementation for reading `.kicad_pcb`/`.kicad_sch`
   without KiCad — though oparroy's hand-rolled parser
   (`src/oparroy/dsl/kicad_pcb.py`) already covers that.
+- **DNP semantics in the DSL** (spotted wiring the power-domain
+  crossing audit): parts captured with `value="DNP"` (the PHY
+  frontend's BUF1 Schmitt trigger, the hysteresis leg Rfb) are
+  electrically present in the IR — the crossing audit's resistive walk
+  traverses them, so T1–T7's `opo` audits a phantom crossing through
+  the DNP Rfb and the DiesWith rule counts the DNP BUF1 output as a
+  live driver. A first-class not-fitted marker would let the checks
+  treat DNP parts as absent; today the captures audit the DNP legs
+  as-fitted (the conservative direction) and the declarations say so.
 
 ## Related projects to mine
 
