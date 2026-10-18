@@ -603,6 +603,71 @@ PARTS = PartsDb(
                 "470 Ω series R; the design wants piezo)"
             ),
         ),
+        PartRecord(
+            name="csa-ina241a5",
+            kind="current-sense-amp",
+            lcsc="C7425524",
+            symbol="Amplifier_Current:INA241A5xDDF",
+            footprint="Package_TO_SOT_SMD:SOT-23-8",
+            value="INA241A5",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                3_809,
+                date(2026, 10, 17),
+                "kicad-jlcpcb-tools feed snapshot 2026-10-17; $3.0244 @1 "
+                "from the LCSC product page",
+            ),
+            area_mm2=8.12,
+            datasheet="datasheets/INA241",
+            note=(
+                "TI INA241A5IDDFR — the measurement tile's high-side "
+                "shunt amp (instrumented-ci.md §12): gain 200 V/V, "
+                "1.1 MHz small-signal BW at all gains (typ-only), "
+                "A-grade offset ±8 µV max, supply 2.7..20 V from the "
+                "always-on 3V3, CM range -5..110 V, bidirectional REF "
+                "pins (datasheets/INA241/notes/facts.md). Extended tier "
+                "— JLCPCB's Basic list carries no current-sense amp "
+                "above ~100 kHz (the stocked clones are 48-80 kHz "
+                "zero-drift parts). Rejected: INA293 (BW falls to "
+                "900 kHz at A4/A5 and no REF pin — unidirectional "
+                "only), TSC2011 (750 kHz, ±200 µV offset), "
+                "INA180/INA181/INA240 (≤400 kHz)"
+            ),
+        ),
+        PartRecord(
+            name="adc-adcs7476",
+            kind="adc",
+            lcsc="C91530",
+            symbol="Analog_ADC:ADS7886xxDBV",
+            footprint="Package_TO_SOT_SMD:SOT-23-6",
+            value="ADCS7476",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                1_680,
+                date(2026, 10, 17),
+                "kicad-jlcpcb-tools feed snapshot 2026-10-17; ~$0.90 @1 "
+                "from the LCSC product page",
+            ),
+            area_mm2=4.64,
+            datasheet="datasheets/ADCS7476",
+            note=(
+                "TI ADCS7476AIMFX/NOPB — the measurement tile's SPI ADC "
+                "(instrumented-ci.md §12): 12-bit, 1 MSPS at 20 MHz "
+                "SCLK, VDD-as-reference (0..3.3 V input on the 3V3 "
+                "rail), 16-SCLK frames of 4 leading zeros + 12 bits "
+                "(sample rising edge, SPI mode 0), streams conversions "
+                "with no config writes — the RP2040 PIO burst-capture "
+                "target (datasheets/ADCS7476/notes/facts.md). Extended "
+                "tier — JLCPCB's Basic list carries no ADCs at all. "
+                "The KiCad symbol is the pin-identical ADS7886xxDBV "
+                "(facts.md pin-compat verdict). Second source on the "
+                "same footprint: SiChange XCS7476E (C41383380, 4,301 in "
+                "the same feed snapshot). Rejected: ADS7886SBDBVT (8 "
+                "in stock), ADS7042 (X2QFN package), MCP33131-10 "
+                "(needs an external reference), AD7476ARTZ (5x the "
+                "price, thin stock)"
+            ),
+        ),
     ]
 )
 
