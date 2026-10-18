@@ -25,7 +25,8 @@ H-transforms cut against):
 - **B1-B5, boundary tile** — the §5 PIO taps on `opa_p`, `TX_A#b`
   (post-injector, so the tap rides the split alias and must apply
   after F1), `opo`, `led_work`, and the watchdog defeat: a 3157 shunt
-  clamping `sel` to the always rail (B1 = NC = watchdog in charge).
+  clamping `sel` to the always rail through the §2 legs' 470 Ω
+  (B1 = NC = watchdog in charge).
   The taps feed the supervisor's bidirectional GPIOs, so they carry
   the POR-input justification (`AddTap.non_input_consumers`).
 - **O1/O2, per tile** — the §8 observe taps: `sel` (the truthful
@@ -301,9 +302,10 @@ def boundary_taps() -> tuple[Transform, ...]:
             rail="3V3",
             part=TransformPart(
                 "FI1/SWWD",
-                FiSwitch(a="@net", b2="3V3", s="@control", vcc="3V3", gnd="GND"),
+                FiSwitch(a="@net", b2="@leg", s="@control", vcc="3V3", gnd="GND"),
             ),
             control="WD_DEFEAT",
+            extra=(TransformPart("FI1/RWD", R0603("470", a="@leg", b="3V3")),),
         ),
     )
 

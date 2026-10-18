@@ -192,10 +192,15 @@ what the equivalence proof requires; stimulus mode is a deliberate
 non-reset state.
 
 **Watchdog defeat** (DESIGN.md §6): `add_shunt(sel → 3V3 always)` through one
-3157 (B1 = NC = bit 0 = watchdog in charge, B2 = rail). While set, `sel`
-is clamped high through ~7 Ω and a halted/single-stepped node stays
+3157 plus the §2 shunt legs' 470 Ω (B1 = NC = bit 0 = watchdog in
+charge, B2 = leg). While set, `sel` is clamped high through 470 Ω +
+~7 Ω — with the pump stopped only `WD1/Rb`'s 47 kΩ pulls `sel` down,
+so the defeat still holds — and a halted/single-stepped node stays
 electrically in the ring; the charge pump's edge dumps into the rail
-are normal-operation amplitudes and `WD1/Rb` bleeds 70 µA. The
+are normal-operation amplitudes and `WD1/Rb` bleeds 70 µA. The leg
+also bounds the stacked-fault corner: defeat latched while the tile is
+power-cut drives the dead MCU's clamp through the same ≤ 5.7 mA figure
+§3 budgets, inside the ±20 mA injection budget. The
 scan-chain `sel`-observe (§8) reads high, consistent.
 
 ## 6. Human-I/O overrides (demonstrator tiles)
@@ -261,13 +266,13 @@ instance `FI1`, parts prefixed at flatten time):
 **Boundary tile 0, additional** (per-instance, on top of the per-tile
 set):
 
-| #   | Kind      | Target                   | Parts         | Bit / pin                            |
-| --- | --------- | ------------------------ | ------------- | ------------------------------------ |
-| B1  | add_tap   | `opa_p` → RP2040 GPIO    | wire          | PIO                                  |
-| B2  | add_tap   | `TX_A#b` → RP2040 GPIO   | wire          | PIO                                  |
-| B3  | add_tap   | `opo` → RP2040 GPIO      | wire          | PIO                                  |
-| B4  | add_tap   | `led_work` → RP2040 GPIO | wire          | PIO                                  |
-| B5  | add_shunt | `sel` → `3V3`            | FI1/SWWD 3157 | `WD_DEFEAT` (0 = watchdog in charge) |
+| #   | Kind      | Target                   | Parts                 | Bit / pin                            |
+| --- | --------- | ------------------------ | --------------------- | ------------------------------------ |
+| B1  | add_tap   | `opa_p` → RP2040 GPIO    | wire                  | PIO                                  |
+| B2  | add_tap   | `TX_A#b` → RP2040 GPIO   | wire                  | PIO                                  |
+| B3  | add_tap   | `opo` → RP2040 GPIO      | wire                  | PIO                                  |
+| B4  | add_tap   | `led_work` → RP2040 GPIO | wire                  | PIO                                  |
+| B5  | add_shunt | `sel` → `3V3`            | FI1/SWWD 3157 + 470 Ω | `WD_DEFEAT` (0 = watchdog in charge) |
 
 **Input tiles 1, 3, 5, 7, additional** (per-tile declaration over the
 four input tiles):
@@ -312,8 +317,10 @@ demand side the plane was sized against:
   the /OE + pull-down discipline and zero-load boot sequence
   (scan-plane.md §4), and those levels are the equivalence proof's
   inputs.
-- **All patterns safe** (this doc §2): the 470 Ω shunt legs bound
-  every bit combination, so the chain needs no hardware interlocks — a
+- **All patterns safe** (this doc §2): the 470 Ω shunt legs — the
+  injector legs and B5's defeat leg alike — bound every bit
+  combination (defeat-while-gated lands in §3's clamp-injection
+  budget, §5), so the chain needs no hardware interlocks — a
   wrong pattern injects a wrong fault, never damage.
 - **Observe requests: 16 bits** — per-tile `sel` (bypass state; the
   truthful node-health bit: engages on power cut, keep-alive cut, or
