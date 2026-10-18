@@ -402,3 +402,68 @@ it gets a dedicated bench item.
   fragile-connector doctrine; the per-node power cut covers the logical
   power-fault space. Switching five more conductors per segment is
   cost without new information.
+
+## 12. Tile power measurement chain
+
+One ring tile trades its human-I/O role additions for a current
+measurement chain: a shunt in series with the tile's `3V3` feed at the
+F8 power-cut switch (§3), a high-side shunt amp, and a fast SPI ADC —
+amp and ADC powered from the **always-on `3V3` domain**, so the chain
+survives the per-node power cut and keeps reading through boot,
+flash-programming, and per-frame activity signatures.
+
+**The parts** (parts DB `csa-ina241a5` / `adc-adcs7476`; extractions in
+[datasheets/INA241/notes/facts.md](../datasheets/INA241/notes/facts.md)
+and
+[datasheets/ADCS7476/notes/facts.md](../datasheets/ADCS7476/notes/facts.md)):
+
+- **Shunt: 82 mΩ 1% 0603** from the §7 `R0603` bin (`R082`).
+- **Amp: TI INA241A5** (gain 200 V/V, A-grade offset ±8 µV max),
+  SOT-23-8. 1.1 MHz small-signal bandwidth *at all gains* and 1 µs
+  settling to 1 % (both typ-only —
+  [quirks](../datasheets/INA241/notes/quirks.md)) resolve the 1.25 µs
+  bit cells of 800 kbit/s line activity. Supply 2.7–20 V runs off `3V3`
+  always; CM range −5…110 V covers the rail with decades of margin;
+  the REF pair supports bidirectional sensing if the capture wants the
+  cut-state reverse flow read.
+- **ADC: TI ADCS7476** (12-bit, 1 MSPS), SOT-23-6. VDD-as-reference —
+  0…3.3 V input straight off the rail, no reference part; 16-SCLK
+  frames (4 leading zeros + 12 bits, SPI mode 0) stream conversions
+  with no config writes, the shape the RP2040 PIO + DMA burst capture
+  wants. Second source on the same footprint: SiChange XCS7476E.
+
+Both are Extended tier — JLCPCB's Basic list carries no current-sense
+amp above ~100 kHz and no ADCs at all, so the two line fees are
+structural. Amp ~$3.02, ADC ~$0.90 @1.
+
+**Shunt sizing — inside the FET's spend.** The F8 AO3401A spends ≤ 85 mΩ
+(RDS(on) max @ VGS = −2.5 V, §3) of rail on the tile already: at the
+50 mA tile-current ceiling that is 4.25 mV. The 82 mΩ shunt adds
+4.1 mV at the same current — inside the FET's existing spend at every
+current, and mV-class against the 3V3 port's 3.2…3.4 V band
+(`design/ci_power.py`). 3 mW dissipation at the clip point, nothing
+against the 0603 rating.
+
+**Full scale, resolution, floor.** 50 mA → 4.1 mV × 200 = **0.82 V**
+output; the ADC clips only when the amp hits its VS−0.2 V ceiling, at
+~190 mA — inrush bursts above the nominal ceiling still register
+without saturating the interesting range. Resolution 0.805 mV/LSB →
+**49 µA/LSB** referred to the shunt; amp offset ±8 µV × 200 = ±1.6 mV
+≈ ±2 LSB. At the low end the ~4 mA MCU idle reads 66 mV, 3.3× the
+amp's 20 mV max swing-to-GND floor — the run/idle/sleep deltas stay
+above the nonlinearity.
+
+**Capture model.** USB full-speed cannot stream 1 MS/s × 12 bit
+continuously, so the supervisor burst-captures to SRAM: 264 kB at
+2 B/sample ≈ **130 ms at 1 MS/s**, uploaded after the burst. The chain
+draws ~3.1 mA typ (amp 2.5 + ADC 0.6) on the always-on rail — noise
+against the §6 500 mA budget.
+
+**Deferred to the capture:** shunt placement upstream vs downstream of
+the F8 switch (downstream reads the tile alone and — with the REF pins
+biased mid-rail — the cut-state clamp back-feed of §3 as a negative
+current, turning the ≈5.7 mA analytic bound into a measured number);
+the amp→ADC charge-bucket RC against the amp's 1 nF max capacitive
+load (quirks); the first bench read against a known voltage to settle
+the Linux-driver shift discrepancy
+([ADCS7476 quirks](../datasheets/ADCS7476/notes/quirks.md)).
