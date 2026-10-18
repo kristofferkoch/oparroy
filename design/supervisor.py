@@ -89,6 +89,7 @@ from oparroy.dsl import (
     Interval,
     KiCadLibraries,
     Limits,
+    PowerDomainKind,
     Subcircuit,
     SymbolTable,
     TypedPart,
@@ -259,6 +260,15 @@ class Supervisor(Subcircuit):
         ring_txa, ring_rxb, ring_rxa, ring_txb = _ring_ports(circuit)
 
         dvdd = circuit.net("dvdd")
+        # The rail domains (instrumented-ci.md §3): 3V3 always, GND the
+        # return; dvdd — the RP2040's internal core regulator output —
+        # is always-on with IOVDD.
+        for rail, kind in (
+            (v3v3, PowerDomainKind.ALWAYS),
+            (gnd, PowerDomainKind.GROUND),
+            (dvdd, PowerDomainKind.ALWAYS),
+        ):
+            circuit.power_domain(rail, kind=kind)
         qspi_ss = circuit.net("qspi_ss")
         qspi_sclk = circuit.net("qspi_sclk")
         qspi_sd0 = circuit.net("qspi_sd0")

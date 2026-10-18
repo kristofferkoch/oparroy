@@ -65,6 +65,7 @@ from oparroy.dsl import (
     Interval,
     KiCadLibraries,
     Limits,
+    PowerDomainKind,
     Subcircuit,
     SymbolTable,
     TypedPart,
@@ -168,6 +169,9 @@ class CiPower(Subcircuit):
         v5 = circuit.port("5V", sink=Limits(voltage=Interval(4.5, 5.5)))
         v3v3 = circuit.port("3V3", source=Limits(voltage=Interval(3.2, 3.4)))
         gnd = circuit.port("GND")
+        circuit.power_domain(v5, kind=PowerDomainKind.ALWAYS)
+        circuit.power_domain(v3v3, kind=PowerDomainKind.ALWAYS)
+        circuit.power_domain(gnd, kind=PowerDomainKind.GROUND)
         usb_dp = circuit.port(
             "USB_DP",
             source=Limits(voltage=Interval(0, 3.6)),

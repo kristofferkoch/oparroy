@@ -11,10 +11,12 @@ only); regenerate it from the dev shell with:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from design.ci_board import INPUT_TILES, TILE_COUNT, capture, ci_board_plan
 from design.ci_instrumentation import BUDGETS, reset_levels
 from oparroy.dsl import (
+    POWER_DOMAIN_CROSSING,
     Circuit,
     EquivalenceReport,
     KiCadLibraries,
@@ -33,6 +35,10 @@ from oparroy.dsl.equivalence import (
     SWITCH_CAPACITANCE,
     TAP_CAPACITANCE,
 )
+from oparroy.dsl.ir import hierarchical_crossings
+
+if TYPE_CHECKING:
+    import pytest
 
 GOLDEN = Path(__file__).parent / "golden" / "oparroy-ci.net"
 
@@ -156,6 +162,53 @@ def test_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
 def test_base_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
     issues = check(capture(kicad_libs, instrumented=False), footprints=kicad_libs)
     assert [i for i in issues if i.severity is Severity.ERROR] == []
+
+
+def test_crossing_dispositions(kicad_libs: KiCadLibraries) -> None:
+    """The §3 crossing audit's declaration map over the real capture."""
+    board = capture(kicad_libs)
+    declared: dict[str, list[str]] = {}
+    for crossing in hierarchical_crossings(board):
+        declared.setdefault(crossing.path, []).append(
+            type(crossing.disposition).__name__
+        )
+    # Every tile: the ring wires' bounded back-feed, the always-powered
+    # mux/select/driver group (design/ci_tiles.py).
+    for tile in range(TILE_COUNT):
+        for net in ("opa_p", "opo", "opa_p_b", "RX_B#a", "txb_drv"):
+            assert declared[f"T{tile}/{net}"] == ["BackFeed"]
+        for net in ("swio", "debug_tx", "sel", "PHY1/sel_sw", "ka#a", "txa_drv"):
+            if tile == 0 and net == "sel":
+                continue  # asserted below
+            assert declared[f"T{tile}/{net}"] == ["AlwaysPowered"]
+    # T0/sel adds the board-level BackFeed bounding B5's defeat leg
+    # (instrumented-ci.md §3/§5) on top of the tile's AlwaysPowered.
+    assert sorted(declared["T0/sel"]) == ["AlwaysPowered", "BackFeed"]
+    # B4's observe-only tap: the RP2040 pad drive bounds the misdrive.
+    assert declared["T0/led_work"] == ["BackFeed"]
+    assert declared["T0/SL1/ledw_a"] == ["BackFeed"]
+    # The inter-tile segments; the drain (SEG8) never crosses.
+    for index in range(TILE_COUNT):
+        assert declared[f"SEG{index}_A"] == ["BackFeed"]
+        assert declared[f"SEG{index}_B"] == ["BackFeed"]
+
+
+def test_dropped_segment_declaration_fails(
+    kicad_libs: KiCadLibraries, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Negative control: drop the declarations and the audit names the nets."""
+    monkeypatch.setattr(
+        "design.ci_board.declare_segment_crossings", lambda _board, _segments: None
+    )
+    issues = check(capture(kicad_libs), footprints=kicad_libs)
+    undeclared = {
+        i.path
+        for i in issues
+        if i.check == POWER_DOMAIN_CROSSING and i.severity is Severity.ERROR
+    }
+    assert undeclared == {
+        f"SEG{index}_{wire}" for index in range(TILE_COUNT) for wire in ("A", "B")
+    }
 
 
 def test_reset_levels_all_zero(kicad_libs: KiCadLibraries) -> None:

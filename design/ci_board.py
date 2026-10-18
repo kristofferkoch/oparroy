@@ -50,15 +50,17 @@ from typing import TYPE_CHECKING
 
 from design.ci_instrumentation import ci_transform_plan
 from design.ci_power import CiPower
-from design.ci_tiles import InputNode, OutputNode
+from design.ci_tiles import InputNode, OutputNode, ring_back_feed
 from design.scan_plane import TILE_BITS, DebugTree, ScanPlane, SwioTree
 from design.segment import SegmentConnector
 from design.supervisor import Supervisor
 from oparroy.dsl import (
     Annotation,
+    BackFeed,
     Circuit,
     KiCadLibraries,
     PerInstance,
+    PowerDomainKind,
     SymbolTable,
     TileNet,
     annotate,
@@ -105,6 +107,27 @@ def ci_board_plan() -> list[Scope]:
     )
 
 
+def declare_segment_crossings(board: Circuit, segments: int) -> None:
+    """Declare the segment wires' crossing dispositions (instrumented-ci §3).
+
+    A gated tile's MCU clamps are driven from the live ring through the
+    470 Ω terminal-protection resistors — bounded back-feed, 5.7 mA per
+    dead-side pin on the reach (opa_p + opo on ring A, txb_drv on ring
+    B). ``segments`` counts the inter-tile segments; the drain segment
+    (T7→supervisor on the full board) is always↔always and never
+    crosses, so it is excluded. The plain side carries these as dormant
+    declarations — the crossings are an instrumented-side phenomenon
+    (F8's 3V3N) — so its check reports them stale, like the tile
+    captures'.
+    """
+    for index in range(segments):
+        board.crossing(
+            f"SEG{index}_A",
+            ring_back_feed("ring traffic and the injector shunts", 2, "Rar"),
+        )
+        board.crossing(f"SEG{index}_B", ring_back_feed("ring-B traffic", 1, "Rbt"))
+
+
 def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
     """Build the CI board; ``instrumented`` selects the proof side."""
     board = Circuit("oparroy-ci", symbols)
@@ -113,11 +136,19 @@ def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
         "v3v3": board.net("3V3"),
         "gnd": board.net("GND"),
     }
+    # The board rails' domains (instrumented-ci.md §3): 3V3/5V/UNREG are
+    # always-on, GND the return; F8 derives each tile's switched 3V3N
+    # from 3V3 (design/ci_instrumentation.py).
+    for name in ("unreg", "v3v3"):
+        board.power_domain(rails[name], kind=PowerDomainKind.ALWAYS)
+    board.power_domain(rails["gnd"], kind=PowerDomainKind.GROUND)
+    v5 = board.net("5V")
+    board.power_domain(v5, kind=PowerDomainKind.ALWAYS)
     board.instance(
         "PWR",
         CiPower(),
         **{
-            "5V": board.net("5V"),
+            "5V": v5,
             "3V3": rails["v3v3"],
             "GND": rails["gnd"],
             "USB_DP": board.net("USB_DP"),
@@ -133,6 +164,31 @@ def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
         )
         for index in range(TILE_COUNT + 1)
     ]
+    declare_segment_crossings(board, TILE_COUNT)
+    # The boundary tile's extras (instrumented-ci.md §5), declared here
+    # because they exist only once the B4/B5 transforms land on T0:
+    # B5's defeat leg drives the gated tile's `sel` (the tile-level
+    # AlwaysPowered covers the placement rule; this bounds the driven
+    # corner), and B4's observe-only tap sits on `led_work` with no
+    # series R — a misdriven RP2040 pad (≤ 12 mA max drive) stays
+    # inside the MCU's ±20 mA injection budget.
+    board.crossing(
+        "T0/sel",
+        BackFeed(
+            5.7,
+            "instrumented-ci.md §3/§5 — B5's defeat leg drives the gated "
+            "tile's sel (the U1 clamp path) through RWD (470 Ω): ≤ 5.7 mA, "
+            "inside the ±20 mA injection budget (CH32V003 facts T3-1)",
+        ),
+    )
+    led_tap = BackFeed(
+        12,
+        "instrumented-ci.md §5 — B4's observe-only tap: a misdriven "
+        "RP2040 pad (≤ 12 mA max drive) into the gated tile's led_work "
+        "stays inside the CH32V003 ±20 mA injection budget (§3, facts T3-1)",
+    )
+    board.crossing("T0/led_work", led_tap)
+    board.crossing("T0/SL1/ledw_a", led_tap)
     # The boundary segment's supervisor-end connector (instrumented-ci
     # §2's connectorized segment; the tile end is T0's J1).
     board.part(

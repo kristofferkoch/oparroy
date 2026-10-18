@@ -22,7 +22,7 @@ pin 1 sits next to pin 2, not above it.
 
 from typing import ClassVar
 
-from oparroy.dsl import Bundle, BundleConnector, Circuit
+from oparroy.dsl import Bundle, BundleConnector, Circuit, PowerDomainKind
 
 #: The bundle members of one segment face, in pin order.
 SEGMENT_MEMBERS = ("unreg", "v3v3", "gnd", "a", "b")
@@ -41,6 +41,11 @@ def segment_ports(circuit: Circuit) -> tuple[Bundle, Bundle]:
     unreg = circuit.port("UNREG")
     v3v3 = circuit.port("3V3")
     gnd = circuit.port("GND")
+    # The tile's rail domains: 3V3 is the always rail F8 splits 3V3N
+    # off (the transform's switched-domain tagging validates against
+    # this declaration); GND is the domain-neutral return.
+    circuit.power_domain(v3v3, kind=PowerDomainKind.ALWAYS)
+    circuit.power_domain(gnd, kind=PowerDomainKind.GROUND)
     rx_a = circuit.port("RX_A")
     tx_a = circuit.port("TX_A")
     rx_b = circuit.port("RX_B")
