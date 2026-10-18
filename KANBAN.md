@@ -33,8 +33,7 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T40a[T40a measurement chain selection] --> T40b[T40b measurement tile capture]
-    T38[T38 power-domain crossing check] --> T40b
+    T38[T38 power-domain crossing check] --> T40b[T40b measurement tile capture]
     T40b --> T10c[T10c CI layout + fab]
     T10c --> T12[T12 test-hw harness]
     T10c --> T15[T15 cable reach: bench + §2 adoption]
@@ -45,24 +44,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T40a — CI board tile power measurement: chain selection.** Split
-  from T40. *Shape: research.* Pick the dedicated tile's measurement
-  chain: a high-side shunt amp and a fast external SPI ADC, both
-  powered from the always-on 3V3 domain so the chain survives the
-  per-node power cut. Bandwidth is the point of the analog route:
-  µs-scale resolution to discern per-frame line activity at
-  800 kbit/s, boot, and flash-programming signatures — spec the amp
-  ≥1 MHz-class BW and the ADC ≥1 MS/s-class at 12-bit-class
-  resolution; USB full-speed can't stream that continuously, so the
-  supervisor burst-captures to SRAM (264 kB ≈ 60–130 ms at 1–2 MS/s)
-  and uploads after the burst. Confirm both parts' assembler stock
-  class, extract the datasheets (`datasheets/<PART>/notes/` with the
-  SDK cross-check, per the standing instruction), and bind the parts
-  DB records. Size the shunt so the added drop stays inside what the
-  FET's Rds(on) already spends from the rail budget
-  (`design/ci_power.py`), and record the selection and the sizing
-  arithmetic where T40b's capture can cite them.
-  **Blocked by:** — · **Unblocks:** T40b
 - **T38 — DSL power-domain crossing check.** *Shape: implementation.*
   Captures declare power domains (the `design/ci_power.py` transform's
   `3V3` always / `3V3N` switched split) and a check pass audits every
@@ -276,9 +257,12 @@ ______________________________________________________________________
   note on why the redundant-GND pinout suffices.
   **Blocked by:** — · **Unblocks:** —
 - **T40b — CI board tile power measurement: the capture.** Split from
-  T40. Dedicate one ring tile to current measurement: T40a's shunt in
-  series with the tile's 3V3 feed at the F8 power-cut switch, into the
-  shunt amp + SPI ADC on the always-on 3V3 domain — the chain survives
+  T40. Dedicate one ring tile to current measurement: the chain
+  selection and sizing are settled in [instrumented-ci.md
+  §12](docs/instrumented-ci.md#12-tile-power-measurement-chain) — an
+  82 mΩ shunt in series with the tile's 3V3 feed at the F8 power-cut
+  switch, into the INA241A5 shunt amp + ADCS7476 SPI ADC on the
+  always-on 3V3 domain — the chain survives
   the per-node power cut and reads the cut-state clamp back-feed (the
   ≈5.7 mA hazard [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)
   bounds analytically becomes a measured number). The capture declares
@@ -290,7 +274,7 @@ ______________________________________________________________________
   role in the sheet-partition/congruence contract, and the closest
   current signature to the standalone node board. The fast chain also
   captures the §10 [P-FET-turn-on rail-dip/inrush bench item](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness).
-  **Blocked by:** T40a, T38 · **Unblocks:** T10c, T41
+  **Blocked by:** T38 · **Unblocks:** T10c, T41
 - **T41 — Tile power reconciliation (bench half).** *Shape: research.*
   On the fabbed CI board: supervisor burst-capture firmware for the
   T40b measurement tile (extends T32's scope — PIO SPI + DMA into SRAM,
