@@ -162,6 +162,10 @@ class PartRecord:
     residual magnitudes the reset-state equivalence proof enumerates
     (``docs/instrumentation-equivalence.md`` §4 Q3) — the
     parts DB is the single home for part facts.
+    ``partial_power_down`` records the datasheet's partial-power-down
+    (Ioff) support: None is no data — never a finding — and False is
+    a cited absence, consumed by the power-domain crossing check's
+    ``AlwaysPowered`` rule.
     """
 
     name: str
@@ -176,6 +180,7 @@ class PartRecord:
     spice: SpiceModel | None = None
     datasheet: str | None = None
     residuals: Residuals | None = None
+    partial_power_down: bool | None = None
     note: str = ""
 
     def __post_init__(self) -> None:
@@ -323,6 +328,7 @@ class PartsDb:
             "default_value": record.value,
             "default_footprint": record.footprint,
             "residuals": record.residuals,
+            "partial_power_down": record.partial_power_down,
         }
         return cast(
             "type[_TypedPartT]",

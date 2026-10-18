@@ -60,6 +60,10 @@ class TypedPart:
     #: Electrical residual magnitudes (``PartsDb.bind`` threads the
     #: record's in); placement copies them onto the placed part.
     residuals: ClassVar[Residuals | None] = None
+    #: Partial-power-down (Ioff) support from the parts DB record,
+    #: threaded like ``residuals``: None means no data, False means
+    #: the datasheet specifies none.
+    partial_power_down: ClassVar[bool | None] = None
 
     def __init__(
         self,

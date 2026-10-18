@@ -13,6 +13,7 @@ from oparroy.dsl import (
     Issue,
     KiCadLibraries,
     PinType,
+    PowerDomainKind,
     Severity,
     Symbol,
     check,
@@ -146,12 +147,16 @@ def test_power_symbol_marks_rail_driven(
 ) -> None:
     # KiCad's convention: a power-library symbol (power:+3V3-class,
     # power_in pin) marks the rail driven — and needs no footprint,
-    # being a schematic-only net marker.
+    # being a schematic-only net marker. The rail carries a declared
+    # power domain; the undeclared-rail warning's coverage lives in
+    # test_dsl_power_domains.py.
     c = Circuit("pwr", symbols)
     load = c.part("L1", symbol="Stub:LOAD", value="", footprint="StubFP:LOAD_SIP")
     marker = c.part("P1", symbol="power:+3V3", value="+3V3")
     rail = c.net("3V3")
+    c.power_domain(rail, kind=PowerDomainKind.ALWAYS)
     gnd = c.net("GND")
+    c.power_domain(gnd, kind=PowerDomainKind.GROUND)
     c.connect(rail, load[1], marker[1])
     c.connect(gnd, load[2])
     issues = check(c, footprints=footprints)

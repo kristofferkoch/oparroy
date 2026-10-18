@@ -302,6 +302,93 @@ class Provenance:
     base: str
 
 
+class PowerDomainKind(StrEnum):
+    """How a rail behaves when the board is partially powered.
+
+    ``ALWAYS`` rails stay live whenever the board is powered at all;
+    ``SWITCHED`` rails die when their switch opens (the per-tile
+    ``3V3N``); ``GROUND`` rails are the return — they satisfy the
+    check's rail-completeness rule but contribute nothing to crossing
+    signatures, so a pull-down to GND is never a crossing.
+    """
+
+    ALWAYS = "always"
+    SWITCHED = "switched"
+    GROUND = "ground"
+
+
+@dataclass(frozen=True)
+class PowerDomain:
+    """The power domain a rail net owns (``Circuit.power_domain``).
+
+    ``kind`` is the rail's behavior class. ``parent`` names the base
+    net a switched domain derives from — set by the ``InsertSeries``
+    transform's ``switched_domain`` tagging (the rail split ``3V3`` →
+    ``3V3N``, :mod:`oparroy.dsl.transform`); None for capture-declared
+    domains.
+    """
+
+    kind: PowerDomainKind
+    parent: str | None = None
+
+
+@dataclass(frozen=True)
+class DiesWith:
+    """Crossing disposition: the net dies with its (switched) domain.
+
+    The check verifies that every pin on the net and its resistive
+    reach belonging to a part powered from an ALWAYS rail is
+    input-class (``INPUT``/``PASSIVE``) — a foreign output would drive
+    the dead net (the Rth1 bug shape, docs/instrumented-ci.md §3).
+    """
+
+
+@dataclass(frozen=True)
+class AlwaysPowered:
+    """Crossing disposition: every no-Ioff part on the net stays powered.
+
+    The check verifies that every part touching the net or its
+    resistive reach whose parts-DB record says ``partial_power_down``
+    is False (no partial-power-down spec — the SN74LVC1G3157 rule,
+    datasheets/SN74LVC1G3157/notes/facts.md) is powered solely from
+    ALWAYS-domain rails.
+    """
+
+
+@dataclass(frozen=True)
+class BackFeed:
+    """Crossing disposition: live-into-dead drive exists, bounded by data.
+
+    ``budget_ma`` is the bound on the back-feed current, ``citation``
+    the analysis it comes from (the 470 Ω / ≈5.7 mA analysis,
+    docs/instrumented-ci.md §3). Both are required at declaration
+    (``Circuit.crossing``); the topology behind the budget is not
+    auto-verified in v1.
+    """
+
+    budget_ma: float
+    citation: str
+
+
+type Disposition = DiesWith | AlwaysPowered | BackFeed
+
+
+@dataclass(frozen=True)
+class Crossing:
+    """A declared power-domain crossing: a net name and its disposition.
+
+    Declared with ``Circuit.crossing`` next to the wiring it describes,
+    ``path`` relative to the declaring circuit — instantiation prefixes
+    it like a waiver path. The named net need not exist at declaration
+    time (forward references to transform-created nets like ``TX_A#a``
+    are legitimate); the check reports declarations matching no
+    crossing net as stale.
+    """
+
+    path: str
+    disposition: Disposition
+
+
 @dataclass(frozen=True, order=True)
 class TileNet:
     """A net local to one tile instance, addressed for a pass's tables.
@@ -554,7 +641,11 @@ class Part:
     transforms tag the parts they create. ``residuals`` carries the
     part's electrical residual magnitudes (:class:`Residuals`) when it
     was placed from a typed part whose class declares them (the parts
-    DB's ``bind`` threads them through); None means no data. ``note``
+    DB's ``bind`` threads them through); None means no data.
+    ``partial_power_down`` is the parts DB's partial-power-down (Ioff)
+    datum, threaded the same way: None means no data, False means the
+    datasheet specifies none (the power-domain crossing check's
+    ``AlwaysPowered`` rule consumes it). ``note``
     is an optional human note for the layout author (``Circuit.part``'s
     ``note=``), emitted as the netlist comp's Comment field; ``{ref}``
     placeholders naming sibling parts resolve to the annotated refdes
@@ -577,6 +668,7 @@ class Part:
         self.footprint = footprint
         self.provenance: Provenance | None = None
         self.residuals: Residuals | None = None
+        self.partial_power_down: bool | None = None
         self.note: str | None = None
         self._identity = ref if identity is None else identity
         base = Placement() if placement is None else placement
@@ -769,7 +861,10 @@ class Net:
     """A named equipotential: the set of pins joined together.
 
     ``provenance`` is None for base-capture nets; instrumentation
-    transforms tag the nets they create.
+    transforms tag the nets they create. ``power_domain`` is None for
+    signal nets; rail nets carry their declared :class:`PowerDomain`
+    (``Circuit.power_domain``, or the ``InsertSeries`` transform's
+    switched-domain tagging).
     """
 
     def __init__(
@@ -786,6 +881,7 @@ class Net:
         self._sink = sink
         self._pins: list[Pin] = []
         self.provenance: Provenance | None = None
+        self.power_domain: PowerDomain | None = None
 
     @property
     def name(self) -> str:
@@ -1150,6 +1246,7 @@ class Instance:
         )
         self._circuit._flatten_into(flat, (), {}, self._socket_bindings)  # noqa: SLF001
         flat._waivers.extend(hierarchical_waivers(self._circuit))  # noqa: SLF001
+        flat._crossings.extend(hierarchical_crossings(self._circuit))  # noqa: SLF001
         self._circuit = flat
         self._socket_bindings = {}
         return flat
@@ -1173,6 +1270,7 @@ class Circuit:
         self._bundles: dict[str, Bundle] = {}
         self._instances: dict[str, Instance] = {}
         self._waivers: list[Waiver] = []
+        self._crossings: list[Crossing] = []
         self._sockets: dict[str, type[SocketSpec]] = {}
         self._allocations: dict[tuple[str, int], str] = {}
 
@@ -1246,6 +1344,78 @@ class Circuit:
         return waiver
 
     @property
+    def crossings(self) -> tuple[Crossing, ...]:
+        """The capture's power-domain crossing declarations, in declaration order."""
+        return tuple(self._crossings)
+
+    def power_domain(self, net: Net | str, *, kind: PowerDomainKind) -> PowerDomain:
+        """Declare a rail net's power domain: always-on, switched, or ground.
+
+        The declaration is what makes a net a rail for the power-domain
+        crossing check (:mod:`oparroy.dsl.check`): the rail owns the
+        domain, is never audited as a crossing itself, and grounds the
+        signatures of nets reaching it. GROUND rails satisfy the
+        rail-completeness rule but contribute nothing to signatures.
+        One domain per net; flattening carries the attribute onto the
+        flat copies.
+        """
+        if not isinstance(kind, PowerDomainKind):
+            msg = f"power domain kind must be a PowerDomainKind, got {kind!r}"
+            raise DefinitionError(msg)
+        resolved = self._resolve_net(net)
+        if resolved.power_domain is not None:
+            msg = f"net {resolved.name!r} already has a declared power domain"
+            raise DefinitionError(msg)
+        domain = PowerDomain(kind)
+        resolved.power_domain = domain
+        return domain
+
+    def crossing(self, net: str, disposition: Disposition) -> Crossing:
+        """Declare how one power-domain-crossing net is made safe.
+
+        Crossings are explicit, path-addressed data in the capture, in
+        the waiver idiom: the check errors on every crossing net
+        (a net touching ≥2 domains, one switched) carrying no
+        declaration, and verifies each declaration's disposition —
+        :class:`DiesWith`: no always-powered output drives the net;
+        :class:`AlwaysPowered`: every no-Ioff part on the net is
+        powered from always rails; :class:`BackFeed`: the drive is
+        bounded by the declared budget and citation (data only, v1).
+        ``net`` is relative to this circuit — instantiation prefixes it
+        — and need not exist yet: forward references to
+        transform-created nets (``TX_A#a``) are legitimate, and the
+        check warns when a declaration matches no crossing net.
+        """
+        if not net:
+            msg = "a crossing declaration needs a net name"
+            raise DefinitionError(msg)
+        if isinstance(disposition, BackFeed):
+            if disposition.budget_ma <= 0:
+                msg = (
+                    f"a back-feed budget must be positive, "
+                    f"got {disposition.budget_ma} mA"
+                )
+                raise DefinitionError(msg)
+            if not disposition.citation:
+                msg = f"a back-feed crossing at {net!r} needs a citation"
+                raise DefinitionError(msg)
+        elif not isinstance(disposition, DiesWith | AlwaysPowered):
+            msg = f"unknown crossing disposition {disposition!r}"
+            raise DefinitionError(msg)
+        if any(
+            c.path == net and type(c.disposition) is type(disposition)
+            for c in self._crossings
+        ):
+            msg = (
+                f"duplicate {type(disposition).__name__} crossing "
+                f"declaration for {net!r}"
+            )
+            raise DefinitionError(msg)
+        crossing = Crossing(net, disposition)
+        self._crossings.append(crossing)
+        return crossing
+
+    @property
     def sockets(self) -> dict[str, type[SocketSpec]]:
         """Component sockets by reference — the part interface (insertion order)."""
         return dict(self._sockets)
@@ -1315,6 +1485,7 @@ class Circuit:
         if isinstance(spec, _MultiUnitPart):
             placed = self._place_multi(ref, spec, footprint, resolved)
             placed.residuals = spec.residuals
+            placed.partial_power_down = spec.partial_power_down
             return placed
         symbol_pins = {pin.number for pin in resolved.pins}
         targets = [
@@ -1351,6 +1522,7 @@ class Circuit:
             for number in _pin_numbers(spec.pin_map[kw]):
                 net._attach(placed.pin(number))  # noqa: SLF001 — same module
         placed.residuals = spec.residuals
+        placed.partial_power_down = spec.partial_power_down
         return placed
 
     def _place_multi(
@@ -1895,7 +2067,13 @@ class Circuit:
         nets: dict[Net, Net] = {}
         for name, net in self._nets.items():
             if net.is_port and name in bindings:
-                nets[net] = bindings[name]
+                # The port merges into the bound net: a one-sided domain
+                # declaration rides the merged equipotential (the
+                # both-declared case is the kind-agreement check's).
+                bound = bindings[name]
+                if bound.power_domain is None and net.power_domain is not None:
+                    bound.power_domain = net.power_domain
+                nets[net] = bound
             else:
                 # Prefixed names carry '/' — bypass the capture-time
                 # separator check (it guards captured names only).
@@ -1906,6 +2084,7 @@ class Circuit:
                     sink=net.sink,
                 )
                 created.provenance = net.provenance
+                created.power_domain = net.power_domain
                 nets[net] = created
         for part in self._parts.values():
             if part.symbol.is_socket:
@@ -1919,6 +2098,7 @@ class Circuit:
             )
             placed.provenance = part.provenance
             placed.residuals = part.residuals
+            placed.partial_power_down = part.partial_power_down
             placed.note = _prefix_note_refs(part.note, self._parts, prefix)
             for pin in part.pins:
                 if pin.net is not None:
@@ -1965,6 +2145,7 @@ class Circuit:
             )
             placed.provenance = placeholder.provenance
             placed.residuals = part_class.residuals
+            placed.partial_power_down = part_class.partial_power_down
             for pin in placeholder.pins:
                 if pin.net is not None:
                     for number in _pin_numbers(part_class.pin_map[pin.number]):
@@ -1989,6 +2170,7 @@ class Circuit:
         for name, net in self._nets.items():
             copied = renamed._add_net(name, is_port=net.is_port)
             copied.provenance = net.provenance
+            copied.power_domain = net.power_domain
             nets[net] = copied
         for part in self._parts.values():
             placed = renamed._place(
@@ -2002,6 +2184,7 @@ class Circuit:
             )
             placed.provenance = part.provenance
             placed.residuals = part.residuals
+            placed.partial_power_down = part.partial_power_down
             placed.note = part.note
             for pin in part.pins:
                 if pin.net is not None:
@@ -2071,4 +2254,27 @@ def _collect_waivers(circuit: Circuit, prefix: tuple[str, ...]) -> list[Waiver]:
     ]
     for instance in circuit.instances.values():
         collected.extend(_collect_waivers(instance.circuit, (*prefix, instance.name)))
+    return collected
+
+
+def hierarchical_crossings(circuit: Circuit) -> list[Crossing]:
+    """Gather a circuit's and its instances' crossing declarations, prefixed.
+
+    A crossing declared inside a subcircuit addresses a net relative to
+    that subcircuit; instantiation prefixes it with the instance path,
+    so ``sig`` inside ``T0`` addresses ``T0/sig``. The validation pass
+    consumes these; ``Instance.flatten_hierarchy`` re-homes them on the
+    per-tile flat form.
+    """
+    return _collect_crossings(circuit, ())
+
+
+def _collect_crossings(circuit: Circuit, prefix: tuple[str, ...]) -> list[Crossing]:
+    base = "/".join(prefix)
+    collected = [
+        Crossing(f"{base}/{c.path}" if base else c.path, c.disposition)
+        for c in circuit.crossings
+    ]
+    for instance in circuit.instances.values():
+        collected.extend(_collect_crossings(instance.circuit, (*prefix, instance.name)))
     return collected

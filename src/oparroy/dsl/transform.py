@@ -61,6 +61,8 @@ from oparroy.dsl.ir import (
     Instance,
     Net,
     Pin,
+    PowerDomain,
+    PowerDomainKind,
     Provenance,
     TileNet,
 )
@@ -113,7 +115,10 @@ class InsertSeries:
     ``net#a``/``net#b`` nets. The part wires ``@a``/``@b`` for the two
     sides; ``control`` names an escaped control port for the
     ``@control`` placeholder; ``name`` overrides the detached side's
-    net name (the rail-split ``3V3`` → ``3V3N``). ``extra`` places
+    net name (the rail-split ``3V3`` → ``3V3N``). ``switched_domain``
+    tags the detached net as a SWITCHED power domain deriving from the
+    base net — the base must carry a declared ALWAYS domain (the rail
+    split ``3V3`` → ``3V3N`` is exactly this). ``extra`` places
     auxiliary parts of the same transform (the keep-alive cut's
     pull-down on the watchdog-side stub).
     """
@@ -124,6 +129,7 @@ class InsertSeries:
     part: TransformPart
     control: str | None = None
     name: str | None = None
+    switched_domain: bool = False
     extra: tuple[TransformPart, ...] = ()
 
 
@@ -334,7 +340,9 @@ class _TileTransforms:
     def _insert_series(self, t: InsertSeries, handles: Handles) -> None:
         base = self._net(t.label, t.net).name
         parts = (t.part, *t.extra)
-        detached, kept = self._cut(t.label, t.net, t.pins, t.name)
+        detached, kept = self._cut(
+            t.label, t.net, t.pins, t.name, switched_domain=t.switched_domain
+        )
         special = {"a": detached, "b": kept}
         self._add_control(
             t.label, base, parts, control=t.control, special=special, handles=handles
@@ -395,12 +403,23 @@ class _TileTransforms:
         net: str,
         pins: tuple[str, ...],
         name: str | None,
+        *,
+        switched_domain: bool = False,
     ) -> tuple[Net, Net]:
         """Split a net into the detached (#a) and interface (#b) sides."""
         if not pins:
             msg = f"transform {label!r}: a series cut needs its detached-side pins"
             raise DefinitionError(msg)
         base = self._net(label, net)
+        if switched_domain and (
+            base.power_domain is None
+            or base.power_domain.kind is not PowerDomainKind.ALWAYS
+        ):
+            msg = (
+                f"transform {label!r}: a switched domain must derive from a "
+                f"declared always rail — net {base.name!r} has none"
+            )
+            raise DefinitionError(msg)
         if len(pins) >= len(base.pins) and not base.is_port:
             msg = (
                 f"transform {label!r}: the cut leaves no pins on the "
@@ -413,6 +432,10 @@ class _TileTransforms:
             name=name or f"{base.name}#a",
         )
         detached.provenance = Provenance(label, base.name)
+        if switched_domain:
+            detached.power_domain = PowerDomain(
+                PowerDomainKind.SWITCHED, parent=base.name
+            )
         if base.is_port:
             # The port keeps name, flag, and ranges as the #b side —
             # the parent binding holds. Later transforms name it
