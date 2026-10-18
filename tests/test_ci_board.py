@@ -189,7 +189,7 @@ def test_reset_state_equivalence(kicad_libs: KiCadLibraries) -> None:
     assert kinds.count(SWITCH_CAPACITANCE) == 3 + 3 * 3 + 4 * 4 + 2
     assert kinds.count(LEAKAGE) == 8 + 3 * 7 + 4 * 10 + 6
     assert kinds.count(SHUNT_OFF_CAPACITANCE) == 5 + 3 * 4 + 4 * 6 + 4
-    assert kinds.count(EXTRA_LOADING) == 6 + 3 * 6 + 4 * 10 + 4
+    assert kinds.count(EXTRA_LOADING) == 7 + 3 * 6 + 4 * 10 + 4  # T0: + RWD
     # O1/O2 + M1/M2 per tile, B1-B4 on the boundary tile.
     assert kinds.count(TAP_CAPACITANCE) == TILE_COUNT * 4 + 4
     taps = [r for r in report.residuals if r.kind == TAP_CAPACITANCE]

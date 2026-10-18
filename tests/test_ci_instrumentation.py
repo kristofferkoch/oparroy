@@ -177,7 +177,7 @@ def test_plan_applies_to_a_single_tile(kicad_libs: KiCadLibraries) -> None:
         "FI1/QPW.2",
         "FI1/RAV.2",
         "FI1/RBV.2",
-        "FI1/SWWD.1",
+        "FI1/RWD.2",
     } <= v3v3
     for ref in ("FI1/SWAB", "FI1/SWAG", "FI1/SWAV", "FI1/SWBB", "FI1/SWBG"):
         assert tile.parts[ref].pin("5").net is tile.nets["3V3"]  # VCC
@@ -198,6 +198,8 @@ def test_plan_applies_to_a_single_tile(kicad_libs: KiCadLibraries) -> None:
         assert handles[TileNet(("T0",), tap)].name == f"T0/{tap}"
     assert handles[TileNet(("T0",), "TX_A#b")] is board.nets["SEG1_A"]
     assert net_pins(tile, "sel") >= {"FI1/SWWD.4"}
+    # B5's defeat leg carries the §2 shunt idiom's 470 Ω bound.
+    assert net_pins(tile, "B5_leg") == {"FI1/SWWD.1", "FI1/RWD.1"}
 
 
 def test_plan_applies_to_multiple_tiles(kicad_libs: KiCadLibraries) -> None:
@@ -247,6 +249,7 @@ def test_all_doc_named_targets_resolve(kicad_libs: KiCadLibraries) -> None:
             "FI1/RKA",
             "FI1/RPW",
             "FI1/SWWD",
+            "FI1/RWD",
         },
         "T1": {
             "FI1/SWAB",
@@ -370,7 +373,7 @@ def test_reset_state_equivalence(kicad_libs: KiCadLibraries) -> None:
     assert kinds.count(SWITCH_CAPACITANCE) == 3 + 4
     assert kinds.count(LEAKAGE) == 8 + 10
     assert kinds.count(SHUNT_OFF_CAPACITANCE) == 5 + 6
-    assert kinds.count(EXTRA_LOADING) == 6 + 10
+    assert kinds.count(EXTRA_LOADING) == 7 + 10  # + B5's 470 Ω leg resistor
     assert kinds.count(TAP_CAPACITANCE) == BOUNDARY_TAP_COUNT + 2 * PER_TILE_TAP_COUNT
     taps = [r for r in report.residuals if r.kind == TAP_CAPACITANCE]
     assert {r.net for r in taps} == {
