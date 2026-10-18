@@ -257,7 +257,12 @@ F8_INPUT_PINS = ("POT1.a", "RPA.b", "RPB.b")
 
 
 def _power_cut(extra_pins: tuple[str, ...] = ()) -> InsertSeries:
-    """Build F8: the §3 rail split behind the AO3401A high-side switch."""
+    """Build F8: the §3 rail split behind the AO3401A high-side switch.
+
+    ``switched_domain`` tags the detached 3V3N as the tile's SWITCHED
+    domain deriving from the always 3V3 — the power-domain crossing
+    audit's domain pair.
+    """
     return InsertSeries(
         label="F8",
         net="3V3",
@@ -265,6 +270,7 @@ def _power_cut(extra_pins: tuple[str, ...] = ()) -> InsertSeries:
         name="3V3N",
         part=TransformPart("FI1/QPW", PowerCutFet(s="@b", d="@a", g="@control")),
         control="PWR",
+        switched_domain=True,
         extra=(TransformPart("FI1/RPW", R0603("47k", a="@control", b="GND")),),
     )
 

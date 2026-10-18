@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from design.ci_board import declare_segment_crossings
 from design.ci_instrumentation import (
     BUDGETS,
     boundary_taps,
@@ -121,6 +122,10 @@ def ci_board(libs: KiCadLibraries, tiles: list[tuple[str, type]]) -> Circuit:
         tiles, faces[:-1], faces[1:], strict=True
     ):
         board.instance(name, cls(), upstream=upstream, downstream=downstream)
+    # The segment wires cross once the transforms land, exactly as on
+    # the real board; SEG0_B stays stale here — without the supervisor
+    # instance no always-powered part reaches it.
+    declare_segment_crossings(board, len(tiles))
     return board
 
 

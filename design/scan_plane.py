@@ -44,6 +44,7 @@ from design.phy_frontend import Sn74lvc1g3157
 from oparroy.dsl import (
     Circuit,
     KiCadLibraries,
+    PowerDomainKind,
     Subcircuit,
     SymbolTable,
     check,
@@ -181,6 +182,8 @@ class ScanPlane(Subcircuit):
         oe_n = circuit.port("oe_n")
         v3v3 = circuit.port("3V3")
         gnd = circuit.port("GND")
+        circuit.power_domain(v3v3, kind=PowerDomainKind.ALWAYS)
+        circuit.power_domain(gnd, kind=PowerDomainKind.GROUND)
 
         # §4: /OE pulled up — every 595 output Hi-Z until firmware
         # latches the zero word and drives /OE low.
@@ -260,6 +263,8 @@ def _capture_tree(circuit: Circuit, *, leaf_pullups: bool) -> None:
     root = circuit.port("root")
     v3v3 = circuit.port("3V3")
     gnd = circuit.port("GND")
+    circuit.power_domain(v3v3, kind=PowerDomainKind.ALWAYS)
+    circuit.power_domain(gnd, kind=PowerDomainKind.GROUND)
     sel = [circuit.port(f"swio_a{index}") for index in range(3)]
     leaves = [circuit.port(f"leaf{index}") for index in range(8)]
     mid = [circuit.net(f"mid{index}") for index in range(2)]
@@ -297,6 +302,7 @@ def _capture_tree(circuit: Circuit, *, leaf_pullups: bool) -> None:
         # a power-cut node), 4.7 kΩ at the root to the always rail.
         for index, leaf in enumerate(leaves):
             rail = circuit.port(f"rail{index}")
+            circuit.power_domain(rail, kind=PowerDomainKind.SWITCHED)
             circuit.part(
                 f"RU{index}",
                 R0603("10k", a=leaf, b=rail),

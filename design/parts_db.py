@@ -136,11 +136,15 @@ PARTS = PartsDb(
                 off_capacitance_pf=5.2,
                 leakage_ua=1.0,
             ),
+            partial_power_down=False,
             note=(
                 "Residuals (SCES424O §5.5): Ron ≤ 25 Ω over the full "
                 "signal range (7 Ω typ / 9 Ω max at 3 V, 25 °C); "
                 "Cio(on) 17.3 pF, Cio(off) 5.2 pF — typ at VCC = 5 V, "
-                "25 °C, no max specified; leakage ±1 µA max."
+                "25 °C, no max specified; leakage ±1 µA max. "
+                "No partial-power-down (Ioff) spec — behavior at "
+                "VCC = 0 with live signal pins is unspecified "
+                "(datasheets/SN74LVC1G3157/notes/facts.md)."
             ),
         ),
         PartRecord(
