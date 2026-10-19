@@ -81,6 +81,13 @@ def test_capacitor_round_trip(literal: str) -> None:
     )
 
 
+def test_format_value_tolerates_float_noise_at_a_prefix_boundary() -> None:
+    # A generated value can land a hair under a decade: (3.3 - 2.0) /
+    # 1.3e-3 is 999.9999999999999, which still reads as 1k.
+    assert format_value(999.9999999999999, family="resistor") == "1k"
+    assert format_value(0.9999999999999999e-6, family="capacitor") == "1u"
+
+
 def test_bare_number_parses_as_base_units() -> None:
     assert parse_value("470", family="resistor") == pytest.approx(470.0)
     assert parse_value("470", family="capacitor") == pytest.approx(470.0)

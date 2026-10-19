@@ -236,6 +236,8 @@ def format_value(value: float, *, family: str) -> str:
     'R082'
     >>> format_value(1e-07, family="capacitor")
     '100n'
+    >>> format_value(999.9999999999999, family="resistor")
+    '1k'
     """
     prefixes = _family(family, _PREFIXES)
     if value < 0:
@@ -245,7 +247,11 @@ def format_value(value: float, *, family: str) -> str:
         return "0R" if family == "resistor" else "0p"
     multiplier, letter = prefixes[-1]
     for candidate in prefixes:
-        if value >= candidate[0]:
+        # A computed value can land a hair under a decade boundary
+        # ((3.3 - 2.0) / 1.3e-3 is 999.9999999999999); the prefix is a
+        # display scale, so give the boundary the same float slack the
+        # range comparisons take.
+        if value >= candidate[0] * (1 - _EPS):
             multiplier, letter = candidate
             break
     text = f"{value / multiplier:.6g}"
