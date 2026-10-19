@@ -65,6 +65,30 @@ PINOUTS: dict[type[TypedPart], tuple[str, dict[str, str]]] = {
     ci_parts.Rk09k: ("pot-10k-rk09k", {"1": "1", "2": "2", "3": "3"}),
     ci_parts.Ts1187a: ("btn-tact-ts1187a", {"1": "1", "2": "2"}),
     ci_parts.Pklcs1212e: ("buzzer-pklcs1212e", {"1": "+", "2": "-"}),
+    ci_parts.Ina241a5: (
+        "csa-ina241a5",
+        {
+            "1": "-",
+            "2": "GND",
+            "3": "REF2",
+            "4": "GND",
+            "5": "",
+            "6": "V+",
+            "7": "REF1",
+            "8": "+",
+        },
+    ),
+    ci_parts.Adcs7476: (
+        "adc-adcs7476",
+        {
+            "1": "V_{DD}",
+            "2": "GND",
+            "3": "VIN",
+            "4": "SCLK",
+            "5": "SDO",
+            "6": "~{CS}",
+        },
+    ),
 }
 
 

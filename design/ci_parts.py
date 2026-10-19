@@ -23,6 +23,15 @@ vendored datasheet notes and the KiCad symbols:
 - ``Pklcs1212e`` — passive piezo, electrically non-polar; the
   symbol's +/- pins are phase convention
   (datasheets/PKLCS1212E/notes/facts.md).
+- ``Ina241a5`` — the measurement tile's shunt amp
+  (instrumented-ci.md §12); the DDF pinout from
+  datasheets/INA241/notes/facts.md, matching
+  ``Amplifier_Current:INA241A5xDDF`` (pin 4 is the reserved NC —
+  wired to GND per the datasheet's pin table).
+- ``Adcs7476`` — the measurement tile's SPI ADC; the DBV pinout from
+  datasheets/ADCS7476/notes/facts.md, carried by the pin-identical
+  ``Analog_ADC:ADS7886xxDBV`` symbol (the facts.md pin-compat
+  verdict).
 
 The sourcing rows live in the parts DB (``design/parts_db.py``);
 the classes here stay capture-local, like ``design/phy_frontend.py``
@@ -355,3 +364,115 @@ class Pklcs1212e(TypedPart):
         footprint: str | None = None,
     ) -> None:
         super().__init__(value, footprint, {"pos": pos, "neg": neg})
+
+
+class Ina241a5(TypedPart):
+    """TI INA241A5 current-sense amp (SOT-23-8): the measurement tile's shunt amp.
+
+    Gain 200 V/V, powered from the always-on `3V3`, sensing across the
+    82 mΩ shunt downstream of the F8 power-cut switch
+    (instrumented-ci.md §12). ``in_p`` is the bus side of the shunt,
+    ``in_m`` the load side (`3V3N`); ``ref1``/``ref2`` strap the output
+    reference — the tile biases them mid-rail (REF1 to `3V3`, REF2 to
+    GND) so the cut-state clamp back-feed reads as a negative current.
+    Pin 4 (``nc``) is the reserved pin — the datasheet's pin table ties
+    it to GND (datasheets/INA241/notes/facts.md, DS §5 Table 5-1).
+    """
+
+    symbol = "Amplifier_Current:INA241A5xDDF"
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
+        "in_m": "1",
+        "gnd": "2",
+        "ref2": "3",
+        "nc": "4",
+        "out": "5",
+        "vs": "6",
+        "ref1": "7",
+        "in_p": "8",
+    }
+    required_pins: ClassVar[frozenset[str]] = frozenset(
+        {"in_m", "gnd", "ref2", "nc", "out", "vs", "ref1", "in_p"}
+    )
+    default_value = "INA241A5"
+    default_footprint = "Package_TO_SOT_SMD:SOT-23-8"
+
+    def __init__(  # noqa: PLR0913 — one keyword per physical pin
+        self,
+        *,
+        in_m: Net | str,
+        gnd: Net | str,
+        ref2: Net | str,
+        nc: Net | str,
+        out: Net | str,
+        vs: Net | str,
+        ref1: Net | str,
+        in_p: Net | str,
+        value: str | None = None,
+        footprint: str | None = None,
+    ) -> None:
+        super().__init__(
+            value,
+            footprint,
+            {
+                "in_m": in_m,
+                "gnd": gnd,
+                "ref2": ref2,
+                "nc": nc,
+                "out": out,
+                "vs": vs,
+                "ref1": ref1,
+                "in_p": in_p,
+            },
+        )
+
+
+class Adcs7476(TypedPart):
+    """TI ADCS7476 12-bit 1 MSPS SPI ADC (SOT-23-6): the measurement tile's ADC.
+
+    VDD-as-reference on the always-on `3V3`; ``vin`` rides the shunt
+    amp's output through the charge-bucket RC; ``sclk``/``cs``/``sdo``
+    face the supervisor's PIO burst capture (instrumented-ci.md §12).
+    The KiCad symbol is the pin-identical ADS7886xxDBV
+    (datasheets/ADCS7476/notes/facts.md pin-compat verdict); pin 5 is
+    tri-state between conversions.
+    """
+
+    symbol = "Analog_ADC:ADS7886xxDBV"
+    pin_map: ClassVar[dict[str, str | tuple[str, ...]]] = {
+        "vdd": "1",
+        "gnd": "2",
+        "vin": "3",
+        "sclk": "4",
+        "sdo": "5",
+        "cs": "6",
+    }
+    required_pins: ClassVar[frozenset[str]] = frozenset(
+        {"vdd", "gnd", "vin", "sclk", "sdo", "cs"}
+    )
+    default_value = "ADCS7476"
+    default_footprint = "Package_TO_SOT_SMD:SOT-23-6"
+
+    def __init__(  # noqa: PLR0913 — one keyword per physical pin
+        self,
+        *,
+        vdd: Net | str,
+        gnd: Net | str,
+        vin: Net | str,
+        sclk: Net | str,
+        sdo: Net | str,
+        cs: Net | str,
+        value: str | None = None,
+        footprint: str | None = None,
+    ) -> None:
+        super().__init__(
+            value,
+            footprint,
+            {
+                "vdd": vdd,
+                "gnd": gnd,
+                "vin": vin,
+                "sclk": sclk,
+                "sdo": sdo,
+                "cs": cs,
+            },
+        )
