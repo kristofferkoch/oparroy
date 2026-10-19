@@ -24,17 +24,15 @@ from oparroy.dsl import (
 
 GOLDEN = Path(__file__).parent / "golden" / "supervisor.net"
 
-#: The spare GPIOs (GPIO0..3 — the tail of the reclaimed
+#: The spare GPIOs (GPIO3 — the tail of the reclaimed
 #: debug-transport reservation — and GPIO23..29) plus SWCLK/SWDIO,
 #: reporting by pin number on U1 — deliberate NCs, and the list pins
 #: them so nothing else hides among them. GPIO14..17 bind the
-#: pot-override PWM ports and are no longer NCs.
+#: pot-override PWM ports and GPIO0..2 the measurement chain's SPI
+#: (instrumented-ci.md §12); none are NCs anymore.
 EXPECTED_NC_WARNINGS = {
     f"U1.{pin} is not connected"
     for pin in (
-        "2",
-        "3",
-        "4",
         "5",
         "24",
         "25",
@@ -55,6 +53,9 @@ DECOUPLING_100N_COUNT = 10
 DECOUPLING_1U_COUNT = 2
 
 SIGNAL_PORTS = {
+    "adc_sdata",
+    "adc_cs",
+    "adc_sclk",
     "usb_dp",
     "usb_dm",
     "usb_boot",
@@ -173,6 +174,9 @@ def test_gpio_binding_matches_pin_map(kicad_libs: KiCadLibraries) -> None:
     assert nets["pot_pwm3"] == {"U1.18"}
     assert nets["pot_pwm5"] == {"U1.27"}
     assert nets["pot_pwm7"] == {"U1.28"}
+    assert nets["adc_sdata"] == {"U1.2"}
+    assert nets["adc_cs"] == {"U1.3"}
+    assert nets["adc_sclk"] == {"U1.4"}
 
 
 def test_ring_port_protection(kicad_libs: KiCadLibraries) -> None:

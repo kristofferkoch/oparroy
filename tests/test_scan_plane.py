@@ -11,20 +11,22 @@ from __future__ import annotations
 
 from itertools import pairwise
 
+from design.ci_tiles import MEASUREMENT_TILE
 from design.scan_plane import (
     AUX0_BITS,
     AUX1_BITS,
     AUX2_BITS,
-    TILE_BITS,
     DebugTree,
     ScanPlane,
     SwioTree,
+    tile_bits,
 )
 from oparroy.dsl import Circuit, KiCadLibraries, Severity, Subcircuit, check
 
-#: §4's 47 kΩ pull-down count: 56 tile lines (7/tile, PWR exempt) + 6
+#: §4's 47 kΩ pull-down count: 49 tile lines (7/tile on the seven
+#: switching tiles; the measurement tile drives PWR alone, §12) + 6
 #: supervisor + 3 SWIO + 1 WD_DEFEAT + 4 POT_SEL (BTN_* exempt).
-PULLDOWN_COUNT = 70
+PULLDOWN_COUNT = 63
 
 
 def nets_of(circuit: Circuit) -> dict[str, set[str]]:
@@ -72,8 +74,15 @@ def test_bit_map_ports(kicad_libs: KiCadLibraries) -> None:
     # 595 outputs: QA=15, QB=1, QC=2, QD=3, QE=4, QF=5, QG=6, QH=7.
     q_pins = ["15", "1", "2", "3", "4", "5", "6", "7"]
     for tile in range(8):
-        for index, bit in enumerate(TILE_BITS):
+        for index, bit in enumerate(tile_bits(tile)):
             assert f"T{tile}/U1.{q_pins[index]}" in nets[f"t{tile}_{bit}"]
+    # The measurement tile's slice drives PWR alone; its seven spare
+    # outputs are internal nets, filled like AUX2's (§1/§12).
+    for index in range(1, len(q_pins)):
+        assert (
+            f"T{MEASUREMENT_TILE}/U1.{q_pins[index]}"
+            in nets[f"t{MEASUREMENT_TILE}_spare{index}"]
+        )
     for stage, bits in (("AUX0", AUX0_BITS), ("AUX1", AUX1_BITS), ("AUX2", AUX2_BITS)):
         for index, bit in enumerate(bits):
             assert f"{stage}/U1.{q_pins[index]}" in nets[bit]
@@ -86,7 +95,7 @@ def test_bit_map_ports(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_por_discipline(kicad_libs: KiCadLibraries) -> None:
-    """§4: /OE pulled up; 70 pull-downs, exempting the FET-gate lines."""
+    """§4: /OE pulled up; 63 pull-downs, exempting the FET-gate lines."""
     nets = scan_plane_nets(kicad_libs)
     assert nets["oe_n"] >= {"R_OE.1"}
     assert nets["3V3"] >= {"R_OE.2"}

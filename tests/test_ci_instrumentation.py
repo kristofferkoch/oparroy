@@ -63,6 +63,9 @@ PER_TILE_TAP_COUNT = 4
 #: The Supervisor ports the injector fixture doesn't exercise, tied to
 #: their own board nets so the instance binds its full interface.
 SUPERVISOR_TIE_OFF_PORTS = (
+    "adc_sdata",
+    "adc_cs",
+    "adc_sclk",
     "usb_dp",
     "usb_dm",
     "usb_boot",
