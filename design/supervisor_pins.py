@@ -4,9 +4,10 @@ Every function the CI-board supervisor carries — the §2/§3 ring
 closure (the supervisor is the ring's only frame originator and
 drainer, on both counter-rotating rings), the §6 PIO SWIO flash
 channel, the instrumented boundary node's four taps, the §6 debug
-transport's tree root, the scan-plane control chain, and the four
-pot-override PWM channels — requested by
-name, with pads bound below as refinement data: 19 of 30 GPIO spent,
+transport's tree root, the scan-plane control chain, the four
+pot-override PWM channels, and the §12 measurement tile's ADC SPI —
+requested by
+name, with pads bound below as refinement data: 22 of 30 GPIO spent,
 verified by ``check_pin_map``. The one table feeds the firmware headers
 (``emit_pin_header`` → ``firmware/supervisor/pins.hpp``,
 ``emit_pin_module`` → ``firmware/supervisor/pins.py`` for the
@@ -162,9 +163,35 @@ def capture() -> PinMap:
             "for the pot wiper by the tile's POT_SEL mux (§6).",
         )
 
+    # §12 tile power measurement: the measurement tile's ADCS7476 SPI,
+    # PIO burst-captured with DMA (docs/instrumented-ci.md §12's capture
+    # model — 16-SCLK frames, CS framing each conversion). The SPI0
+    # pads keep the hardware-SPI fallback open; PIO is the plan.
+    gpio.request(
+        "adc_sdata",
+        uses=("spi0_rx",),
+        doc="measurement tile's ADC data out — PIO burst-capture input "
+        "(instrumented-ci.md §12).",
+    )
+    gpio.request(
+        "adc_cs",
+        uses=("spi0_csn",),
+        doc="measurement tile's ADC chip select — a conversion per "
+        "frame (instrumented-ci.md §12).",
+    )
+    gpio.request(
+        "adc_sclk",
+        uses=("spi0_sck",),
+        doc="measurement tile's ADC clock — up to 20 MHz for the "
+        "1 MSPS burst (instrumented-ci.md §12).",
+    )
+
     # The refinement data: one pad per function. Comments name the
     # binding reason — peripheral-forced pads cite the signal.
     gpio.bind(
+        adc_sdata="GPIO0",  # SPI0 RX — the §12 ADC's SDO
+        adc_cs="GPIO1",  # SPI0 CSn — frames each conversion
+        adc_sclk="GPIO2",  # SPI0 SCK — 20 MHz for 1 MSPS
         ring_txa="GPIO4",  # ring ports: GPIO4-7, originator pair first —
         ring_rxb="GPIO5",  # drive+sample adjacent, one SM per port
         ring_rxa="GPIO6",  # drain pair
@@ -185,8 +212,8 @@ def capture() -> PinMap:
         pot_pwm5="GPIO16",  # PWM0A
         pot_pwm7="GPIO17",  # PWM0B
     )
-    # The spares: GPIO0-3 (the tail of the reclaimed debug-transport
-    # reservation — settled, DESIGN.md §6) and GPIO23-29 (11 of 30).
+    # The spares: GPIO3 (the tail of the reclaimed debug-transport
+    # reservation — settled, DESIGN.md §6) and GPIO23-29 (8 of 30).
     return gpio
 
 

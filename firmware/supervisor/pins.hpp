@@ -5,9 +5,8 @@
 //
 // oparroy supervisor pin map — RP2040 (QFN-56). Function requests, pads bound late as refinement
 // data (DESIGN.md §5/§6).
-// 19 of 30 GPIO assigned; spare: GPIO0 (pin 2), GPIO1 (pin 3), GPIO2 (pin 4), GPIO3 (pin 5), GPIO23
-// (pin 35), GPIO24 (pin 36), GPIO25 (pin 37), GPIO26 (pin 38), GPIO27 (pin 39), GPIO28 (pin 40),
-// GPIO29 (pin 41).
+// 22 of 30 GPIO assigned; spare: GPIO3 (pin 5), GPIO23 (pin 35), GPIO24 (pin 36), GPIO25 (pin 37),
+// GPIO26 (pin 38), GPIO27 (pin 39), GPIO28 (pin 40), GPIO29 (pin 41).
 
 #include <cstdint>
 
@@ -92,5 +91,15 @@ inline constexpr Pad pot_pwm5{.port_base = gpio_sio_base, .bit = 16, .package_pi
 // pot_pwm7 — pot-override PWM for input tile 7, substituted for the pot wiper by the tile's POT_SEL
 // mux (§6).
 inline constexpr Pad pot_pwm7{.port_base = gpio_sio_base, .bit = 17, .package_pin = 28};
+
+// adc_sdata — measurement tile's ADC data out — PIO burst-capture input (instrumented-ci.md §12).
+inline constexpr Pad adc_sdata{.port_base = gpio_sio_base, .bit = 0, .package_pin = 2};
+
+// adc_cs — measurement tile's ADC chip select — a conversion per frame (instrumented-ci.md §12).
+inline constexpr Pad adc_cs{.port_base = gpio_sio_base, .bit = 1, .package_pin = 3};
+
+// adc_sclk — measurement tile's ADC clock — up to 20 MHz for the 1 MSPS burst (instrumented-ci.md
+// §12).
+inline constexpr Pad adc_sclk{.port_base = gpio_sio_base, .bit = 2, .package_pin = 4};
 
 } // namespace pins
