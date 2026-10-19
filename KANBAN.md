@@ -33,8 +33,7 @@ Critical paths only — every card also carries its own
 
 ```mermaid
 graph TD
-    T40b[T40b measurement tile capture] --> T10c[T10c CI layout + fab]
-    T10c --> T12[T12 test-hw harness]
+    T10c[T10c CI layout + fab] --> T12[T12 test-hw harness]
     T10c --> T15[T15 cable reach: bench + §2 adoption]
     T32[T32 supervisor firmware] --> T12
 ```
@@ -43,27 +42,6 @@ ______________________________________________________________________
 
 ## Next
 
-- **T40b — CI board tile power measurement: the capture.** Split from
-  T40. Dedicate one ring tile to current measurement: the chain
-  selection and sizing are settled in [instrumented-ci.md
-  §12](docs/instrumented-ci.md#12-tile-power-measurement-chain) — an
-  82 mΩ shunt in series with the tile's 3V3 feed at the F8 power-cut
-  switch, into the INA241A5 shunt amp + ADCS7476 SPI ADC on the
-  always-on 3V3 domain — the chain survives
-  the per-node power cut and reads the cut-state clamp back-feed (the
-  ≈5.7 mA hazard [instrumented-ci.md §3](docs/instrumented-ci.md#3-per-node-power-cut--and-the-tile-rail-split)
-  bounds analytically becomes a measured number). The capture declares
-  every domain crossing's disposition, and the power-domain crossing
-  audit ([dsl-reference.md](docs/dsl-reference.md#validation-checkpy))
-  must pass clean. The tile trades observability/controllability for
-  measurement
-  confidence: it drops its human-I/O role additions (the output-tile
-  buzzer / input-tile pot+buttons would dominate the draw) and its
-  segment injectors, keeping only the rail split + power cut — its own
-  role in the sheet-partition/congruence contract, and the closest
-  current signature to the standalone node board. The fast chain also
-  captures the §10 [P-FET-turn-on rail-dip/inrush bench item](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness).
-  **Blocked by:** — · **Unblocks:** T10c, T41
 - **T10c — CI board layout + fab.** Split from T10. *Shape: chore —
   the fab step needs a human.* 4-layer KiCad layout of the composed
   board (DESIGN.md §6), silkscreen self-documentation (§6: connector
@@ -78,7 +56,7 @@ ______________________________________________________________________
   docs/scan-plane.md §8 lists, before the control plane is committed.
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
-  **Blocked by:** T40b · **Unblocks:** T12, T15
+  **Blocked by:** — · **Unblocks:** T12, T15
 - **T23 — DSL parametric value resolution.** Computed component values
   carry slack (DESIGN.md §7): the capture states a spec — target plus
   tolerance — and the emitter resolves it to real parts from the parts
@@ -259,7 +237,8 @@ ______________________________________________________________________
   **Blocked by:** — · **Unblocks:** —
 - **T41 — Tile power reconciliation (bench half).** *Shape: research.*
   On the fabbed CI board: supervisor burst-capture firmware for the
-  T40b measurement tile (extends T32's scope — PIO SPI + DMA into SRAM,
+  measurement tile ([instrumented-ci.md §12](docs/instrumented-ci.md#12-tile-power-measurement-chain);
+  extends T32's scope — PIO SPI + DMA into SRAM,
   USB upload after the burst), then the signature catalog: boot,
   SWIO flash programming, idle-listen vs relaying, per-frame activity
   at 800 kbit/s, the F8-turn-on inrush ([instrumented-ci.md §10](docs/instrumented-ci.md#10-bench-verify-list-feeds-the-test-bench-harness)),

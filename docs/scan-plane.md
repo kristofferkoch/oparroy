@@ -53,9 +53,10 @@ RP2040 ──SER──▶ AUX0 ─▶ AUX1 ─▶ AUX2 ─▶ T0 ─▶ … ─�
   that wants "commit, then read the effect" issues two transactions.
 
 Chain scaling is a firmware constant: a future control bit adds a stage
-to the middle of the chain and one byte to the transaction. The 86/16
+to the middle of the chain and one byte to the transaction. The 79/16
 split below fills the observe stages exactly and leaves **two spare
-control bits** in AUX2.
+control bits** in AUX2, plus seven spare outputs in the measurement
+tile's slice (§3).
 
 ## 2. Partitioning: per-tile slices + supervisor aux stages
 
@@ -65,7 +66,11 @@ Control is partitioned **per tile, one 595 per tile**, not by function:
   (instrumented-ci.md §7, transforms F1–F8), so **each tile carries one
   595 as its control slice** — 8 identical stages, co-located with the
   tile they drive, declared once in the capture (the same
-  sheetpath-keyed one-declaration pattern as the transform list).
+  sheetpath-keyed one-declaration pattern as the transform list). Tile 6
+  is the exception in use, not in hardware: the measurement tile
+  (instrumented-ci.md §12) drops F1–F7, so its slice drives only `PWR`
+  and the seven other outputs land on internal spare nets
+  (`t6_spare1..7`, no pull-downs — the AUX2 spare precedent, §3).
 - The per-role extras — the supervisor originator port's injector (6),
   the SWIO tree selects (3), the boundary node's watchdog defeat (1),
   the four input tiles' overrides (12) — total 22 bits and fill **three
@@ -113,6 +118,10 @@ instrumented-ci.md §7):
 | 6   | `KA_CUT` | keep-alive connected | keep-alive cut (hang sim)     |
 | 7   | `PWR`    | tile powered         | tile power cut                |
 
+Tile 6 (the measurement tile, instrumented-ci.md §12) is the
+exception: its byte carries only bit 7 (`PWR`); bits 0–6 are spare
+outputs on internal nets (`t6_spare1..7`, no pull-downs).
+
 `AUX0` — supervisor originator-port injector + SWIO tree low bits:
 
 | Bit | Name            | 0 = plain board                                        |
@@ -146,9 +155,11 @@ instrumented-ci.md §7):
 | 5   | `BTN_B7`   | tile 7 button B: released |
 | 6–7 | —          | spare                     |
 
-Totals: 64 tile + 6 supervisor-port + 3 SWIO + 1 defeat + 12 override =
-**86 control bits in 11 × 74HC595** (two spare in AUX2;
-instrumented-ci.md §8's 83 + the 3-bit SWIO select).
+Totals: 57 tile (7 × 8 + the measurement tile's lone `PWR`) + 6
+supervisor-port + 3 SWIO + 1 defeat + 12 override =
+**79 control bits in 11 × 74HC595** (two spare in AUX2, seven spare in
+T6's slice;
+instrumented-ci.md §8's 76 + the 3-bit SWIO select).
 
 Observe bytes (165 inputs `A`–`H` map to bits 0–7; `H` shifts out
 first):
@@ -175,11 +186,12 @@ equivalence proof's reset-level input:
    is high-impedance (SCLS041J Table 8-1).
 1. **Every control line carries a 47 kΩ pull-down to GND.** With the
    outputs Hi-Z, the pull-downs define the board: bit-0 = low = the
-   plain-board state on all 86 used lines. The FET-gate pull-downs
+   plain-board state on all 79 used lines. The FET-gate pull-downs
    already
    on the transform list (instrumented-ci.md §3/§6: `PWR`, `BTN_*`)
-   double as their lines' pull-downs; the 70 switch-select lines
-   (injectors, keep-alive, pot muxes, watchdog defeat, SWIO tree) gain
+   double as their lines' pull-downs; the 63 switch-select lines
+   (49 tile injector/keep-alive selects on the seven injector tiles + 6
+   supervisor port + 3 SWIO + 1 watchdog defeat + 4 pot muxes) gain
    one each — same 47 kΩ / 0603 bin. A floated LVC select is not just
    indeterminate, it burns shoot-through current and can double-clock
    logic ([facts.md](../datasheets/SN74LVC1G3157/notes/facts.md) —
@@ -198,7 +210,7 @@ Properties this buys:
 - **Unpowered-supervisor = plain board.** If the RP2040 never runs
   (bad flash, held in reset), the board sits in the plain-board state
   indefinitely — the safe default is the pull-downs', not firmware's.
-- **Proof inputs are static data.** The proof consumes `reset_levels = all-zeros` over the 86-bit map of §3; the discipline above is the
+- **Proof inputs are static data.** The proof consumes `reset_levels = all-zeros` over the 79-bit map of §3; the discipline above is the
   hardware argument that all-zeros is what the nets actually see.
   (This amends the memo's Q2 mechanism — see
   [docs/instrumentation-equivalence.md](instrumentation-equivalence.md)
@@ -237,7 +249,7 @@ SWIO(RP2040) ─┬─ SW ──────┬─ SW ────────�
 ```
 
 - **Single stocked BOM line.** The 3157 is already the board's
-  workhorse switch (instrumented-ci.md §2: 65 positions); the tree adds
+  workhorse switch (instrumented-ci.md §2: 60 positions); the tree adds
   7 to the same line instead of a new 4051-class line.
 - **Stacked Ron is fine here.** Three switches in series ≈ 21 Ω typ
   (≤ 75 Ω over the full range) on a line whose pull-ups are 10 kΩ —
@@ -290,6 +302,11 @@ The whole plane is also trivially PIO-able — the firmware picks. Clock
 and COMMIT fan out to 12 stages each: fanout and stub length are a
 layout footnote at these speeds (§7 layout-checker territory), not a
 design constraint.
+
+Outside this plane, three more supervisor pins serve the measurement
+tile (instrumented-ci.md §12): `adc_sdata`/`adc_cs`/`adc_sclk` on
+GPIO0/1/2 — all SPI0-capable pads — reached through taps P1–P3. Burst
+capture spends no chain bits.
 
 ## 7. Electrical notes
 

@@ -30,7 +30,7 @@ flowchart TB
 
   subgraph SCAN["Scan control/observe plane — docs/scan-plane.md"]
     direction LR
-    C595["11 × 74HC595 — 86 control bits<br/>AUX0·AUX1·AUX2 + one slice per tile<br/>bit 0 = plain-board state"]
+    C595["11 × 74HC595 — 79 control bits<br/>AUX0·AUX1·AUX2 + one slice per tile<br/>bit 0 = plain-board state"]
     C165["2 × 74HC165 — 16 observe bits<br/>per-tile sel + 3V3N"]
     C595 -->|"one daisy chain, shared SRCLK + COMMIT"| C165
   end
@@ -47,7 +47,7 @@ flowchart TB
     N3["tile 3<br/>input"]
     N4["tile 4<br/>output"]
     N5["tile 5<br/>input"]
-    N6["tile 6<br/>output"]
+    N6["tile 6<br/>measurement"]
     N7["tile 7<br/>input"]
     DRN(["supervisor<br/>drain port"])
     ORG -->|"connector pair — yank demo,<br/>cable-reach insertion"| N0
@@ -70,10 +70,11 @@ flowchart TB
   DBGT -->|"dbg_rx — PIO UART RX"| RP
 
   N0 <-->|"taps: opa_p · TX_A#b · opo · led_work — no series R"| RP
+  N6 -->|"measurement SPI — taps P1·P2·P3: adc_sclk · adc_cs · adc_sdata"| RP
 
   subgraph HIO["Human I/O — demonstrator dual role"]
     HIN["input tiles 1·3·5·7<br/>10 kΩ pot + two buttons each"]
-    HOUT["output tiles 0·2·4·6<br/>piezo buzzer each — observed, not substituted"]
+    HOUT["output tiles 0·2·4<br/>piezo buzzer each — observed, not substituted"]
   end
   RP -->|"filtered PWM ×4"| HIN
   C595 -.->|"POT_SEL → substitute mux · BTN_A/B → parallel N-FET"| HIN
@@ -81,17 +82,21 @@ flowchart TB
   RING ==>|"per-tile sel + 3V3N"| C165
 ```
 
-Every inter-tile hop is one instrumented segment: the upstream tile's
+Every inter-tile hop but one is an instrumented segment: the upstream tile's
 injector sits at its downstream boundary on the segment's two wires
-(`TX_A`, `RX_B`), so each of the ring's nine segments is instrumented at
-exactly one end — the supervisor's originator port carries the ninth
-(driven from AUX0). Solid arrows are signal or power flow, dotted arrows
+(`TX_A`, `RX_B`), so eight of the ring's nine segments are instrumented at
+exactly one end — the supervisor's originator port carries one of the
+eight (driven from AUX0); the exception is tile 6's downstream hop: tile
+6 is the measurement tile
+([instrumented-ci.md §12](instrumented-ci.md#12-tile-power-measurement-chain))
+and carries no injector. Solid arrows are signal or power flow, dotted arrows
 are scan-chain control, the thick arrow is observe.
 
 ## Tile anatomy
 
 One tile, its rail split, and its per-tile transform set
-(instrumented-ci.md §7, F1–F8 — declared once, instanced eight times):
+(instrumented-ci.md §7, F1–F8 — declared once, instanced seven times;
+the measurement tile carries the extended F8 only):
 
 ```mermaid
 flowchart TB
@@ -130,8 +135,14 @@ Per-role additions on top of the per-tile set:
 - **Input tiles 1·3·5·7** — pot wiper through a `substitute` mux to PD6
   (`POT_SEL`: human pot ↔ supervisor filtered PWM) and each button
   paralleled by a 2N7002 N-FET (`BTN_A`/`BTN_B`, bit 0 = released).
-- **Output tiles 0·2·4·6** — buzzer payload (PC4 → 470 Ω → piezo);
+- **Output tiles 0·2·4** — buzzer payload (PC4 → 470 Ω → piezo);
   observed through the node's telemetry, no control bits.
+- **Tile 6 (measurement)** — the
+  [§12 power-measurement chain](instrumented-ci.md#12-tile-power-measurement-chain)
+  in place of the injector/keep-alive set and the buzzer payload: the
+  extended F8 (82 mΩ shunt downstream of the power-cut FET, INA241A5
+  mid-rail amp, ADCS7476 SPI ADC on the always-on 3V3), its SPI escaping
+  on taps P1–P3 to supervisor GPIO0/1/2.
 - **Supervisor originator port** — the same six-switch injector as a
   tile's on the supervisor→tile-0 segment (AUX0 bits 0–5); the drain
   port needs none — tile 7's injector covers that segment.
@@ -148,7 +159,7 @@ Per-role additions on top of the per-tile set:
   precedes the latch edge within a transaction
   ([scan-plane.md §1](scan-plane.md#1-architecture-one-daisy-chain)).
 - **Every latched bit pattern is electrically safe** — the 470 Ω shunt
-  legs bound all 86 bits' combinations, so the chain needs no hardware
+  legs bound all 79 bits' combinations, so the chain needs no hardware
   interlocks
   ([instrumented-ci.md §2](instrumented-ci.md#2-the-segment-injector)).
 - Bit maps live in [scan-plane.md §3](scan-plane.md#3-bit-maps); the
