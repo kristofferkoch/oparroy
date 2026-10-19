@@ -333,7 +333,12 @@ class DividerSpec:
 
     ``ratio`` and ``r_out`` each carry a nominal (``ValueRange``'s) the
     resolver aims at; ``top()``/``bottom()`` build the two per-part
-    markers the capture places on the sibling resistors.
+    markers the capture places on the sibling resistors. One spec
+    resolves one divider: the halves must be siblings in the same
+    capture and share that spec object, and a second divider needs its
+    own spec. Grouping keys on that capture, so a spec hoisted to a
+    module or class constant is safe across instances of a reusable
+    subcircuit.
 
     >>> str(DividerSpec(ValueRange.around(0.5, 0.05),
     ...                 ValueRange.around("5k", 0.2, family="resistor"),
@@ -350,11 +355,17 @@ class DividerSpec:
         if not (self.ratio.lo > 0.0 and self.ratio.hi < 1.0):
             msg = f"divider ratio must lie inside (0, 1), got {self.ratio}"
             raise DefinitionError(msg)
-        if self.vcc <= 0:
+        if self.ratio.family is not None:
+            msg = f"divider ratio is dimensionless, got family {self.ratio.family!r}"
+            raise DefinitionError(msg)
+        if math.isnan(self.vcc) or self.vcc <= 0:
             msg = f"divider vcc must be positive, got {self.vcc}"
             raise DefinitionError(msg)
-        if self.i_max <= 0:
+        if math.isnan(self.i_max) or self.i_max <= 0:
             msg = f"divider i_max must be positive, got {self.i_max}"
+            raise DefinitionError(msg)
+        if self.r_out.family != "resistor":
+            msg = f"divider r_out is a resistance, got family {self.r_out.family!r}"
             raise DefinitionError(msg)
 
     def top(self) -> DividerHalf:
@@ -376,11 +387,13 @@ class DividerSpec:
 class DividerHalf:
     """One resistor of a divider, awaiting joint resolution.
 
-    ``spec`` is the joint :class:`DividerSpec` the two halves share;
-    ``role`` is ``"top"`` (VCC side, R1) or ``"bottom"`` (GND side,
-    R2). The solve pass groups the two halves by their shared spec
+    ``spec`` is the joint :class:`DividerSpec` the two sibling halves
+    share within one capture; ``role`` is ``"top"`` (VCC side, R1) or
+    ``"bottom"`` (GND side, R2) — the capture author's claim, which
+    nothing here verifies, so a swapped marker inverts the achieved
+    ratio. The solve pass groups the two halves by their shared spec
     object and resolves them together; a half surviving to ``check`` or
-    an emitter is rejected there, like a ``ValueRange``.
+    a netlist emitter is rejected there, like a ``ValueRange``.
     """
 
     spec: DividerSpec

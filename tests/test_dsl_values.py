@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from oparroy.dsl import DefinitionError, DividerHalf, DividerSpec, ValueBin, ValueRange
@@ -210,10 +212,28 @@ def test_divider_spec_validates() -> None:
         DividerSpec(ValueRange(0.0, 0.5), ValueRange(1.0, 2.0), 3.3, 1e-3)
     with pytest.raises(DefinitionError, match="ratio"):
         DividerSpec(ValueRange(0.5, 1.0), ValueRange(1.0, 2.0), 3.3, 1e-3)
+    with pytest.raises(DefinitionError, match="dimensionless"):
+        DividerSpec(
+            ValueRange.around(0.5, 0.05, family="resistor"),
+            ValueRange(1.0, 2.0, family="resistor"),
+            3.3,
+            1e-3,
+        )
     with pytest.raises(DefinitionError, match="vcc"):
         DividerSpec(ValueRange(0.4, 0.6), ValueRange(1.0, 2.0), 0.0, 1e-3)
+    with pytest.raises(DefinitionError, match="vcc"):
+        DividerSpec(ValueRange(0.4, 0.6), ValueRange(1.0, 2.0), math.nan, 1e-3)
     with pytest.raises(DefinitionError, match="i_max"):
         DividerSpec(ValueRange(0.4, 0.6), ValueRange(1.0, 2.0), 3.3, 0.0)
+    with pytest.raises(DefinitionError, match="i_max"):
+        DividerSpec(ValueRange(0.4, 0.6), ValueRange(1.0, 2.0), 3.3, math.nan)
+    with pytest.raises(DefinitionError, match="r_out"):
+        DividerSpec(
+            ValueRange.around(0.4, 0.6),
+            ValueRange.around("5u", 0.2, family="capacitor"),
+            3.3,
+            1e-3,
+        )
 
 
 def test_divider_half_validates_role() -> None:
@@ -255,7 +275,7 @@ def test_resolve_divider_tie_prefers_in_use_then_ascending() -> None:
     # 11k/11k into an exact relative-error tie; in_use breaks it.
     spec = DividerSpec(
         ratio=ValueRange.around(0.5, 0.05),
-        r_out=ValueRange.around(5250.0, 0.2),
+        r_out=ValueRange.around(5250.0, 0.2, family="resistor"),
         vcc=3.3,
         i_max=330e-6,
     )
@@ -263,3 +283,27 @@ def test_resolve_divider_tie_prefers_in_use_then_ascending() -> None:
     assert R_0603_BIN.resolve_divider(spec, in_use=frozenset({11_000.0})) == (
         pytest.approx((11_000.0, 11_000.0))
     )
+
+
+def test_resolve_divider_rejects_out_of_band_ratio() -> None:
+    # Only the ratio band rejects this spec: without it the ranking picks
+    # 8k2/6k2 (+0.13% ratio), inside the r_out and current bounds.
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.43, 0.001),
+        r_out=ValueRange.around(5000.0, 0.5, family="resistor"),
+        vcc=3.3,
+        i_max=330e-6,
+    )
+    assert R_0603_BIN.resolve_divider(spec) is None
+
+
+def test_resolve_divider_rejects_pairs_over_the_standing_current() -> None:
+    # r_out 1k needs both halves near 2k (4k series), under the 33k a
+    # 100 µA bound demands: only the current bound rejects the pair.
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around("1k", 0.2, family="resistor"),
+        vcc=3.3,
+        i_max=100e-6,
+    )
+    assert R_0603_BIN.resolve_divider(spec) is None

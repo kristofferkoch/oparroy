@@ -1002,11 +1002,12 @@ DSL shape (from the initial design interrogation):
   irrational value — reporting each pick's achieved error against the
   spec. A divider whose *ratio* is the spec, not any one resistor, is
   a `DividerSpec` placed as two sibling `DividerHalf` markers
-  (`spec.top()`/`spec.bottom()`): the solve pass resolves the pair
+  (`spec.top()`/`spec.bottom()`; one spec per divider, the halves
+  siblings in one capture): the solve pass resolves the pair
   jointly, meeting the ratio, Thévenin output-impedance, and
   standing-current constraints with one bin pair and reporting all
-  three achieved figures. `check` and the emitters reject a surviving
-  spec, so the pipeline order is enforced, not conventional.
+  three achieved figures. `check` and the netlist emitters reject a
+  surviving spec, so the pipeline order is enforced, not conventional.
   Context-computed values (generators) remain open work (KANBAN.md).
 - **Captures live in a new `design/` tree.** `circuits/` keeps benches
   and device models until the bench DUTs are ported and the DUT `.cir`
@@ -1180,10 +1181,9 @@ a unified diff; the data-as-code file stays hand-authored and the
 script never rewrites it, and the feed never replaces a newer
 hand-verified snapshot. Stock numbers are as-of-dated
 snapshots with provenance, never live data — re-query JLCPCB before
-ordering. Value specs (`ValueRange`) resolve against these bins in the
-solve pass between capture and check (§7); ratio specs (a divider
-ratio met by any bin pair) and context-computed values (generators)
-remain open work (KANBAN.md).
+ordering. Value specs (`ValueRange` and `DividerSpec`) resolve against
+these bins in the solve pass between capture and check (§7);
+context-computed values (generators) remain open work (KANBAN.md).
 
 Firmware pin maps: `pinmap.py` — pins are requested by function
 (`gpio.request("keepalive")`), pads bind late as

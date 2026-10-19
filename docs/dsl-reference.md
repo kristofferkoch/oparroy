@@ -70,8 +70,8 @@ Data types:
   `number`, `name`, `type`, `net`), `PinType` (KiCad electrical types).
 - `Part` — `ref` (current name; the refdes after annotation),
   `identity` (capture name, what tstamps key on), `path` (instance
-  path), `symbol`, `value` (a literal string or a `ValueRange` spec),
-  `footprint`, `note`, `pins`; `pin(number)`,
+  path), `symbol`, `value` (a literal string, a `ValueRange`, or a
+  `DividerHalf` marker), `footprint`, `note`, `pins`; `pin(number)`,
   `unit(n)`, integer indexing (`part[1]`).
 - `Interval(low, high)` — closed interval, inclusive containment.
   `Limits(voltage, current=None)` — a port's electrical ranges;
@@ -97,10 +97,11 @@ pin number or tuple), `default_value`, `default_footprint`,
 unwired). Pin keywords are keyword-only; construction carries the
 wiring; a missing or misspelled pin is a `TypeError` at the call site.
 
-Concrete classes: `Resistor`, `Capacitor` (value positional — a
-literal string or a `ValueRange` spec — pins
-`a`/`b`), `Diode` (`anode`/`cathode`), `Led`, `TvsDiode`, `Bat54s`
-(series pair: `anode`/`cathode`/`com`), all keyword-only.
+Concrete classes: `Resistor` (value positional — a literal string, a
+`ValueRange`, or a `DividerHalf`; pins `a`/`b`), `Capacitor` (a literal
+or a `ValueRange`; pins `a`/`b`), `Diode` (`anode`/`cathode`), `Led`,
+`TvsDiode`, `Bat54s` (series pair: `anode`/`cathode`/`com`), all
+keyword-only.
 `MultiUnitPart` (classvar `unit_pins`) places a unit subset and wires
 nothing — wire units individually via `part.unit(n).pinname` or pack
 them into sockets; `Bat54adw` is the concrete quad. `DiodeSocket` is
@@ -164,29 +165,35 @@ candidate nearest the spec's nominal — ties prefer a value already
 used in the circuit (BOM consolidation), then the smaller value.
 
 `solve(circuit) -> SolveReport` is the pass between capture/transforms
-and check: it walks the IR hierarchically, resolves every `ValueRange`
-against the part's bin, and rewrites `Part.value` to the stocked
-literal in place; literal strings are never touched. `SolveReport`
-carries `issues` (a spec on a bin-less part, or one no stocked value
-meets, is an error) and `resolutions` — one `Resolution` per pick:
-path, spec, chosen value, and the achieved relative error; `str()`
-renders one line per resolution
-(`T0/PHY1/Rth1: 10k ±5% → 10k (achieved +0.0%)`). `check` and the
+and check: it walks the IR hierarchically, resolves every value spec
+(`ValueRange`, and the divider pair below) against the part's bin, and
+rewrites `Part.value` to the stocked literal in place; literal strings
+are never touched. `SolveReport` carries `issues` (a spec on a
+bin-less part, or one no stocked value meets, is an error) and
+`resolutions` — one `Resolution` per single-spec pick, and one
+`DividerResolution` per divider (below): path, spec, chosen value, and
+the achieved relative error; `str()` renders one line per resolution
+(`R1: 10k ±5% → 10k (achieved +0.0%)`). `check` and the netlist
 emitters reject a surviving spec, so the pipeline order is enforced.
 
 A resistive divider whose *ratio* is the spec (not any one resistor) is
-a `DividerSpec` — `ratio` (R2/(R1+R2), dimensionless), `r_out` (the
-Thévenin R1‖R2), and `vcc`/`i_max` (the standing-current bound
-R1+R2 ≥ vcc/i_max), each a `ValueRange` with a nominal to aim at.
-`spec.top()`/`spec.bottom()` build the two `DividerHalf` markers the
-capture places on the sibling resistors (`R0603(spec.top(), a=vcc, b=out)` — R1 is the VCC side, R2 the GND side). `solve` groups the two
-halves by their shared spec and resolves them with
-`ValueBin.resolve_divider(spec, in_use=…)` — the pair meeting all three
-constraints, ranked by ratio error, then R‖R error, then BOM
-consolidation, then size. The pick lands in `SolveReport.resolutions`
-as a `DividerResolution` (the pair plus the achieved ratio, R‖R, and
-current); a missing or duplicate half, a bin-less pair, or no meeting
-pair is an error issue, and a `DividerHalf` surviving to `check` or an
+a `DividerSpec` — `ratio` (R2/(R1+R2), dimensionless) and `r_out` (the
+Thévenin R1‖R2), each a `ValueRange` with a nominal to aim at, plus
+`vcc`/`i_max` (the standing-current bound R1+R2 ≥ vcc/i_max) as plain
+floats. `spec.top()`/`spec.bottom()` build the two `DividerHalf`
+markers the capture places on the sibling resistors
+(`R0603(spec.top(), a=vcc, b=out)` — R1 is the VCC side, R2 the GND
+side; the role is the capture's claim, not a wiring check). One spec
+resolves one divider: the halves are siblings in one capture and
+share the same spec object, so a spec hoisted to a module or class
+constant safely spans instances, while two dividers in one capture
+need two specs. `solve` groups the halves by their shared spec within
+that capture and resolves them with `ValueBin.resolve_divider(spec, in_use=…)` — the pair meeting all three constraints, ranked by ratio
+error, then R‖R error, then BOM consolidation, then size. The pick
+lands in `SolveReport.resolutions` as a `DividerResolution` (the pair
+plus the achieved ratio, R‖R, and current); a missing or duplicate
+half, a bin-less pair, a non-resistor bin, or no meeting pair is an
+error issue, and a `DividerHalf` surviving to `check` or a netlist
 emitter is rejected like a `ValueRange`.
 
 ## Validation (`check.py`)
@@ -194,8 +201,9 @@ emitter is rejected like a `ValueRange`.
 `check(circuit, *, footprints=None) -> list[Issue]` — the one
 validation pass: flattens implicitly, checks port-range containment
 over the hierarchy *before* flattening, then part and net rules over
-the flat IR, and applies waivers last. A `ValueRange` still on a part
-errors — `solve` runs first. `Issue(severity, message, check, path)`; `Severity` = `warning` / `error` / `waived`.
+the flat IR, and applies waivers last. An unresolved value spec
+(`ValueRange` or `DividerHalf`) still on a part errors — `solve` runs
+first. `Issue(severity, message, check, path)`; `Severity` = `warning` / `error` / `waived`.
 `raise_on_errors(issues)` raises `CheckError`. `RANGE_CONTAINMENT` is
 the containment check's id for waivers. `FootprintTable` is the
 `exists(footprint)` protocol (kicadlib or stubs).
