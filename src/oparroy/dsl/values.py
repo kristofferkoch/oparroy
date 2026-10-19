@@ -321,6 +321,103 @@ class ValueRange:
 
 
 @dataclass(frozen=True)
+class DividerSpec:
+    """A VDD → R1 → out → R2 → GND divider, met by one stocked bin pair.
+
+    The three joint constraints the solve pass meets with a single
+    (R1, R2) pair drawn from the part's :class:`ValueBin`:
+    - ``ratio`` — R2/(R1+R2), the output fraction (dimensionless);
+    - ``r_out`` — R1‖R2, the Thévenin output impedance (base units);
+    - ``vcc``/``i_max`` — the standing-current bound: the pair must
+      satisfy R1+R2 ≥ vcc / i_max.
+
+    ``ratio`` and ``r_out`` each carry a nominal (``ValueRange``'s) the
+    resolver aims at; ``top()``/``bottom()`` build the two per-part
+    markers the capture places on the sibling resistors.
+
+    >>> str(DividerSpec(ValueRange.around(0.5, 0.05),
+    ...                 ValueRange.around("5k", 0.2, family="resistor"),
+    ...                 3.3, 330e-6))
+    'divider 0.5 ±5%, R∥R 5k ±20%, I ≤ 330 µA @ 3.3 V'
+    """
+
+    ratio: ValueRange
+    r_out: ValueRange
+    vcc: float
+    i_max: float
+
+    def __post_init__(self) -> None:
+        if not (self.ratio.lo > 0.0 and self.ratio.hi < 1.0):
+            msg = f"divider ratio must lie inside (0, 1), got {self.ratio}"
+            raise DefinitionError(msg)
+        if self.vcc <= 0:
+            msg = f"divider vcc must be positive, got {self.vcc}"
+            raise DefinitionError(msg)
+        if self.i_max <= 0:
+            msg = f"divider i_max must be positive, got {self.i_max}"
+            raise DefinitionError(msg)
+
+    def top(self) -> DividerHalf:
+        """Build the VCC-side resistor's marker (R1), placed ``a=vcc, b=out``."""
+        return DividerHalf(self, "top")
+
+    def bottom(self) -> DividerHalf:
+        """Build the GND-side resistor's marker (R2), placed ``a=out, b=gnd``."""
+        return DividerHalf(self, "bottom")
+
+    def __str__(self) -> str:
+        return (
+            f"divider {self.ratio}, R∥R {self.r_out}, "
+            f"I ≤ {self.i_max * 1e6:g} µA @ {self.vcc:g} V"
+        )
+
+
+@dataclass(frozen=True)
+class DividerHalf:
+    """One resistor of a divider, awaiting joint resolution.
+
+    ``spec`` is the joint :class:`DividerSpec` the two halves share;
+    ``role`` is ``"top"`` (VCC side, R1) or ``"bottom"`` (GND side,
+    R2). The solve pass groups the two halves by their shared spec
+    object and resolves them together; a half surviving to ``check`` or
+    an emitter is rejected there, like a ``ValueRange``.
+    """
+
+    spec: DividerSpec
+    role: str
+
+    def __post_init__(self) -> None:
+        if self.role not in ("top", "bottom"):
+            msg = f"divider role must be 'top' or 'bottom', got {self.role!r}"
+            raise DefinitionError(msg)
+
+    def __str__(self) -> str:
+        return f"divider {self.role} ({self.spec})"
+
+
+def _within(lo: float, value: float, hi: float) -> bool:
+    """Return True when ``value`` lies in [lo, hi], bounds given slack."""
+    return lo * (1 - _EPS) <= value <= hi * (1 + _EPS)
+
+
+def _relative_error(actual: float, nominal: float) -> float:
+    """Absolute relative error, degrading to absolute at a zero nominal."""
+    if nominal == 0:
+        return abs(actual - nominal)
+    return abs(actual - nominal) / nominal
+
+
+def _divider_ratio(pair: tuple[float, float]) -> float:
+    """Return the ratio R2/(R1+R2) of an (R1, R2) divider pair."""
+    return pair[1] / (pair[0] + pair[1])
+
+
+def _divider_r_out(pair: tuple[float, float]) -> float:
+    """Return the Thévenin output impedance R1‖R2 of an (R1, R2) pair."""
+    return pair[0] * pair[1] / (pair[0] + pair[1])
+
+
+@dataclass(frozen=True)
 class ValueBin:
     """A stocked value grid: one E-series within bounds (base units).
 
@@ -405,3 +502,72 @@ class ValueBin:
         ]
         used = [value for value in best if value in in_use]
         return min(used or best)
+
+    def resolve_divider(
+        self, spec: DividerSpec, *, in_use: frozenset[float] = frozenset()
+    ) -> tuple[float, float] | None:
+        """Pick the stocked (R1, R2) pair meeting ``spec``'s constraints.
+
+        R1 is the VCC-side (top) resistor, R2 the GND-side (bottom):
+        ratio R2/(R1+R2), R1‖R2, and R1+R2 ≥ vcc/i_max must all hold.
+        Among the pairs that meet them, the pick minimizes the ratio's
+        relative error to its nominal, then R1‖R2's, then prefers values
+        already in use (BOM consolidation), then the smaller
+        (R1+R2, R1) — deterministic. None when no pair meets.
+        """
+        candidates = self._divider_candidates(spec)
+        if not candidates:
+            return None
+        assert spec.ratio.nominal is not None  # noqa: S101 — __post_init__ fills it
+        assert spec.r_out.nominal is not None  # noqa: S101 — __post_init__ fills it
+        ratio_nominal = spec.ratio.nominal
+        r_out_nominal = spec.r_out.nominal
+        best_ratio = min(
+            _relative_error(_divider_ratio(pair), ratio_nominal) for pair in candidates
+        )
+        candidates = [
+            pair
+            for pair in candidates
+            if math.isclose(
+                _relative_error(_divider_ratio(pair), ratio_nominal),
+                best_ratio,
+                rel_tol=_EPS,
+            )
+        ]
+        best_r_out = min(
+            _relative_error(_divider_r_out(pair), r_out_nominal) for pair in candidates
+        )
+        candidates = [
+            pair
+            for pair in candidates
+            if math.isclose(
+                _relative_error(_divider_r_out(pair), r_out_nominal),
+                best_r_out,
+                rel_tol=_EPS,
+            )
+        ]
+        best_used = max(
+            sum(1 for value in pair if value in in_use) for pair in candidates
+        )
+        candidates = [
+            pair
+            for pair in candidates
+            if sum(1 for value in pair if value in in_use) == best_used
+        ]
+        return min(candidates, key=lambda pair: (pair[0] + pair[1], pair[0]))
+
+    def _divider_candidates(self, spec: DividerSpec) -> list[tuple[float, float]]:
+        """Every (R1, R2) bin pair meeting the ratio, R‖R, and current bounds."""
+        series_min = spec.vcc / spec.i_max
+        candidates: list[tuple[float, float]] = []
+        for r1 in self.values():
+            for r2 in self.values():
+                pair = (r1, r2)
+                if not _within(spec.ratio.lo, _divider_ratio(pair), spec.ratio.hi):
+                    continue
+                if not _within(spec.r_out.lo, _divider_r_out(pair), spec.r_out.hi):
+                    continue
+                if r1 + r2 < series_min * (1 - _EPS):
+                    continue
+                candidates.append(pair)
+        return candidates

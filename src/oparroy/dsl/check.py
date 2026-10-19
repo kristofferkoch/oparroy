@@ -9,8 +9,9 @@ range must cover the connected source's output range) and the
 power-domain crossing audit (every net touching two domains, one
 switched, must carry a declared disposition — ``Circuit.crossing``),
 with waivers as explicit, path-addressed capture data. It also guards
-the pipeline order: a ``ValueRange`` spec surviving to check is an
-error — the solve pass (``oparroy.dsl.solve``) runs first.
+the pipeline order: an unresolved value spec (a ``ValueRange`` or a
+``DividerHalf``) surviving to check is an error — the solve pass
+(``oparroy.dsl.solve``) runs first.
 """
 
 import fnmatch
@@ -35,7 +36,6 @@ from oparroy.dsl.ir import (
     natural_key,
 )
 from oparroy.dsl.kicadlib import LibraryError
-from oparroy.dsl.values import ValueRange
 
 _MIN_NET_PINS = 2
 
@@ -571,7 +571,7 @@ def _check_part(part: Part, footprints: FootprintTable | None) -> list[Issue]:
     issues: list[Issue] = []
     if part.value is None:
         issues.append(Issue(Severity.WARNING, f"{part.ref} has no value"))
-    elif isinstance(part.value, ValueRange):
+    elif not isinstance(part.value, str):
         issues.append(
             Issue(
                 Severity.ERROR,

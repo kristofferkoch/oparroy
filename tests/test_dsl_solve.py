@@ -14,11 +14,14 @@ import pytest
 from oparroy.dsl import (
     Circuit,
     DefinitionError,
+    DividerResolution,
+    DividerSpec,
     InsertSeries,
     PartRecord,
     PartsDb,
     PerInstance,
     Resistor,
+    Resolution,
     Severity,
     TransformPart,
     ValueBin,
@@ -68,6 +71,7 @@ def test_spec_resolves_and_mutates_the_part(symbols: StubSymbols) -> None:
     assert report.issues == []
     assert c.parts["R1"].value == "10k"
     (resolution,) = report.resolutions
+    assert isinstance(resolution, Resolution)
     assert resolution.path == "R1"
     assert resolution.chosen == pytest.approx(EXACT_10K)
     assert resolution.chosen_str == "10k"
@@ -79,6 +83,7 @@ def test_resolution_reports_the_achieved_error(symbols: StubSymbols) -> None:
     c = spec_circuit(symbols, ValueRange.around(OFF_NOMINAL, 0.05, family="resistor"))
     report = solve(c)
     (resolution,) = report.resolutions
+    assert isinstance(resolution, Resolution)
     assert resolution.chosen == pytest.approx(NEAREST_1K)
     assert resolution.rel_error == pytest.approx(-30 / 1030, rel=1e-6)
     assert "(achieved -2.9%)" in str(report)
@@ -101,6 +106,7 @@ def test_identical_specs_consolidate(symbols: StubSymbols) -> None:
     # The spec's exact tie (4k7 vs 5k1) breaks toward the in-use 5k1.
     assert c.parts["R1"].value == "5k1"
     (resolution,) = report.resolutions
+    assert isinstance(resolution, Resolution)
     assert resolution.chosen == pytest.approx(TIE_HIGH)
     assert resolution.chosen != TIE_LOW
 
@@ -246,3 +252,162 @@ def test_transform_placed_parts_carry_the_bin(symbols: StubSymbols) -> None:
     assert placed.value == "10k"
     (resolution,) = report.resolutions
     assert resolution.path == "T1/FI1/RS"
+
+
+def divider_circuit(symbols: StubSymbols, spec: DividerSpec | None = None) -> Circuit:
+    """Build a VDD → R1 → out → R2 → GND divider from the bin."""
+    c = Circuit("test", symbols)
+    vcc, out, gnd = c.net("vcc"), c.net("out"), c.net("gnd")
+    spec = spec or DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around("5k", 0.2, family="resistor"),
+        vcc=3.3,
+        i_max=330e-6,
+    )
+    c.part("R1", RBin(spec.top(), a=vcc, b=out))
+    c.part("R2", RBin(spec.bottom(), a=out, b=gnd))
+    return c
+
+
+def test_divider_resolves_both_parts_and_reports(symbols: StubSymbols) -> None:
+    c = divider_circuit(symbols)
+    report = solve(c)
+    assert report.issues == []
+    assert c.parts["R1"].value == "10k"
+    assert c.parts["R2"].value == "10k"
+    (resolution,) = report.resolutions
+    assert isinstance(resolution, DividerResolution)
+    assert resolution.path == "R1"
+    assert resolution.r1 == pytest.approx(10_000.0)
+    assert resolution.r2 == pytest.approx(10_000.0)
+    assert resolution.ratio == pytest.approx(0.5)
+    assert resolution.ratio_error == pytest.approx(0.0)
+    assert resolution.r_out == pytest.approx(5_000.0)
+    assert resolution.current == pytest.approx(165e-6)
+    assert "10k/10k" in str(report)
+    assert "R∥R 5k" in str(report)
+    assert "I 165 µA" in str(report)
+
+
+def test_divider_hits_a_nonhalf_ratio_and_reports_all_figures(
+    symbols: StubSymbols,
+) -> None:
+    # Vout = VDD/3, source impedance 10k, current ≤ 1 mA: the pair is
+    # 30k/15k, drawing 73.3 µA at 3.3 V.
+    spec = DividerSpec(
+        ratio=ValueRange.around(1 / 3, 0.01),
+        r_out=ValueRange.around("10k", 0.1, family="resistor"),
+        vcc=3.3,
+        i_max=1e-3,
+    )
+    c = divider_circuit(symbols, spec)
+    report = solve(c)
+    assert report.issues == []
+    assert c.parts["R1"].value == "30k"
+    assert c.parts["R2"].value == "15k"
+    (resolution,) = report.resolutions
+    assert isinstance(resolution, DividerResolution)
+    assert resolution.ratio == pytest.approx(1 / 3)
+    assert resolution.r_out == pytest.approx(10_000.0)
+    assert resolution.current == pytest.approx(3.3 / 45_000.0)
+
+
+def test_divider_unsolved_fails_check(symbols: StubSymbols) -> None:
+    c = divider_circuit(symbols)
+    messages = [issue.message for issue in check(c) if issue.severity is Severity.ERROR]
+    assert any("unresolved value spec" in m for m in messages)
+
+
+def test_divider_missing_half_is_an_error(symbols: StubSymbols) -> None:
+    c = Circuit("test", symbols)
+    vcc, out = c.net("vcc"), c.net("out")
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around("5k", 0.2, family="resistor"),
+        vcc=3.3,
+        i_max=330e-6,
+    )
+    c.part("R1", RBin(spec.top(), a=vcc, b=out))
+    report = solve(c)
+    (issue,) = report.issues
+    assert issue.severity is Severity.ERROR
+    assert "missing its bottom half" in issue.message
+
+
+def test_divider_duplicate_role_is_an_error(symbols: StubSymbols) -> None:
+    c = Circuit("test", symbols)
+    vcc, out, gnd = c.net("vcc"), c.net("out"), c.net("gnd")
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around("5k", 0.2, family="resistor"),
+        vcc=3.3,
+        i_max=330e-6,
+    )
+    c.part("R1", RBin(spec.top(), a=vcc, b=out))
+    c.part("R2", RBin(spec.top(), a=out, b=gnd))
+    report = solve(c)
+    assert any("duplicate divider top" in i.message for i in report.issues)
+    assert any("missing its bottom half" in i.message for i in report.issues)
+
+
+def test_divider_halves_without_bin_are_an_error(symbols: StubSymbols) -> None:
+    c = Circuit("test", symbols)
+    vcc, out, gnd = c.net("vcc"), c.net("out"), c.net("gnd")
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around("5k", 0.2, family="resistor"),
+        vcc=3.3,
+        i_max=330e-6,
+    )
+    top = c.part("R1", symbol="Stub:R", value=spec.top(), footprint="StubFP:R_0603")
+    bottom = c.part(
+        "R2", symbol="Stub:R", value=spec.bottom(), footprint="StubFP:R_0603"
+    )
+    c.connect(vcc, top[1])
+    c.connect(out, top[2], bottom[1])
+    c.connect(gnd, bottom[2])
+    report = solve(c)
+    (issue,) = report.issues
+    assert issue.severity is Severity.ERROR
+    assert "one shared value bin" in issue.message
+
+
+def test_divider_unresolvable_is_an_error(symbols: StubSymbols) -> None:
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.01),
+        r_out=ValueRange.around("1M", 0.01, family="resistor"),
+        vcc=3.3,
+        i_max=1e-3,
+    )
+    c = divider_circuit(symbols, spec)
+    report = solve(c)
+    (issue,) = report.issues
+    assert issue.severity is Severity.ERROR
+    assert "no pair in the resistor bin" in issue.message
+
+
+def divider_child(circuit: Circuit) -> None:
+    """Capture a child holding a divider, for the hierarchy test."""
+    vcc, out, gnd = circuit.net("vcc"), circuit.net("out"), circuit.net("gnd")
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around("5k", 0.2, family="resistor"),
+        vcc=3.3,
+        i_max=330e-6,
+    )
+    circuit.part("R1", RBin(spec.top(), a=vcc, b=out))
+    circuit.part("R2", RBin(spec.bottom(), a=out, b=gnd))
+
+
+def test_divider_walks_instances_and_flatten_carries_the_pair(
+    symbols: StubSymbols,
+) -> None:
+    board = Circuit("board", symbols)
+    board.instance("T1", divider_child)
+    report = solve(board)
+    (resolution,) = report.resolutions
+    assert isinstance(resolution, DividerResolution)
+    assert resolution.path == "T1/R1"
+    flat = board.flatten()
+    assert flat.parts["T1/R1"].value == "10k"
+    assert flat.parts["T1/R2"].value == "10k"
