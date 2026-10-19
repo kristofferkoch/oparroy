@@ -50,6 +50,8 @@ DEFAULT_PREFIX_RULES: tuple[tuple[str, str], ...] = (
     ("MCU_*:*", "U"),
     ("Memory_Flash:*", "U"),
     ("74*:*", "U"),
+    ("Amplifier_Current:*", "U"),
+    ("Analog_ADC:*", "U"),
     ("Analog_Switch:*", "U"),
     ("Regulator*:*", "U"),
 )

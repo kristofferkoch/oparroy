@@ -6,22 +6,31 @@ capture names (`design/node.py`, `design/phy_frontend.py`,
 CI tile variants (`design/ci_tiles.py` — the §6 payload carriers the
 H-transforms cut against):
 
-- **F1-F6, per tile** — the §2 four-state segment injector on the
+- **F1-F6, per tile except T6** — the §2 four-state segment injector on the
   tile's downstream-boundary wires ``TX_A``/``RX_B``: a break switch
   (B1 = pass, B2 = NC) plus a 470 Ω-legged shunt to GND and to `3V3`
   per wire (shunts on B2 — bit 0 = branch absent). The same six
   records serve the supervisor originator port
-  (:func:`segment_injector`), so each of the ring's nine segments is
-  instrumented at exactly one end (§2).
+  (:func:`segment_injector`), so eight of the ring's nine segments are
+  instrumented at exactly one end (§2) — the measurement tile's
+  downstream segment is the exception (§12).
 - **F7** — the §4 keep-alive cut on `ka` (U1.PD3 ↔ WD1/Rs.a), 47 kΩ
-  pull-down parking the watchdog-side stub low.
+  pull-down parking the watchdog-side stub low. Every tile but T6.
 - **F8** — the §3 power cut: `3V3` → `3V3N` behind the AO3401A
   high-side P-FET, 47 kΩ gate pull-down (POR = on). The detached pin
   list *is* the §3 domain split: U1 VDD with C1/C2, the VDD/2 divider
   top `PHY1/Rth1`, all of SL1, TP2 — plus, on input tiles, the pot
   end and the button pull-ups. The bypass switch `PHY1/SW1`, the DNP
   Schmitt `PHY1/BUF1`, the injector switch VCCs, and the shunt/defeat
-  leg sources stay on the always-on `3V3`.
+  leg sources stay on the always-on `3V3`. The measurement tile's F8
+  (:func:`measurement_power_cut`) is the same cut extended with the
+  §12 chain: the FET drain feeds 3V3N through the 82 mΩ shunt, and the
+  INA241A5 + ADCS7476 ride the shunt from the always-on rail.
+- **P1-P3, the measurement tile** — the §12 chain's SPI escapes:
+  taps on F8's transform-local `F8_sclk`/`F8_cs`/`F8_sdata` nets,
+  wired at board level to the supervisor's PIO burst-capture pins.
+  The tri-stated SDO and the POR-input GPIOs carry the reset-state
+  justification (`AddTap.non_input_consumers`).
 - **B1-B5, boundary tile** — the §5 PIO taps on `opa_p`, `TX_A#b`
   (post-injector, so the tap rides the split alias and must apply
   after F1), `opo`, `led_work`, and the watchdog defeat: a 3157 shunt
@@ -66,8 +75,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from design.bins import C0603, R0603
-from design.ci_parts import Ao3401a, N2n7002
-from design.ci_tiles import InputNode, OutputNode
+from design.ci_parts import Adcs7476, Ao3401a, Ina241a5, N2n7002
+from design.ci_tiles import InputNode, MeasurementNode, OutputNode
 from design.parts_db import PARTS
 from oparroy.dsl import (
     AddShunt,
@@ -99,6 +108,8 @@ __all__ = [
     "boundary_taps",
     "ci_transform_plan",
     "input_overrides",
+    "measurement_power_cut",
+    "measurement_taps",
     "observe_taps",
     "per_tile_faults",
     "reset_levels",
@@ -151,10 +162,15 @@ class _FiSwitch(TypedPart):
 
 #: The transform parts, DB-bound so the equivalence proof inherits the
 #: residual magnitudes (memo Q3). The 3157 is the §2 switch line; the
-#: FETs are the §3 power cut and the §6 button override.
+#: FETs are the §3 power cut and the §6 button override; the amp and
+#: the ADC are the measurement tile's §12 chain (extras of its F8
+#: record — extras need only a value for the proof's EXTRA_LOADING
+#: residual, which the DB bindings carry).
 FiSwitch = PARTS.bind("sn74lvc1g3157-ti", _FiSwitch, class_name="FiSwitch")
 PowerCutFet = PARTS.bind("ao3401a", Ao3401a, class_name="PowerCutFet")
 ButtonFet = PARTS.bind("2n7002", N2n7002, class_name="ButtonFet")
+SenseAmp = PARTS.bind("csa-ina241a5", Ina241a5, class_name="SenseAmp")
+ChainAdc = PARTS.bind("adc-adcs7476", Adcs7476, class_name="ChainAdc")
 
 
 def _shunt(label: str, net: str, rail: str, suffix: str, bit: str) -> AddShunt:
@@ -272,6 +288,96 @@ def _power_cut(extra_pins: tuple[str, ...] = ()) -> InsertSeries:
         control="PWR",
         switched_domain=True,
         extra=(TransformPart("FI1/RPW", R0603("47k", a="@control", b="GND")),),
+    )
+
+
+def measurement_power_cut() -> tuple[Transform, ...]:
+    """Build the measurement tile's transform set: F8 extended per §12.
+
+    The same power cut the other tiles carry — same label, same
+    control, same switched-domain split — but the FET's drain feeds
+    3V3N through the 82 mΩ shunt (``R082`` from the §7 bin), and the
+    INA241A5 + ADCS7476 chain rides the shunt: the amp senses across it
+    (IN+ on the FET side ``@sns``, IN- on 3V3N), REF1/REF2 strapped to
+    3V3/GND for the mid-rail bidirectional read (the cut-state clamp
+    back-feed shows as a negative current — §12's settled placement),
+    the charge-bucket RC (47 Ω + 1 nF: τ = 47 ns recovers the 26 pF
+    sampling kick to 12 bits in ≈390 ns of the 1 µs frame, C at the
+    amp's 1 nF max-load ceiling behind the isolating R) between the amp
+    and the ADC, a 47 kΩ CS pull-up holding the ADC deselected through
+    the POR Hi-Z window (scan-plane.md §4's discipline), and the
+    datasheet bypass set (amp 100 nF; ADC 100 nF + 1 µF). The SPI pins
+    sit on transform-local nets the P1-P3 taps escape to the
+    supervisor. The amp and ADC power from the always-on 3V3 — the
+    chain reads through the tile's own power cut.
+    """
+    return (
+        InsertSeries(
+            label="F8",
+            net="3V3",
+            pins=F8_DOMAIN_PINS,
+            name="3V3N",
+            part=TransformPart("FI1/QPW", PowerCutFet(s="@b", d="@sns", g="@control")),
+            control="PWR",
+            switched_domain=True,
+            extra=(
+                TransformPart("FI1/RPW", R0603("47k", a="@control", b="GND")),
+                TransformPart("FI1/RSH", R0603("R082", a="@sns", b="@a")),
+                TransformPart(
+                    "FI1/UIM",
+                    SenseAmp(
+                        in_p="@sns",
+                        in_m="@a",
+                        vs="3V3",
+                        ref1="3V3",
+                        ref2="GND",
+                        nc="GND",
+                        out="@imeas",
+                        gnd="GND",
+                    ),
+                ),
+                TransformPart("FI1/RFC", R0603("47", a="@imeas", b="@adc_in")),
+                TransformPart("FI1/CFC", C0603("1n", a="@adc_in", b="GND")),
+                TransformPart(
+                    "FI1/UAD",
+                    ChainAdc(
+                        vdd="3V3",
+                        gnd="GND",
+                        vin="@adc_in",
+                        sclk="@sclk",
+                        sdo="@sdata",
+                        cs="@cs",
+                    ),
+                ),
+                TransformPart("FI1/RCS", R0603("47k", a="@cs", b="3V3")),
+                TransformPart("FI1/CIM", C0603("100n", a="3V3", b="GND")),
+                TransformPart("FI1/CAD1", C0603("100n", a="3V3", b="GND")),
+                TransformPart("FI1/CAD2", C0603("1u", a="3V3", b="GND")),
+            ),
+        ),
+    )
+
+
+def measurement_taps() -> tuple[AddTap, ...]:
+    """Build P1-P3: the §12 chain's SPI escapes to the supervisor.
+
+    The taps ride F8's transform-local nets (``F8_sclk`` etc.), so they
+    must apply after it. The consumers are the supervisor's GPIOs —
+    inputs from POR (scan-plane.md §4's zero-load discipline) — and the
+    ADCS7476's SDO, tri-stated between conversions while CS sits high
+    on the tile's pull-up; the burst drive is the §12 injected state
+    the proof does not cover.
+    """
+    consumers = (
+        "supervisor GPIOs are inputs from POR (scan-plane.md §4's "
+        "zero-load discipline); the ADCS7476's SDO tri-states while CS "
+        "sits high on the tile's 47 kΩ pull-up — the burst drive is the "
+        "injected state (instrumented-ci.md §12)"
+    )
+    return (
+        AddTap(label="P1", net="F8_sclk", non_input_consumers=consumers),
+        AddTap(label="P2", net="F8_cs", non_input_consumers=consumers),
+        AddTap(label="P3", net="F8_sdata", non_input_consumers=consumers),
     )
 
 
@@ -410,9 +516,10 @@ def ci_transform_plan(
     (`design/ci_tiles.py`): every OutputNode gets the F-set, every
     InputNode the F-set with its payload pins joining 3V3N plus the
     H-set — one declaration each instruments all instances of the
-    variant — and every tile of either variant gets the observe (O1/O2)
-    and mux-tree (M1/M2) taps. ``boundary`` names the tile-0 instance
-    for B1-B5.
+    variant — every tile of either variant gets the observe (O1/O2)
+    and mux-tree (M1/M2) taps, and the MeasurementNode gets the §12
+    extended F8 with its P1-P3 SPI escapes instead of the F-set.
+    ``boundary`` names the tile-0 instance for B1-B5.
     ``supervisor_port``/``supervisor_nets`` add the originator port's
     F1-F6 (§7): the instance path, and its (tx_net, tx_pin, rx_net,
     rx_pin) capture names. The `Supervisor` capture's ring ports
@@ -429,6 +536,18 @@ def ci_transform_plan(
                 *input_overrides(),
                 *observe_taps(),
                 *tree_taps(),
+            ),
+        ),
+        # The §12 measurement tile: the extended power cut plus the
+        # observe/tree taps every tile carries, then the SPI escapes —
+        # they tap F8's transform-local nets and must follow it.
+        PerTile(
+            MeasurementNode,
+            (
+                *measurement_power_cut(),
+                *observe_taps(),
+                *tree_taps(),
+                *measurement_taps(),
             ),
         ),
         PerInstance((boundary,), boundary_taps()),
@@ -511,16 +630,23 @@ BUDGETS = {
         "point at"
     ),
     EXTRA_LOADING: (
-        "instrumented-ci.md §9 R4 — the 47 kΩ pull-down class; "
+        "instrumented-ci.md §9 R4/R12 — the 47 kΩ pull-down class; "
         "shunt-leg and gate resistors load nothing in reset state "
-        "(branches absent, FETs off)"
+        "(branches absent, FETs off). The measurement tile's §12 chain: "
+        "the 82 mΩ shunt drops ≤ 4.1 mV at the 50 mA tile ceiling — "
+        "inside the FET's existing spend at every current (§12) — the "
+        "amp's ≤ 45 µA/pin input bias is 1 %-class against the 4 mA "
+        "idle floor, and the amp + ADC quiescent (~3.1 mA) rides the "
+        "always rail, invisible to the tile's nodes"
     ),
     TAP_CAPACITANCE: (
         "instrumented-ci.md §9 R6 — Rar x 10 pF = 4.7 ns vs §2's "
         "≥ 70 ns slice margin; the O1/O2 observe taps and the M1/M2 "
         "tree stubs are the same stub class (the register's "
         "observe/tree rows are a §9 gap, closing with the layout "
-        "card); stub length is the §7 layout checker's short-stub "
+        "card); the P1-P3 SPI stubs resolve onto the always rail by "
+        "provenance — pF-class stubs on 3V3 perturb nothing; stub "
+        "length is the §7 layout checker's short-stub "
         "contract"
     ),
 }

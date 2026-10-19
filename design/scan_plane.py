@@ -12,10 +12,11 @@ transform handles (`design/ci_instrumentation.py`).
 The §4 POR discipline in capture form: one shared 47 kΩ pull-up on
 /OE, and a 47 kΩ pull-down on every control line — except the FET-gate
 lines (`PWR`, `BTN_*`), whose transform-side gate pull-downs double as
-their lines' (instrumented-ci.md §7's closing note): 70 switch-select
-pull-downs in the plane, 16 gate pull-downs in the transforms, 86
-control bits total. The reset state this constructs — all-zeros — is
-the equivalence proof's `reset_levels` input.
+their lines' (instrumented-ci.md §7's closing note): 63 switch-select
+pull-downs in the plane, 16 gate pull-downs in the transforms, 79
+control bits total (the measurement tile's slice drives only `PWR` —
+instrumented-ci.md §12). The reset state this constructs — all-zeros —
+is the equivalence proof's `reset_levels` input.
 
 The §5 SWIO/debug trees: two 8:1 binary trees of SN74LVC1G3157 ganged
 to the SWIO_A2..A0 select bits (bit weight = node address, one bit per
@@ -40,6 +41,7 @@ from typing import TYPE_CHECKING
 
 from design.bins import C0603, R0603
 from design.ci_parts import Sn74hc165, Sn74hc595
+from design.ci_tiles import MEASUREMENT_TILE
 from design.phy_frontend import Sn74lvc1g3157
 from oparroy.dsl import (
     Circuit,
@@ -91,6 +93,16 @@ AUX1_BITS = (
 
 #: AUX2: input tiles 5/7 overrides; bits 6/7 are the §1 spare pair.
 AUX2_BITS = ("pot_sel5", "btn_a5", "btn_b5", "pot_sel7", "btn_a7", "btn_b7")
+
+
+def tile_bits(tile: int) -> tuple[str, ...]:
+    """One tile's control byte: F1-F8's bits, or PWR alone on the measurement tile.
+
+    The measurement tile (instrumented-ci.md §12) drops the injector
+    and keep-alive transforms, so its 595 slice drives `pwr` only; the
+    stage's seven remaining outputs are spares, filled like AUX2's.
+    """
+    return ("pwr",) if tile == MEASUREMENT_TILE else TILE_BITS
 
 
 def _gate_pulldown_covers(bit: str) -> bool:
@@ -197,7 +209,7 @@ class ScanPlane(Subcircuit):
         ):
             control.append((stage, [circuit.port(bit) for bit in bits]))
         control.extend(
-            (f"T{tile}", [circuit.port(f"t{tile}_{bit}") for bit in TILE_BITS])
+            (f"T{tile}", [circuit.port(f"t{tile}_{bit}") for bit in tile_bits(tile)])
             for tile in range(8)
         )
 

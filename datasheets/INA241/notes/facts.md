@@ -5,8 +5,10 @@ zero-drift current-sense amplifier with enhanced PWM rejection
 (DS §3). Target orderable: **INA241A5IDDFR** — SOT-23-8 (DDF),
 −40…+125 °C, tape-and-reel, marking code 2PL3 (DS §11 packaging
 table; LCSC C7425524). Role: high-side shunt amp in the CI board
-tile power-measurement chain — 82 mΩ shunt on the 3.3 V tile rail,
-unidirectional (REF at GND), output feeds an external SPI ADC
+tile power-measurement chain — 82 mΩ shunt on the 3.3 V tile rail
+downstream of the power-cut FET, bidirectional with REF biased
+mid-rail (REF1 → VS, REF2 → GND) so the cut-state clamp back-feed
+reads as a negative current, output feeds an external SPI ADC
 (docs/instrumented-ci.md §12).
 
 Source (canonical PDF in `datasheets/INA241/`):
@@ -82,13 +84,15 @@ Table 5-1). Cross-check target: KiCad symbol
   (DS §7.4.1 Equation 1). No operational difference between REF1
   and REF2.
 - Reference input range: 0 V to VS (DS §6.5).
-- **Unidirectional, ground-referenced (the tile chain's config):**
-  REF1 and REF2 tied together to GND; output sits at the swing-to-GND
-  floor (8 mV typ / 20 mV max) at zero current and rises toward VS
-  with positive VSENSE (DS §7.4.2.1). Input polarity must be
-  positive to lift the output off ground (DS §7.4.2).
-- Mid-supply bidirectional: REF1 to VS, REF2 to GND → output at
-  VS/2 at zero current, ratiometric to the supply (DS §7.4.3.2);
+- **Unidirectional, ground-referenced:** REF1 and REF2 tied together
+  to GND; output sits at the swing-to-GND floor (8 mV typ / 20 mV max)
+  at zero current and rises toward VS with positive VSENSE (DS
+  §7.4.2.1). Input polarity must be positive to lift the output off
+  ground (DS §7.4.2) — rejected for the tile chain: it cannot read
+  the cut-state reverse flow.
+- **Mid-supply bidirectional (the tile chain's config):** REF1 to VS,
+  REF2 to GND → output at VS/2 at zero current, ratiometric to the
+  supply (DS §7.4.3.2);
   reference divider accuracy ±0.01% max for A3/A4/A5 (DS §6.5).
 - REF pins are designed to connect **directly to supply, ground, or
   a low-impedance reference**. A resistor-divider reference must be

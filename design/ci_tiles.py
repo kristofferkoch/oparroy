@@ -1,13 +1,16 @@
-"""CI board tile variants: the plain Node plus the §6 demonstrator payload.
+"""CI board tile variants: the plain Node plus the §6/§12 role payloads.
 
-The CI board tiles two Node variants (docs/instrumented-ci.md §6):
-**input tiles** (1, 3, 5, 7) carry the potentiometer and the two
-buttons, **output tiles** (0, 2, 4, 6 — the boundary tile among them)
-carry the buzzer. The payloads bind the pin map's reserved functions
-(``pot`` = PD6, ``button_a`` = PC5, ``button_b`` = PC6, ``buzzer`` =
-PC4; `design/node_pins.py`), wired per §6: the 10 kΩ pot across the
-switched rail, buttons to GND with 10 kΩ pull-ups, both behind the §7
-1 kΩ series resistors, the piezo behind its 470 Ω.
+The CI board tiles three Node variants: **input tiles** (1, 3, 5, 7)
+carry the §6 potentiometer and the two buttons, **output tiles**
+(0, 2, 4 — the boundary tile among them) carry the §6 buzzer, and the
+**measurement tile** (6, ``MEASUREMENT_TILE``) is the plain Node behind
+the §12 power-measurement chain, dropping both the human-I/O payload
+and the F1-F7 injector transforms so its current signature stays the
+standalone node board's. The §6 payloads bind the pin map's reserved
+functions (``pot`` = PD6, ``button_a`` = PC5, ``button_b`` = PC6,
+``buzzer`` = PC4; `design/node_pins.py`), wired per §6: the 10 kΩ pot
+across the switched rail, buttons to GND with 10 kΩ pull-ups, both
+behind the §7 1 kΩ series resistors, the piezo behind its 470 Ω.
 
 The payload is **capture**, not instrumentation: the plain node's
 payload pads sit unwired, and the transform kinds
@@ -26,11 +29,11 @@ wire the tile's ``3V3`` port *pre-split*; the F8 power-cut transform's
 detached pin list moves them onto ``3V3N`` (the pot and pull-ups must
 die with the MCU rail — instrumented-ci.md §3/§6).
 
-Both variants also wire the PD5 ``debug_tx`` pad (unwired on the plain
-node) — the §5 debug tree's leaves land on it (docs/scan-plane.md §5)
-— and inherit ``Node``'s ``connector_faces``: the CI board keeps only
-the boundary tile's upstream face and drops the rest with their TVS
-pairs (instrumented-ci.md §9 R10).
+All three variants also wire the PD5 ``debug_tx`` pad (unwired on the
+plain node) — the §5 debug tree's leaves land on it
+(docs/scan-plane.md §5) — and inherit ``Node``'s ``connector_faces``:
+the CI board keeps only the boundary tile's upstream face and drops
+the rest with their TVS pairs (instrumented-ci.md §9 R10).
 """
 
 from __future__ import annotations
@@ -42,10 +45,20 @@ from design.ch32v003 import Ch32v003f4p6
 from design.ci_parts import Pklcs1212e, Rk09k, Ts1187a
 from design.node import Node
 from design.node_pins import capture as capture_pin_map
-from oparroy.dsl import AlwaysPowered, BackFeed
+from oparroy.dsl import AlwaysPowered, BackFeed, DiesWith
 
 if TYPE_CHECKING:
     from oparroy.dsl import Circuit, Part, Pin
+
+
+#: The ring tile dedicated to the §12 power-measurement chain: an
+#: output tile by position, stripped of the buzzer payload and the
+#: F1-F7 injector/keep-alive transforms so its current signature stays
+#: the standalone node board's. T6 — the output tile closest to the
+#: supervisor (SUP-T7-T6), the shortest SPI run on board copper; T0 is
+#: the boundary tile and untouchable, and sacrificing an input tile
+#: would ripple the AUX stages and the pot-PWM channels.
+MEASUREMENT_TILE = 6
 
 
 #: The §3 clamp-injection bound behind the tile crossing budgets:
@@ -125,6 +138,59 @@ def _declare_tile_crossings(circuit: Circuit) -> None:
     circuit.crossing("txa_drv", AlwaysPowered())
 
 
+def _declare_measurement_crossings(circuit: Circuit) -> None:
+    """Declare the measurement tile's power-domain crossing dispositions.
+
+    The §12 tile drops the F1-F7 transforms, so the F4/F7-created stubs
+    (``RX_B#a``, ``ka#a``) never exist and take no declarations; the
+    ring-traffic and always-powered groups are the shared declaration's
+    (their drivers live on the neighboring tiles, which keep their
+    injectors). The chain adds one new crossing: ``F8_sns`` — the sense
+    net between the power-cut FET's drain and the shunt — carries the
+    always-powered amp's input pins while resistively reaching the
+    switched rail through 82 mΩ, so it dies with the tile: the amp's
+    ≤ 45 µA/pin input bias (datasheets/INA241/notes/facts.md) sinks
+    charge out of the dead domain, never drives it. Forward-referenced
+    like ``RX_B#a`` — the net exists only once F8 lands.
+
+    Without F1's break switch, ``PHY1/txa_sw``'s resistive reach runs
+    through Rat onto the downstream segment wire and into T7's
+    receiver: with T7 power-cut, T6's always-powered bypass switch
+    drives T7's dead MCU clamp through Rat + Rar — the §3 back-feed
+    shape, halved by the doubled series R.
+    """
+    circuit.crossing(
+        "opa_p", ring_back_feed("ring traffic and the injector shunts", 2, "Rar")
+    )
+    circuit.crossing(
+        "opo",
+        ring_back_feed(
+            "ring traffic via the DNP hysteresis leg Rfb (audited as fitted)",
+            2,
+            "Rar + Rfb",
+        ),
+    )
+    circuit.crossing("opa_p_b", ring_back_feed("ring-B traffic", 1, "Rbr"))
+    circuit.crossing("txb_drv", ring_back_feed("ring-B traffic", 1, "Rbt"))
+    circuit.crossing(
+        "PHY1/txa_sw",
+        BackFeed(
+            2.9,
+            "instrumented-ci.md §3/§12 — no F1 break on the measurement "
+            "tile, so its always-powered TX_A drive reaches T7's gated "
+            "MCU clamp through Rat + Rar (940 Ω): ≤ (3.3 - 0.6) V / "
+            "940 Ω ≈ 2.9 mA, inside the ±20 mA injection budget "
+            "(CH32V003 facts T3-1)",
+        ),
+    )
+    circuit.crossing("swio", AlwaysPowered())
+    circuit.crossing("debug_tx", AlwaysPowered())
+    circuit.crossing("sel", AlwaysPowered())
+    circuit.crossing("PHY1/sel_sw", AlwaysPowered())
+    circuit.crossing("txa_drv", AlwaysPowered())
+    circuit.crossing("F8_sns", DiesWith())
+
+
 def _payload_pin(part: Part, function: str) -> Pin:
     """Resolve one payload function's U1 pin through the authoritative pin map."""
     pad = capture_pin_map().assignments[function]
@@ -190,7 +256,7 @@ class InputNode(Node):
 
 
 class OutputNode(Node):
-    """An output tile (0/2/4/6): the Node plus the buzzer payload."""
+    """An output tile (0/2/4): the Node plus the buzzer payload."""
 
     def capture(self, circuit: Circuit) -> None:
         """Build the node, then the §6 buzzer on PC4."""
@@ -204,3 +270,21 @@ class OutputNode(Node):
         circuit.part("RBZ", R0603("470", a=buzzer, b=bz), note="piezo series R (§7)")
         circuit.part("BZ1", Pklcs1212e(pos=bz, neg=gnd), note="demo buzzer")
         circuit.connect(buzzer, _payload_pin(u1, "buzzer"))
+
+
+class MeasurementNode(Node):
+    """The measurement tile (T6): the plain Node behind the §12 power chain.
+
+    No human-I/O payload — the buzzer or pot+buttons would dominate the
+    draw the tile exists to measure — and no F1-F7 transforms (the plan
+    keys it by type): only the F8 rail split + power cut, extended with
+    the shunt/amp/ADC chain (`design/ci_instrumentation.py`), plus the
+    observe and tree taps every tile carries. The bare payload keeps the
+    tile's current signature the standalone node board's own.
+    """
+
+    def capture(self, circuit: Circuit) -> None:
+        """Build the plain node, wire the debug tree's leaf, declare crossings."""
+        super().capture(circuit)
+        _wire_debug_tx(circuit)
+        _declare_measurement_crossings(circuit)

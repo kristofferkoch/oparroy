@@ -30,7 +30,8 @@ Ports (the subcircuit interface):
 Power budget (the prose arithmetic the machine-checked rail-current
 check will replace): 8 tiles at tens of mA each (CH32V003 ~4 mA run,
 status LEDs, PHY bias), the RP2040 at ~25..100 mA, the scan plane
-(10x74HC595 + 2x74HC165, µA static), fault-switch leakage — worst case
+(10x74HC595 + 2x74HC165, µA static), the measurement tile's amp + ADC
+(~3.1 mA typ, instrumented-ci.md §12), fault-switch leakage — worst case
 ≈ 500 mA on 3V3, plus the LDO's own 5..11 mA quiescent. Against USB-C
 baseline sink delivery that is trivially inside the 500 mA USB-2.0
 host floor, and a source advertising 1.5/3 A via Rp leaves it further

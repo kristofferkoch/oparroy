@@ -1,8 +1,8 @@
 """The CI board composition (DESIGN.md §6, docs/instrumented-ci.md).
 
-Eight CI tiles (`design/ci_tiles.py` — output tiles 0/2/4/6, input
-tiles 1/3/5/7 alternating around the ring, tile 0 the boundary tile)
-chained on board-copper segments, plus the power tree
+Eight CI tiles (`design/ci_tiles.py` — input tiles 1/3/5/7, output
+tiles 0/2/4 with tile 0 the boundary tile, tile 6 the §12 measurement
+tile) chained on board-copper segments, plus the power tree
 (`design/ci_power.py`), the RP2040 supervisor (`design/supervisor.py`)
 closing the ring, and — on the instrumented side — the §7 transform
 plan (`design/ci_instrumentation.py`) wired to the scan plane and the
@@ -13,10 +13,11 @@ reset-state equivalence proof
 (`src/oparroy/dsl/equivalence.py`): ``instrumented=False`` is the
 plain reference board — same composition, no transforms, no control
 plane, and the supervisor's instrumentation-facing ports (the four
-boundary taps, the four pot-override PWMs) bound to stub nets. The
-proof accepts exactly those re-bindings: tap pins ride declared tap
-nets, PWM pins ride the escaped substitute sources (absent in reset
-state). ``instrumented=True`` applies the plan between the tiles and
+boundary taps, the four pot-override PWMs, the measurement tile's
+three SPI lines) bound to stub nets. The proof accepts exactly those
+re-bindings: tap pins ride declared tap nets, PWM pins ride the
+escaped substitute sources (absent in reset state).
+``instrumented=True`` applies the plan between the tiles and
 the supervisor so the tap/PWM handles exist when the supervisor's
 ports bind, then wires PLANE/SWIO/DBG to the handles.
 
@@ -50,8 +51,14 @@ from typing import TYPE_CHECKING
 
 from design.ci_instrumentation import ci_transform_plan
 from design.ci_power import CiPower
-from design.ci_tiles import InputNode, OutputNode, ring_back_feed
-from design.scan_plane import TILE_BITS, DebugTree, ScanPlane, SwioTree
+from design.ci_tiles import (
+    MEASUREMENT_TILE,
+    InputNode,
+    MeasurementNode,
+    OutputNode,
+    ring_back_feed,
+)
+from design.scan_plane import DebugTree, ScanPlane, SwioTree, tile_bits
 from design.segment import SegmentConnector
 from design.supervisor import Supervisor
 from oparroy.dsl import (
@@ -92,6 +99,15 @@ SUPERVISOR_TAP_NETS = {
     "tap_tx": "TX_A#b",
     "tap_comp": "opo",
     "tap_led": "led_work",
+}
+
+#: The supervisor's burst-capture SPI ports and the measurement tile's
+#: transform-local nets they drive/sample (instrumented-ci.md §12 —
+#: the P1-P3 taps escape them).
+SUPERVISOR_ADC_NETS = {
+    "adc_sclk": "F8_sclk",
+    "adc_cs": "F8_cs",
+    "adc_sdata": "F8_sdata",
 }
 
 #: The input tiles, carrying the pot/button payload (§6).
@@ -197,7 +213,12 @@ def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
         note="boundary segment connector, supervisor end",
     )
     for index in range(TILE_COUNT):
-        variant = InputNode if index in INPUT_TILES else OutputNode
+        if index == MEASUREMENT_TILE:
+            variant = MeasurementNode
+        elif index in INPUT_TILES:
+            variant = InputNode
+        else:
+            variant = OutputNode
         # R10: copper-internal segments drop the connectors and their
         # TVS pairs; the boundary tile keeps the cable-facing face.
         faces = ("upstream",) if index == 0 else ()
@@ -256,6 +277,12 @@ def _supervisor_bindings(board: Circuit, handles: Handles | None) -> dict[str, N
     for port, net in SUPERVISOR_TAP_NETS.items():
         bindings[port] = (
             board.net(port) if handles is None else handles[TileNet(("T0",), net)]
+        )
+    for port, net in SUPERVISOR_ADC_NETS.items():
+        bindings[port] = (
+            board.net(port)
+            if handles is None
+            else handles[TileNet((f"T{MEASUREMENT_TILE}",), net)]
         )
     for tile in INPUT_TILES:
         port = f"pot_pwm{tile}"
@@ -323,7 +350,7 @@ def _plane_bindings(
             bindings[f"{bit}{tile}"] = handles[TileNet((f"T{tile}",), bit.upper())]
     for index in range(TILE_COUNT):
         path = (f"T{index}",)
-        for bit in TILE_BITS:
+        for bit in tile_bits(index):
             bindings[f"t{index}_{bit}"] = handles[TileNet(path, bit.upper())]
         bindings[f"t{index}_sel"] = handles[TileNet(path, "sel")]
         bindings[f"t{index}_3v3n"] = handles[TileNet(path, "3V3N")]

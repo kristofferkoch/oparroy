@@ -40,6 +40,9 @@ Ports (the subcircuit interface):
   substituted for the pot wiper through the tile's POT_SEL mux
   (docs/instrumented-ci.md §6). The RC filter sits at the tile; the
   board composition wires these to the escaped ``POT_PWM`` sources.
+- ``adc_sclk``/``adc_cs``/``adc_sdata`` — the §12 measurement tile's
+  ADC SPI: the PIO burst-capture channel reading the tile-current
+  chain (docs/instrumented-ci.md §12).
 - ``TX_A``/``RX_B`` — the ring-closure **originator port** toward
   tile 0 (DESIGN.md §2/§3: the supervisor is the only frame
   originator, on both counter-rotating rings), and ``RX_A``/``TX_B``
@@ -57,14 +60,16 @@ Ports (the subcircuit interface):
   itself lands with the board composition.
 
 The GPIO binding is exactly ``design/supervisor_pins.py``'s pin map:
-gpio4..7 → the ring wires (originator pair, then drain pair),
+gpio0..2 → the measurement tile's ADC SPI (the SPI0-capable pads, the
+hardware fallback to the PIO plan), gpio4..7 → the ring wires
+(originator pair, then drain pair),
 gpio8..11 → the taps, gpio12 → ``swio``, gpio13 → ``dbg_rx``,
 gpio14..17 → the pot-override PWMs, gpio18..22 → the scan chain
-(SRCLK/SDO/SDI on the SPI0-capable pads). gpio0..3 stay spare — the
+(SRCLK/SDO/SDI on the SPI0-capable pads). gpio3 stays spare — the
 tail of the reclaimed debug-transport reservation (DESIGN.md §6
-settled the transport at one GPIO) — and gpio23..29 with them.
+settled the transport at one GPIO) — and gpio23..29 with it.
 
-Expected unconnected-pin warnings: the eleven spare GPIOs (GPIO0..3,
+Expected unconnected-pin warnings: the eight spare GPIOs (GPIO3,
 GPIO23..29) and SWCLK/SWDIO, all on U1. SWD stays unwired on the board
 — the §6 flash channel is PIO SWIO through the 3157 tree; the pads
 report by name so nothing else hides among them.
@@ -256,6 +261,7 @@ class Supervisor(Subcircuit):
         commit = circuit.port("commit")
         oe_n = circuit.port("oe_n")
         dbg_rx = circuit.port("dbg_rx")
+        adc = {name: circuit.port(f"adc_{name}") for name in ("sclk", "cs", "sdata")}
         pot_pwm = {tile: circuit.port(f"pot_pwm{tile}") for tile in (1, 3, 5, 7)}
         ring_txa, ring_rxb, ring_rxa, ring_txb = _ring_ports(circuit)
 
@@ -291,6 +297,9 @@ class Supervisor(Subcircuit):
                 vreg_vout=dvdd,
                 usb_vdd=v3v3,
                 adc_avdd=v3v3,
+                gpio0=adc["sdata"],
+                gpio1=adc["cs"],
+                gpio2=adc["sclk"],
                 gpio4=ring_txa,
                 gpio5=ring_rxb,
                 gpio6=ring_rxa,
