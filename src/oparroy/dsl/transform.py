@@ -433,8 +433,11 @@ class _TileTransforms:
         )
         detached.provenance = Provenance(label, base.name)
         if switched_domain:
+            assert base.power_domain is not None  # noqa: S101 — checked above
             detached.power_domain = PowerDomain(
-                PowerDomainKind.SWITCHED, parent=base.name
+                PowerDomainKind.SWITCHED,
+                parent=base.name,
+                voltage=base.power_domain.voltage,
             )
         if base.is_port:
             # The port keeps name, flag, and ranges as the #b side —

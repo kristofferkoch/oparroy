@@ -7,6 +7,15 @@ unsourcable irrational number: the capture states a :class:`ValueRange`
 stocked :class:`ValueBin` — the E-series grid a parts-DB record
 declares. Plain ``str`` literals stay accepted everywhere a spec is.
 
+A value that depends on the circuit — the LED's series resistor, sized
+from the rail it actually runs on — is a :class:`Generator`: a
+capture-declared function the solve pass evaluates over the finished
+IR, with a :class:`SolveContext` view of the part, its capture, and the
+declared rail voltages (``Circuit.power_domain(..., voltage=...)``).
+The returned literal or :class:`ValueRange` resolves like any authored
+spec. Construction stays plain Python: the function runs as a pass
+between capture and check, never interleaved with construction.
+
 SI literals follow the house style: resistors use ``R``/``k``/``M``
 with the letter as the decimal point (``R082`` = 0.082 Ω, ``0R`` = 0,
 ``4k7``, ``10k``) and plain digits below 1 kΩ (``470``); capacitors use
@@ -21,9 +30,14 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Protocol
 
 from oparroy.dsl.ir import DefinitionError
+
+if TYPE_CHECKING:
+    from oparroy.dsl.ir import Circuit, Net, Part
 
 #: IEC 60063 preferred numbers, one decade each, for the E-series the
 #: stocked bins draw from.
@@ -318,6 +332,102 @@ class ValueRange:
         if self.family is not None:
             return format_value(value, family=self.family)
         return f"{value:.6g}"
+
+
+class SolveContext(Protocol):
+    """The finished-IR view a :class:`Generator` computes from.
+
+    ``solve`` supplies one per evaluation, scoped to the part's owning
+    capture. ``path``/``part`` are the generating part, ``circuit`` is
+    the capture that holds it, and ``rail_voltage`` looks up a declared
+    rail voltage (``Circuit.power_domain(..., voltage=...)``), following
+    instance bindings outward first: the supply a parent actually binds
+    is the actual rail, and the rail's own declaration is the
+    standalone fallback. The circuit is a read-only view by contract —
+    a generator that mutates it breaks the pass's determinism.
+    """
+
+    @property
+    def path(self) -> str:
+        """The generating part's hierarchical path."""
+        ...
+
+    @property
+    def part(self) -> Part:
+        """The part being sized."""
+        ...
+
+    @property
+    def circuit(self) -> Circuit:
+        """The capture that owns the part — a read-only view."""
+        ...
+
+    def rail_voltage(self, net: Net | str) -> ValueRange | None:
+        """Return ``net``'s declared rail voltage, or None when undeclared.
+
+        A string is a net name in the part's own capture. Following the
+        binding chain outward first means a block sizes from the rail
+        its parent supplies, not from the voltage it assumes standalone.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class Generator:
+    """A context-computed value spec: a capture-declared function.
+
+    ``fn`` receives a :class:`SolveContext` built over the finished IR
+    and returns a literal or a :class:`ValueRange`; the solve pass
+    evaluates it in place before bin resolution, so a generated
+    ``ValueRange`` reports its achieved error against the spec like any
+    authored one. The function runs as a pass between capture and
+    check, never interleaved with construction (DESIGN.md §7): a
+    generator reads circuit context, it does not wire parts. A
+    generator names nets in its authored capture; ``flatten`` remaps
+    that name map onto the flat nets, so it still resolves after the
+    instrumentation pass flattens a tile's subcircuits.
+    """
+
+    fn: Callable[[SolveContext], str | ValueRange]
+    #: The authored capture's name → net map (frozen at the moment a
+    #: subcircuit folds into its parent), so a name-based generator
+    #: still resolves its local nets after flattening. Pass machinery
+    #: attaches it; capture code leaves it None.
+    capture_nets: Mapping[str, Net] | None = field(
+        default=None, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        if not callable(self.fn):
+            msg = f"a Generator needs a callable, got {self.fn!r}"
+            raise DefinitionError(msg)
+
+    def remapped(
+        self,
+        net_map: Mapping[Net, Net],
+        authored_nets: Mapping[str, Net],
+    ) -> Generator:
+        """Return a copy whose capture nets follow a flatten.
+
+        ``net_map`` is flatten's old-net → flat-net table; ``authored``
+        is the capture being flattened's name → net map, used when this
+        generator was authored there. A generator from a deeper capture
+        keeps its deepest authored map, remapped into the new flat
+        circuit. Pass machinery only.
+        """
+        source = self.capture_nets if self.capture_nets is not None else authored_nets
+        return replace(
+            self,
+            capture_nets={name: net_map.get(net, net) for name, net in source.items()},
+        )
+
+    def __call__(self, context: SolveContext) -> str | ValueRange:
+        """Return the wrapped function's value for ``context``."""
+        return self.fn(context)
+
+    def __str__(self) -> str:
+        name = getattr(self.fn, "__name__", None) or type(self.fn).__name__
+        return f"<generator {name}>"
 
 
 @dataclass(frozen=True)

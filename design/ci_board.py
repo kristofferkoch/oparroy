@@ -70,6 +70,7 @@ from oparroy.dsl import (
     PowerDomainKind,
     SymbolTable,
     TileNet,
+    ValueRange,
     annotate,
     annotation_from_pcb,
     apply_annotation,
@@ -155,9 +156,15 @@ def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
     }
     # The board rails' domains (instrumented-ci.md §3): 3V3/5V/UNREG are
     # always-on, GND the return; F8 derives each tile's switched 3V3N
-    # from 3V3 (design/ci_instrumentation.py).
-    for name in ("unreg", "v3v3"):
-        board.power_domain(rails[name], kind=PowerDomainKind.ALWAYS)
+    # from 3V3 (design/ci_instrumentation.py). 3V3 also carries the
+    # LDO's regulation window — the actual supply value generators in
+    # the tiles size against.
+    board.power_domain(rails["unreg"], kind=PowerDomainKind.ALWAYS)
+    board.power_domain(
+        rails["v3v3"],
+        kind=PowerDomainKind.ALWAYS,
+        voltage=ValueRange.around(3.3, 0.03),
+    )
     board.power_domain(rails["gnd"], kind=PowerDomainKind.GROUND)
     v5 = board.net("5V")
     board.power_domain(v5, kind=PowerDomainKind.ALWAYS)

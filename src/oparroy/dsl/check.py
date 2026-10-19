@@ -9,9 +9,9 @@ range must cover the connected source's output range) and the
 power-domain crossing audit (every net touching two domains, one
 switched, must carry a declared disposition — ``Circuit.crossing``),
 with waivers as explicit, path-addressed capture data. It also guards
-the pipeline order: an unresolved value spec (a ``ValueRange`` or a
-``DividerHalf``) surviving to check is an error — the solve pass
-(``oparroy.dsl.solve``) runs first.
+the pipeline order: an unresolved value spec (a ``ValueRange``,
+``DividerHalf``, or ``Generator``) surviving to check is an error — the
+solve pass (``oparroy.dsl.solve``) runs first.
 """
 
 import fnmatch

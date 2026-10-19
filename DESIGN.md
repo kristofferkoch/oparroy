@@ -1006,9 +1006,22 @@ DSL shape (from the initial design interrogation):
   siblings in one capture): the solve pass resolves the pair
   jointly, meeting the ratio, Thévenin output-impedance, and
   standing-current constraints with one bin pair and reporting all
-  three achieved figures. `check` and the netlist emitters reject a
-  surviving spec, so the pipeline order is enforced, not conventional.
-  Context-computed values (generators) remain open work (KANBAN.md).
+  three achieved figures. A value that depends on the circuit — the
+  LED's series resistor, sized from the rail it runs on — is a
+  `Generator`: a capture-declared function `solve` evaluates over the
+  finished IR with a `SolveContext` (the generating part, its owning
+  capture, and `rail_voltage(net)`). Rail voltages are declared with
+  `Circuit.power_domain(..., voltage=...)`; `rail_voltage` follows
+  instance bindings outward first, so a block sizes from the supply its
+  parent actually binds, and falls back to its own declared rail
+  standalone. The returned literal or `ValueRange` replaces the
+  generator in place and resolves like any authored spec, reporting its
+  achieved error the same way. Construction stays plain Python —
+  generators run as a pass over the finished IR, never interleaved with
+  construction (PolymorphicBlocks' `IntLike` interleaving is the
+  anti-pattern). `check` and the netlist emitters reject a surviving
+  spec — generator included — so the pipeline order is enforced, not
+  conventional.
 - **Captures live in a new `design/` tree.** `circuits/` keeps benches
   and device models until the bench DUTs are ported and the DUT `.cir`
   files retire.
@@ -1181,9 +1194,10 @@ a unified diff; the data-as-code file stays hand-authored and the
 script never rewrites it, and the feed never replaces a newer
 hand-verified snapshot. Stock numbers are as-of-dated
 snapshots with provenance, never live data — re-query JLCPCB before
-ordering. Value specs (`ValueRange` and `DividerSpec`) resolve against
-these bins in the solve pass between capture and check (§7);
-context-computed values (generators) remain open work (KANBAN.md).
+ordering. Value specs (`ValueRange`, `DividerSpec`, and
+`Generator`) resolve against these bins in the solve pass between
+capture and check (§7), with generators computing their spec from
+circuit context first.
 
 Firmware pin maps: `pinmap.py` — pins are requested by function
 (`gpio.request("keepalive")`), pads bind late as

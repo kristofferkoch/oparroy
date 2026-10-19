@@ -70,6 +70,7 @@ from oparroy.dsl import (
     Subcircuit,
     SymbolTable,
     TypedPart,
+    ValueRange,
     check,
     emit_netlist,
     raise_on_errors,
@@ -172,7 +173,11 @@ class CiPower(Subcircuit):
         v3v3 = circuit.port("3V3", source=Limits(voltage=Interval(3.2, 3.4)))
         gnd = circuit.port("GND")
         circuit.power_domain(v5, kind=PowerDomainKind.ALWAYS)
-        circuit.power_domain(v3v3, kind=PowerDomainKind.ALWAYS)
+        circuit.power_domain(
+            v3v3,
+            kind=PowerDomainKind.ALWAYS,
+            voltage=ValueRange.around(3.3, 0.03),
+        )
         circuit.power_domain(gnd, kind=PowerDomainKind.GROUND)
         usb_dp = circuit.port(
             "USB_DP",

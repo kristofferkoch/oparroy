@@ -5,9 +5,10 @@ and autocomplete cover declaration and connection alike; one-off parts
 stay string-declared (``Circuit.part(symbol=...)``). Pin names are
 keyword-only parameters in the class signature — construction carries
 the wiring, ``Circuit.part`` places and connects in one step, and a
-missing or misspelled pin fails at construction. Value may be
-positional only for unpolarized two-pin parts (``Resistor``,
-``Capacitor``); anything direction-sensitive is keyword-only
+missing or misspelled pin fails at construction. A value is a literal
+string, a ``ValueRange``, a ``DividerHalf``, or a ``Generator``; it may
+be positional only for unpolarized two-pin parts (``Resistor``,
+``Capacitor``), and anything direction-sensitive is keyword-only
 throughout. Classes accrete as captures need them (YAGNI — no
 speculative zoo). Footprints default per class — subclass per
 footprint bin (``class R0603(Resistor)``) — overridable per instance.
@@ -36,7 +37,7 @@ from oparroy.dsl.ir import Bundle, DefinitionError, Residuals, SocketSpec
 
 if TYPE_CHECKING:
     from oparroy.dsl.ir import Net
-    from oparroy.dsl.values import DividerHalf, ValueBin, ValueRange
+    from oparroy.dsl.values import DividerHalf, Generator, ValueBin, ValueRange
 
 
 class TypedPart:
@@ -72,7 +73,7 @@ class TypedPart:
 
     def __init__(
         self,
-        value: str | ValueRange | DividerHalf | None,
+        value: str | ValueRange | DividerHalf | Generator | None,
         footprint: str | None,
         nets: dict[str, Net | str],
     ) -> None:
@@ -105,7 +106,7 @@ class Resistor(TypedPart):
 
     def __init__(
         self,
-        value: str | ValueRange | DividerHalf,
+        value: str | ValueRange | DividerHalf | Generator,
         *,
         a: Net | str,
         b: Net | str,
@@ -122,7 +123,7 @@ class Capacitor(TypedPart):
 
     def __init__(
         self,
-        value: str | ValueRange,
+        value: str | ValueRange | Generator,
         *,
         a: Net | str,
         b: Net | str,

@@ -116,6 +116,13 @@ class StubSymbols:
                 make_symbol("C", passive, ("C_*",), lib="Device"),
                 make_symbol("L", passive, ("L_*",), lib="Device"),
                 make_symbol(
+                    "LED",
+                    passive,
+                    ("LED_*",),
+                    lib="Device",
+                    pin_names={"1": "K", "2": "A"},
+                ),
+                make_symbol(
                     "D_TVS",
                     passive,
                     ("D_*",),

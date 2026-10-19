@@ -29,6 +29,7 @@ from oparroy.dsl import (
     TransformPart,
     TypedPart,
     UnknownSymbolError,
+    ValueRange,
     apply_transforms,
     check,
     raise_on_errors,
@@ -374,6 +375,40 @@ def test_power_domain_declaration_is_validated(symbols: DomainSymbols) -> None:
         board.power_domain(board.net("5V"), kind="always")  # ty: ignore[invalid-argument-type]
 
 
+def test_power_domain_carries_the_rail_voltage(symbols: DomainSymbols) -> None:
+    board = Circuit("board", symbols)
+    net = board.net("3V3")
+    voltage = ValueRange.around(3.3, 0.03)
+    domain = board.power_domain(
+        net,
+        kind=PowerDomainKind.ALWAYS,
+        voltage=voltage,
+    )
+    assert (
+        net.power_domain
+        == domain
+        == PowerDomain(PowerDomainKind.ALWAYS, voltage=voltage)
+    )
+
+
+def test_rail_voltage_must_be_a_dimensionless_value_range(
+    symbols: DomainSymbols,
+) -> None:
+    board = Circuit("board", symbols)
+    with pytest.raises(DefinitionError, match="must be a ValueRange"):
+        board.power_domain(
+            board.net("a"),
+            kind=PowerDomainKind.ALWAYS,
+            voltage=3.3,  # ty: ignore[invalid-argument-type]
+        )
+    with pytest.raises(DefinitionError, match="dimensionless"):
+        board.power_domain(
+            board.net("b"),
+            kind=PowerDomainKind.ALWAYS,
+            voltage=ValueRange.around("10k", 0.05, family="resistor"),
+        )
+
+
 def test_stale_crossing_declaration_warns(symbols: DomainSymbols) -> None:
     board = Circuit("board", symbols)
     rails = _rails(board, "3V3")
@@ -551,8 +586,14 @@ class StubSwitch(TypedPart):
 class RailTile(Subcircuit):
     """A tile whose internal 3V3 rail powers two receivers; F8 splits U1 off."""
 
-    def __init__(self, *, declare: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        declare: bool = True,
+        voltage: ValueRange | None = None,
+    ) -> None:
         self._declare = declare
+        self._voltage = voltage
 
     def capture(self, circuit: Circuit) -> None:
         """Build the tile: two receivers on the internal 3V3 rail."""
@@ -560,7 +601,11 @@ class RailTile(Subcircuit):
         sig = circuit.port("SIG")
         rail = circuit.net("3V3")
         if self._declare:
-            circuit.power_domain(rail, kind=PowerDomainKind.ALWAYS)
+            circuit.power_domain(
+                rail,
+                kind=PowerDomainKind.ALWAYS,
+                voltage=self._voltage,
+            )
         for ref in ("U1", "U2"):
             _receiver(circuit, ref, rail, gnd, sig)
 
@@ -591,6 +636,16 @@ def test_transform_tags_the_switched_domain(symbols: DomainSymbols) -> None:
     assert tile.nets["3V3N"].power_domain == PowerDomain(
         PowerDomainKind.SWITCHED, parent="3V3"
     )
+
+
+def test_transform_inherits_the_rail_voltage(symbols: DomainSymbols) -> None:
+    voltage = ValueRange.around(3.3, 0.03)
+    board = _rail_board(symbols, RailTile(voltage=voltage))
+    apply_transforms(board, [PerTile(RailTile, (_f8(switched_domain=True),))])
+    tile = board.instances["T0"].circuit
+    domain = tile.nets["3V3N"].power_domain
+    assert domain is not None
+    assert domain.voltage == voltage
 
 
 def test_transform_requires_an_always_base(symbols: DomainSymbols) -> None:

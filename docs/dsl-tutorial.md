@@ -15,8 +15,10 @@ The pipeline, in the order a design flows through it:
 1. **Footprint assignment** — per-instance overrides over the class
    defaults.
 1. **Value resolution** — `ValueRange` specs on parts resolve to
-   stocked literals from the parts DB's bins (`solve()`); literal
-   values pass through untouched.
+   stocked literals from the parts DB's bins (`solve()`); a `Generator`
+   computes its spec first from circuit context (an LED's series
+   resistor sizes from its rail's declared voltage); literal values
+   pass through untouched.
 1. **Check** — one validation pass, findings batched as `Issue`s.
 1. **Annotation** — capture paths mapped to refdes, and back from
    pcbnew.

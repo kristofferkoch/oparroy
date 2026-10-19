@@ -57,19 +57,6 @@ ______________________________________________________________________
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
   **Blocked by:** — · **Unblocks:** T12, T15
-- **T23 — DSL parametric value resolution: context-computed
-  generators.** The core and ratio-spec slices landed (DESIGN.md §7):
-  `ValueRange` specs on `Part.value`, E-series `ValueBin`s on
-  parts-DB records, the solve pass between capture and check with
-  achieved-error reporting, and `DividerSpec`/`DividerHalf` — a
-  divider ratio met by any pair from a bin, with Thévenin-impedance and
-  standing-current constraints, reported per pick. Remaining:
-  **generators** (PolymorphicBlocks steal): a subcircuit computes its
-  own part values from context — the LED sizes its resistor from the
-  actual rail voltage. Solving stays a pass over the finished IR, never
-  tangled into construction: plain-Python capture semantics hold (PB's
-  `IntLike` interleaving is the anti-pattern). **Blocked by:** — ·
-  **Unblocks:** —
 - **T22b — Node board fab.** *Shape: chore — needs a human.* Split
   from T22: everything past the settled design. BAT54S verified
   2026-10-04: KEXIN C369929, Extended tier, 1,181 in stock at
