@@ -16,13 +16,17 @@ from oparroy.dsl import (
     DefinitionError,
     DividerResolution,
     DividerSpec,
+    Generator,
+    GeneratorEvaluation,
     InsertSeries,
     PartRecord,
     PartsDb,
     PerInstance,
+    PowerDomainKind,
     Resistor,
     Resolution,
     Severity,
+    SolveContext,
     TransformPart,
     ValueBin,
     ValueRange,
@@ -513,3 +517,237 @@ def test_unsolved_divider_fails_netlist_emit(symbols: StubSymbols) -> None:
     c = divider_circuit(symbols)
     with pytest.raises(DefinitionError, match="run solve"):
         emit_netlist(c)
+
+
+RAIL_3V3 = ValueRange.around(3.3, 0.03)
+
+
+def from_rail(context: SolveContext) -> ValueRange:
+    """Generate 1 kΩ per rail volt (3.3 V → 3k3) for the rail tests."""
+    declared = context.rail_voltage("rail")
+    if declared is None:
+        raise DefinitionError("rail 'rail' has no declared voltage")
+    assert declared.nominal is not None
+    return ValueRange.around(declared.nominal / 1e-3, 0.05, family="resistor")
+
+
+def rail_circuit(symbols: StubSymbols, *, voltage: bool = True) -> Circuit:
+    """Build a one-resistor circuit whose part is a generator."""
+    c = Circuit("test", symbols)
+    rail = c.net("rail")
+    out = c.net("out")
+    kind = PowerDomainKind.ALWAYS
+    if voltage:
+        c.power_domain(rail, kind=kind, voltage=RAIL_3V3)
+    else:
+        c.power_domain(rail, kind=kind)
+    c.part("R1", RBin(Generator(from_rail), a=rail, b=out))
+    return c
+
+
+def test_generator_sizes_from_the_declared_rail_voltage(
+    symbols: StubSymbols,
+) -> None:
+    c = rail_circuit(symbols)
+    report = solve(c)
+    assert report.issues == []
+    assert c.parts["R1"].value == "3k3"
+    (evaluation,) = report.evaluations
+    assert isinstance(evaluation, GeneratorEvaluation)
+    assert evaluation.path == "R1"
+    assert isinstance(evaluation.produced, ValueRange)
+    (resolution,) = report.resolutions
+    assert isinstance(resolution, Resolution)
+    assert resolution.chosen == pytest.approx(3_300.0)
+    lines = str(report).splitlines()
+    assert lines[0] == "R1: <generator from_rail> → 3k3 ±5%"
+    assert lines[1] == "R1: 3k3 ±5% → 3k3 (achieved +0.0%)"
+
+
+def test_generator_without_a_rail_voltage_is_an_error(symbols: StubSymbols) -> None:
+    c = rail_circuit(symbols, voltage=False)
+    report = solve(c)
+    (issue,) = report.issues
+    assert issue.severity is Severity.ERROR
+    assert "has no declared voltage" in issue.message
+    assert report.evaluations == []
+    assert isinstance(c.parts["R1"].value, Generator)
+
+
+def test_generator_naming_an_unknown_net_is_an_error(symbols: StubSymbols) -> None:
+    # The context's lookup is the guard: a typo is a path-named solve
+    # issue, not a KeyError escaping the pass.
+    def wrong_net(context: SolveContext) -> ValueRange:
+        assert context.rail_voltage("nope") is not None
+        return ValueRange.around("1k", 0.05, family="resistor")
+
+    c = rail_circuit(symbols)
+    c.parts["R1"].value = Generator(wrong_net)
+    report = solve(c)
+    (issue,) = report.issues
+    assert "net 'nope' is not in capture" in issue.message
+    assert issue.message.startswith("R1: ")
+
+
+def test_generator_may_return_a_literal(symbols: StubSymbols) -> None:
+    def fixed(_context: SolveContext) -> str:
+        return "470"
+
+    c = rail_circuit(symbols)
+    c.parts["R1"].value = Generator(fixed)
+    report = solve(c)
+    assert report.issues == []
+    assert c.parts["R1"].value == "470"
+    (evaluation,) = report.evaluations
+    assert evaluation.produced == "470"
+    assert report.resolutions == []
+
+
+def test_generator_returning_a_non_value_is_an_error(symbols: StubSymbols) -> None:
+    def broken(_context: SolveContext) -> object:
+        return object()
+
+    c = rail_circuit(symbols)
+    c.parts["R1"].value = Generator(broken)  # ty: ignore[invalid-argument-type]
+    report = solve(c)
+    (issue,) = report.issues
+    assert "returns a value literal or a ValueRange" in issue.message
+    assert isinstance(c.parts["R1"].value, Generator)
+
+
+def local_rail_child(circuit: Circuit) -> None:
+    """Capture a child whose rail declares a local 3.3 V fallback."""
+    rail = circuit.port("rail")
+    out = circuit.net("out")
+    circuit.power_domain(rail, kind=PowerDomainKind.ALWAYS, voltage=RAIL_3V3)
+    circuit.part("R1", RBin(Generator(from_rail), a=rail, b=out))
+
+
+def test_generator_follows_the_outermost_bound_rail(symbols: StubSymbols) -> None:
+    # The child's local declaration is the standalone fallback; the rail
+    # its parent binds (5 V) is the actual supply.
+    board = Circuit("board", symbols)
+    rail = board.net("rail")
+    board.power_domain(
+        rail,
+        kind=PowerDomainKind.ALWAYS,
+        voltage=ValueRange.around(5.0, 0.01),
+    )
+    board.instance("T1", local_rail_child, rail=rail)
+    report = solve(board)
+    assert report.issues == []
+    assert board.instances["T1"].circuit.parts["R1"].value == "5k1"
+    (resolution,) = report.resolutions
+    assert isinstance(resolution, Resolution)
+    assert resolution.path == "T1/R1"
+    assert resolution.chosen == pytest.approx(5_100.0)
+
+
+def test_generator_falls_back_to_the_local_rail(symbols: StubSymbols) -> None:
+    # An undeclared parent rail is no data, so the block's own
+    # declaration sizes the part — the standalone case.
+    board = Circuit("board", symbols)
+    rail = board.net("rail")
+    board.instance("T1", local_rail_child, rail=rail)
+    report = solve(board)
+    assert report.issues == []
+    assert board.instances["T1"].circuit.parts["R1"].value == "3k3"
+
+
+def test_generator_output_consolidates_like_an_authored_spec(
+    symbols: StubSymbols,
+) -> None:
+    # Generators evaluate before literals are collected, so a generated
+    # 4.9k ±5% tie breaks toward the authored 5k1 already in use.
+    def tie(_context: SolveContext) -> ValueRange:
+        return ValueRange.around(TIE_TARGET, 0.05, family="resistor")
+
+    c = rail_circuit(symbols)
+    c.parts["R1"].value = Generator(tie)
+    a, b = c.net("a"), c.net("b")
+    c.part("R2", RBin("5k1", a=a, b=b))
+    report = solve(c)
+    assert report.issues == []
+    assert c.parts["R1"].value == "5k1"
+
+
+def test_unsolved_generator_fails_check_and_emit(symbols: StubSymbols) -> None:
+    c = rail_circuit(symbols)
+    messages = [issue.message for issue in check(c) if issue.severity is Severity.ERROR]
+    assert any("unresolved value spec" in message for message in messages)
+    with pytest.raises(DefinitionError, match="run solve"):
+        emit_netlist(c)
+
+
+def test_generator_walks_the_full_binding_chain(symbols: StubSymbols) -> None:
+    # board 5 V → tile rail → LED block rail: the outer supply wins even
+    # through an intermediate capture that declares nothing.
+    def block(circuit: Circuit) -> None:
+        rail = circuit.port("rail")
+        out = circuit.net("out")
+        circuit.part("R1", RBin(Generator(from_rail), a=rail, b=out))
+
+    def tile(circuit: Circuit) -> None:
+        rail = circuit.port("rail")
+        circuit.instance("LED", block, rail=rail)
+
+    board = Circuit("board", symbols)
+    rail = board.net("rail")
+    board.power_domain(
+        rail,
+        kind=PowerDomainKind.ALWAYS,
+        voltage=ValueRange.around(5.0, 0.01),
+    )
+    board.instance("T1", tile, rail=rail)
+    report = solve(board)
+    assert report.issues == []
+    assert (
+        board.instances["T1"].circuit.instances["LED"].circuit.parts["R1"].value
+        == "5k1"
+    )
+
+
+def _generator_block(circuit: Circuit) -> None:
+    """Capture a leaf block whose resistor generator names its rail port."""
+    rail = circuit.port("rail")
+    out = circuit.net("out")
+    circuit.part("R1", RBin(Generator(from_rail), a=rail, b=out))
+
+
+def _generator_tile(circuit: Circuit) -> None:
+    """Capture a tile binding the leaf rail port to a differently named port."""
+    mine = circuit.port("mine")
+    circuit.instance("LED", _generator_block, rail=mine)
+
+
+def test_generator_survives_the_transform_tile_flatten(symbols: StubSymbols) -> None:
+    # apply_transforms flattens each tile's subcircuits in place; the
+    # generator's local 'rail' must still resolve through the tile's
+    # 'mine' port to the board supply.
+    board = Circuit("board", symbols)
+    rail = board.net("rail")
+    board.power_domain(
+        rail,
+        kind=PowerDomainKind.ALWAYS,
+        voltage=ValueRange.around(5.0, 0.01),
+    )
+    board.instance("T1", _generator_tile, mine=rail)
+    board.instances["T1"].flatten_hierarchy()
+    report = solve(board)
+    assert report.issues == []
+    assert board.instances["T1"].circuit.parts["LED/R1"].value == "5k1"
+
+
+def test_generator_survives_a_full_flatten(symbols: StubSymbols) -> None:
+    board = Circuit("board", symbols)
+    rail = board.net("rail")
+    board.power_domain(
+        rail,
+        kind=PowerDomainKind.ALWAYS,
+        voltage=ValueRange.around(5.0, 0.01),
+    )
+    board.instance("T1", _generator_tile, mine=rail)
+    flat = board.flatten()
+    report = solve(flat)
+    assert report.issues == []
+    assert flat.parts["T1/LED/R1"].value == "5k1"

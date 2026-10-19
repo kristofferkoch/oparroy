@@ -174,7 +174,13 @@ from oparroy.dsl.pinmap import (
     emit_pin_module,
 )
 from oparroy.dsl.sim import SimSymbols
-from oparroy.dsl.solve import DividerResolution, Resolution, SolveReport, solve
+from oparroy.dsl.solve import (
+    DividerResolution,
+    GeneratorEvaluation,
+    Resolution,
+    SolveReport,
+    solve,
+)
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 from oparroy.dsl.transform import (
@@ -192,6 +198,8 @@ from oparroy.dsl.transform import (
 from oparroy.dsl.values import (
     DividerHalf,
     DividerSpec,
+    Generator,
+    SolveContext,
     ValueBin,
     ValueRange,
     format_value,
@@ -241,6 +249,8 @@ __all__ = [
     "Footprint",
     "FootprintSetRule",
     "FootprintTable",
+    "Generator",
+    "GeneratorEvaluation",
     "HolePadClearanceRule",
     "Inductor",
     "InsertSeries",
@@ -292,6 +302,7 @@ __all__ = [
     "SheetPartsRule",
     "SimSymbols",
     "SocketSpec",
+    "SolveContext",
     "SolveReport",
     "SpiceModel",
     "StackupLayer",

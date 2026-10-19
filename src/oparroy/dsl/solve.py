@@ -9,8 +9,8 @@ IR against the part's stocked ``ValueBin`` (the parts DB's
 literal, reporting each pick's achieved error. Literal strings are
 never touched.
 
-Two specs resolve here. A ``ValueRange`` on a part resolves that part
-alone against its bin. A ``DividerHalf`` (``DividerSpec.top()`` /
+Three specs resolve here. A ``ValueRange`` on a part resolves that
+part alone against its bin. A ``DividerHalf`` (``DividerSpec.top()`` /
 ``.bottom()``) marks one resistor of a divider: the two sibling halves
 share a ``DividerSpec`` within one capture and resolve together,
 meeting its ratio, Thévenin output impedance, and standing-current
@@ -18,6 +18,19 @@ constraints with one stocked pair. One spec resolves one divider, and
 scoping the group to the capture keeps a hoisted spec safe across
 instances of a reusable subcircuit. Dividers resolve first — their
 picks join the in-use set single specs then consolidate against.
+
+A ``Generator`` runs first of all: a capture-declared function that
+computes its part's value from circuit context — the LED's series
+resistor sized from the rail it actually runs on. Each generator is
+evaluated in place, in natural path order, with a ``SolveContext``
+whose ``rail_voltage`` follows instance bindings outward to the supply
+a parent actually binds (falling back to the rail's own declaration
+when the block stands alone). The returned literal or ``ValueRange``
+replaces the generator, so a generated spec reports its achieved error
+like an authored one; a generator that raises ``DefinitionError``, or
+returns anything but a literal or ``ValueRange``, is an error issue.
+Generators read the finished IR, never other parts' unresolved specs —
+a generated value resolves in the same pass, not mid-evaluation.
 
 The walk is hierarchical and in place: ``check`` and the emitters
 flatten their own copies, so resolving a flattened copy here would
@@ -31,13 +44,15 @@ conventional.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from oparroy.dsl.check import Issue, Severity
-from oparroy.dsl.ir import Circuit, DefinitionError, Part, natural_key
+from oparroy.dsl.ir import Circuit, DefinitionError, Net, Part, natural_key
 from oparroy.dsl.values import (
     DividerHalf,
     DividerSpec,
+    Generator,
     ValueRange,
     format_value,
     parse_value,
@@ -63,6 +78,74 @@ class Resolution:
             f"{self.path}: {self.spec} → {self.chosen_str} "
             f"(achieved {self.rel_error:+.1%})"
         )
+
+
+@dataclass(frozen=True)
+class GeneratorEvaluation:
+    """One evaluated generator: the part's path, the generator, its output.
+
+    ``produced`` is what the function returned — a literal or the spec
+    the normal resolution pass then picks from (its ``Resolution``
+    follows for a ``ValueRange``). It records the context-computed
+    target, so a rail change that shifts a generated value is visible
+    in the report rather than only in the final literal.
+    """
+
+    path: str
+    generator: Generator
+    produced: str | ValueRange
+
+    def __str__(self) -> str:
+        return f"{self.path}: {self.generator} → {self.produced}"
+
+
+@dataclass(frozen=True)
+class _SolveContext:
+    """The live :class:`SolveContext` solve hands a generator.
+
+    ``_ancestors`` maps each of the owning capture's nets (by identity)
+    to its binding chain in the ancestors — immediate parent first,
+    outermost last — so ``rail_voltage`` can prefer the supply a parent
+    actually binds over the local declaration. ``_nets`` is the
+    generator's authored-capture name map, attached when flatten folds
+    that capture away, so a local name still resolves after the
+    instrumentation pass flattens a tile.
+    """
+
+    path: str
+    part: Part
+    circuit: Circuit
+    _ancestors: Mapping[int, tuple[Net, ...]] = field(default_factory=dict, repr=False)
+    _nets: Mapping[str, Net] | None = field(default=None, repr=False)
+
+    def rail_voltage(self, net: Net | str) -> ValueRange | None:
+        """Return the net's declared rail voltage, outermost binding first.
+
+        A string is a net name in the part's authored capture; an
+        unknown name is a ``DefinitionError`` (the generator gets a
+        path-named solve issue instead of a crash). The candidate order
+        is the outermost bound net inward, then the local net: a
+        block's own declaration is the standalone fallback, never an
+        override of the rail its parent binds.
+        """
+        if isinstance(net, str):
+            local = None if self._nets is None else self._nets.get(net)
+            if local is None:
+                local = self.circuit.nets.get(net)
+            if local is None:
+                msg = (
+                    f"net {net!r} is not in capture {self.circuit.name!r} "
+                    f"(a generator names nets in its own capture)"
+                )
+                raise DefinitionError(msg)
+        else:
+            local = net
+        chain = self._ancestors.get(id(local), ())
+        for candidate in (*reversed(chain), local):
+            domain = candidate.power_domain
+            if domain is not None and domain.voltage is not None:
+                return domain.voltage
+        return None
 
 
 @dataclass(frozen=True)
@@ -116,13 +199,29 @@ class DividerResolution:
 
 @dataclass
 class SolveReport:
-    """``solve``'s result: the error issues and the per-spec resolutions."""
+    """``solve``'s result: the error issues, evaluations, and resolutions."""
 
     issues: list[Issue] = field(default_factory=list)
+    evaluations: list[GeneratorEvaluation] = field(default_factory=list)
     resolutions: list[Resolution | DividerResolution] = field(default_factory=list)
 
     def __str__(self) -> str:
-        return "\n".join(str(resolution) for resolution in self.resolutions)
+        return "\n".join(
+            [
+                *(str(evaluation) for evaluation in self.evaluations),
+                *(str(resolution) for resolution in self.resolutions),
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class _PlacedPart:
+    """One part plus the context a generator needs to read the circuit."""
+
+    path: str
+    part: Part
+    circuit: Circuit
+    ancestors: Mapping[int, tuple[Net, ...]]
 
 
 def _divider_scope(path: str) -> str:
@@ -139,63 +238,104 @@ def _divider_scope(path: str) -> str:
 def solve(circuit: Circuit) -> SolveReport:
     """Resolve every value spec on the IR to a stocked literal.
 
-    Dividers resolve first (grouped per capture, in natural path order
-    of their top half), then single ``ValueRange`` specs (in natural
-    path order); each pick joins the in-use set the consolidation
-    tie-break consults (alongside the circuit's literal values), so
-    repeated solves are deterministic and identical specs consolidate
-    onto one stocked value; a second solve finds no specs and returns
-    an empty report. Mutates the circuit in place and returns the
-    report.
+    Generators evaluate first (in natural path order), then dividers
+    resolve (grouped per capture, in natural path order of their top
+    half), then single ``ValueRange`` specs (in natural path order);
+    each pick joins the in-use set the consolidation tie-break consults
+    (alongside the circuit's literal values), so repeated solves are
+    deterministic and identical specs consolidate onto one stocked
+    value; a second solve finds no specs and returns an empty report.
+    Mutates the circuit in place and returns the report.
     """
-    parts: list[tuple[str, Part]] = []
-    _collect_parts(circuit, (), parts, set())
-    parts.sort(key=lambda item: natural_key(item[0]))
-    literals = [part.value for _, part in parts if isinstance(part.value, str)]
-    in_use: dict[str, set[float]] = {}
+    entries: list[_PlacedPart] = []
+    _collect_parts(circuit, (), {}, entries, set())
+    entries.sort(key=lambda entry: natural_key(entry.path))
     report = SolveReport()
 
-    divider_groups: dict[tuple[str, int], dict[str, tuple[str, Part]]] = {}
-    for path, part in parts:
-        if not isinstance(part.value, DividerHalf):
+    for entry in entries:
+        if isinstance(entry.part.value, Generator):
+            _evaluate_generator(entry, report)
+
+    literals = [
+        entry.part.value for entry in entries if isinstance(entry.part.value, str)
+    ]
+    in_use: dict[str, set[float]] = {}
+
+    divider_groups: dict[tuple[str, int], dict[str, _PlacedPart]] = {}
+    for entry in entries:
+        value = entry.part.value
+        if not isinstance(value, DividerHalf):
             continue
-        half = part.value
-        group = divider_groups.setdefault((_divider_scope(path), id(half.spec)), {})
-        if half.role in group:
+        group = divider_groups.setdefault(
+            (_divider_scope(entry.path), id(value.spec)), {}
+        )
+        if value.role in group:
             report.issues.append(
                 Issue(
                     Severity.ERROR,
-                    f"{path}: duplicate divider {half.role} for {half.spec} — "
-                    "one DividerSpec resolves one divider; build a spec per divider",
+                    f"{entry.path}: duplicate divider {value.role} for "
+                    f"{value.spec} — one DividerSpec resolves one divider; "
+                    "build a spec per divider",
                 )
             )
             continue
-        group[half.role] = (path, part)
+        group[value.role] = entry
 
     def group_key(
-        slots: dict[str, tuple[str, Part]],
+        slots: dict[str, _PlacedPart],
     ) -> tuple[tuple[str | int, ...], str]:
         top = slots.get("top")
         path = (
-            top[0]
+            top.path
             if top is not None
-            else min((present for present, _ in slots.values()), key=natural_key)
+            else min((present.path for present in slots.values()), key=natural_key)
         )
         return natural_key(path)
 
     for group in sorted(divider_groups.values(), key=group_key):
         _resolve_divider(group, literals, in_use, report)
 
-    for path, part in parts:
-        if not isinstance(part.value, ValueRange):
+    for entry in entries:
+        if not isinstance(entry.part.value, ValueRange):
             continue
-        _resolve_single(path, part, literals, in_use, report)
+        _resolve_single(entry.path, entry.part, literals, in_use, report)
 
     return report
 
 
+def _evaluate_generator(entry: _PlacedPart, report: SolveReport) -> None:
+    """Evaluate one generator in place, recording its output or issue."""
+    generator = entry.part.value
+    assert isinstance(generator, Generator)  # noqa: S101 — caller filters
+    context = _SolveContext(
+        entry.path,
+        entry.part,
+        entry.circuit,
+        entry.ancestors,
+        generator.capture_nets,
+    )
+    try:
+        produced = generator(context)
+    except DefinitionError as error:
+        report.issues.append(
+            Issue(Severity.ERROR, f"{entry.path}: {generator} failed: {error}")
+        )
+        return
+    if not isinstance(produced, str | ValueRange):
+        report.issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{entry.path}: {generator} returned {produced!r}; a generator "
+                "returns a value literal or a ValueRange",
+            )
+        )
+        return
+    entry.part.value = produced
+    report.evaluations.append(GeneratorEvaluation(entry.path, generator, produced))
+
+
 def _resolve_divider(
-    group: dict[str, tuple[str, Part]],
+    group: dict[str, _PlacedPart],
     literals: list[str],
     in_use: dict[str, set[float]],
     report: SolveReport,
@@ -207,13 +347,16 @@ def _resolve_divider(
         missing = "top" if top is None else "bottom"
         present = bottom if top is None else top
         assert present is not None  # noqa: S101 — a group holds at least one half
-        path, _ = present
         report.issues.append(
-            Issue(Severity.ERROR, f"{path}: divider missing its {missing} half")
+            Issue(
+                Severity.ERROR,
+                f"{present.path}: divider missing its {missing} half",
+            )
         )
         return
-    top_path, top_part = top
-    bottom_part = bottom[1]
+    top_path = top.path
+    top_part = top.part
+    bottom_part = bottom.part
     half = top_part.value
     assert isinstance(half, DividerHalf)  # noqa: S101 — grouped from halves
     spec = half.spec
@@ -305,16 +448,39 @@ def _resolve_single(
 def _collect_parts(
     circuit: Circuit,
     prefix: tuple[str, ...],
-    out: list[tuple[str, Part]],
+    ancestors: Mapping[int, tuple[Net, ...]],
+    out: list[_PlacedPart],
     seen: set[int],
 ) -> None:
-    """Collect (hierarchical path, part) pairs, instance children included."""
+    """Collect placed parts with their capture and binding chain.
+
+    ``ancestors`` maps the current capture's nets (by identity) to the
+    nets their ports bind in the enclosing captures, immediate parent
+    first — the chain a generator's ``rail_voltage`` walks to find the
+    supply a parent actually binds.
+    """
     if id(circuit) in seen:
         return
     seen.add(id(circuit))
-    out.extend(("/".join((*prefix, ref)), part) for ref, part in circuit.parts.items())
+    out.extend(
+        _PlacedPart("/".join((*prefix, ref)), part, circuit, ancestors)
+        for ref, part in circuit.parts.items()
+    )
     for instance in circuit.instances.values():
-        _collect_parts(instance.circuit, (*prefix, instance.name), out, seen)
+        child_ancestors: dict[int, tuple[Net, ...]] = {}
+        for port_name, parent_net in instance.connections.items():
+            child_port = instance.circuit.nets[port_name]
+            child_ancestors[id(child_port)] = (
+                parent_net,
+                *ancestors.get(id(parent_net), ()),
+            )
+        _collect_parts(
+            instance.circuit,
+            (*prefix, instance.name),
+            child_ancestors,
+            out,
+            seen,
+        )
 
 
 def _parse_literals(literals: list[str], family: str) -> set[float]:

@@ -8,7 +8,10 @@ lights both at half brightness (§4.1). Dd's anode returns
 to 3V3, not GND: the pin-low state sinks rail current through Dd and
 Rs into the pad — anode on GND leaves Dd dark forever (caught in
 pcbnew netlist review). The shared 470 Ω sets ~2.5 mA at
-Vf ≈ 2.1 V, inside the CH32V003's ±8 mA pad drive.
+Vf ≈ 2.1 V, inside the CH32V003's ±8 mA pad drive. The resistor
+values are generators, not literals: the solve pass sizes each from
+the rail's declared voltage, so a parent binding a different supply
+recomputes them (DESIGN.md §7).
 
 The drive-state truth table is the executable contract:
 ``circuits/status-leds/tb_status_leds.cir`` asserts pin high, pin low,
@@ -29,15 +32,21 @@ Usage (in the nix dev shell):
 
 import argparse
 import sys
+from dataclasses import dataclass
 
 from design.bins import R0603, LedRev1206
 from oparroy.dsl import (
     Circuit,
+    DefinitionError,
+    Generator,
     Interval,
     KiCadLibraries,
     Limits,
+    PowerDomainKind,
+    SolveContext,
     Subcircuit,
     SymbolTable,
+    ValueRange,
     check,
     emit_netlist,
     emit_spice,
@@ -56,6 +65,52 @@ SPICE_MODELS = {
 }
 
 
+@dataclass(frozen=True)
+class LedSeriesResistor:
+    """A generator: size an LED's series resistor from the rail it runs on.
+
+    ``rail`` names the block's supply net; the solve pass reads its
+    declared voltage (``Circuit.power_domain(..., voltage=...)``),
+    following instance bindings outward so a parent at 5 V gets a 5 V
+    resistor. ``forward_v`` is the LED's typical drop and ``current``
+    the target drive; ``tolerance`` is the acceptable current spread
+    the stocked bin resolves inside. The LED's Vf is a generator
+    parameter (the parts DB owns no LED model yet), not a value read
+    from another part.
+    """
+
+    rail: str
+    forward_v: float
+    current: float
+    tolerance: float = 0.10
+
+    def __call__(self, context: SolveContext) -> ValueRange:
+        """Return the series resistor's spec for ``context``'s rail."""
+        voltage = context.rail_voltage(self.rail)
+        if voltage is None:
+            msg = (
+                f"rail {self.rail!r} has no declared voltage — declare it "
+                "with Circuit.power_domain(..., voltage=ValueRange(...))"
+            )
+            raise DefinitionError(msg)
+        assert voltage.nominal is not None  # noqa: S101 — ValueRange fills it
+        headroom = voltage.nominal - self.forward_v
+        if headroom <= 0:
+            msg = (
+                f"rail {self.rail!r} at {voltage} has no headroom over the "
+                f"LED's {self.forward_v:g} V forward drop"
+            )
+            raise DefinitionError(msg)
+        return ValueRange.around(
+            headroom / self.current, self.tolerance, family="resistor"
+        )
+
+
+def _series_resistor(rail: str, forward_v: float, current: float) -> Generator:
+    """Build the generator spec for one LED operating point."""
+    return Generator(LedSeriesResistor(rail=rail, forward_v=forward_v, current=current))
+
+
 class StatusLeds(Subcircuit):
     """The §4.1 status-LED block: power, working, antiparallel link pair."""
 
@@ -63,13 +118,25 @@ class StatusLeds(Subcircuit):
         """Build the block: ports v3v3/gnd/led_work/led_seg."""
         v3v3 = circuit.port("v3v3")
         gnd = circuit.port("gnd")
+        # The rail's declared voltage is the generator's context. The
+        # 3.3 V ±3% band is the LDO's regulation window; a parent that
+        # binds a different rail overrides it when solve walks the
+        # binding chain.
+        circuit.power_domain(
+            v3v3,
+            kind=PowerDomainKind.ALWAYS,
+            voltage=ValueRange.around(3.3, 0.03),
+        )
+        circuit.power_domain(gnd, kind=PowerDomainKind.GROUND)
         led_work = circuit.port("led_work", sink=Limits(voltage=Interval(0, 3.6)))
         led_seg = circuit.port("led_seg", sink=Limits(voltage=Interval(0, 3.6)))
         pwr_led = circuit.net("pwr_led")
         ledw_a = circuit.net("ledw_a")
         led_x = circuit.net("led_x")
         circuit.part(
-            "Rp", R0603("1k", a=v3v3, b=pwr_led), note="current limit for {Dp}"
+            "Rp",
+            R0603(_series_resistor("v3v3", 2.0, 1.3e-3), a=v3v3, b=pwr_led),
+            note="current limit for {Dp}",
         )
         circuit.part(
             "Dp",
@@ -77,7 +144,9 @@ class StatusLeds(Subcircuit):
             note="power LED",
         )
         circuit.part(
-            "Rw", R0603("1k", a=led_work, b=ledw_a), note="current limit for {Dw}"
+            "Rw",
+            R0603(_series_resistor("v3v3", 2.0, 1.3e-3), a=led_work, b=ledw_a),
+            note="current limit for {Dw}",
         )
         circuit.part(
             "Dw",
@@ -86,7 +155,7 @@ class StatusLeds(Subcircuit):
         )
         circuit.part(
             "Rs",
-            R0603("470", a=led_seg, b=led_x),
+            R0603(_series_resistor("v3v3", 2.1, 2.5e-3), a=led_seg, b=led_x),
             note="shared current limit for the {Du}/{Dd} link pair",
         )
         circuit.part(

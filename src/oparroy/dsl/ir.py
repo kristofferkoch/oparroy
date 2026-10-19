@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from oparroy.dsl.parts import MultiUnitPart, TypedPart
-    from oparroy.dsl.values import DividerHalf, ValueBin, ValueRange
+    from oparroy.dsl.values import DividerHalf, Generator, ValueBin, ValueRange
 
 type NetBinding = Net | str | Sequence[Net | str] | Mapping[str, Net | str]
 type Connection = NetBinding | UnitHandle | type[TypedPart]
@@ -326,11 +326,16 @@ class PowerDomain:
     net a switched domain derives from — set by the ``InsertSeries``
     transform's ``switched_domain`` tagging (the rail split ``3V3`` →
     ``3V3N``, :mod:`oparroy.dsl.transform`); None for capture-declared
-    domains.
+    domains. ``voltage`` is the rail's declared operating range
+    (a dimensionless :class:`~oparroy.dsl.values.ValueRange`), the
+    context a generator reads through ``SolveContext.rail_voltage``;
+    None means undeclared — not 0 V. A transform-derived switched
+    domain inherits its base rail's declaration.
     """
 
     kind: PowerDomainKind
     parent: str | None = None
+    voltage: ValueRange | None = None
 
 
 @dataclass(frozen=True)
@@ -649,8 +654,8 @@ class Part:
     ``AlwaysPowered`` rule consumes it). ``value_bin`` is the parts
     DB's stocked value grid (``oparroy.dsl.values.ValueBin``), threaded
     the same way: None means no bin, and an unresolved value spec
-    (``ValueRange`` or ``DividerHalf``) on ``value`` then fails the
-    solve pass. ``note``
+    (``ValueRange``, ``DividerHalf``, or ``Generator``) on ``value``
+    then fails the solve pass. ``note``
     is an optional human note for the layout author (``Circuit.part``'s
     ``note=``), emitted as the netlist comp's Comment field; ``{ref}``
     placeholders naming sibling parts resolve to the annotated refdes
@@ -661,7 +666,7 @@ class Part:
         self,
         ref: str,
         symbol: Symbol,
-        value: str | ValueRange | DividerHalf | None,
+        value: str | ValueRange | DividerHalf | Generator | None,
         footprint: str | None,
         *,
         identity: str | None = None,
@@ -1354,7 +1359,13 @@ class Circuit:
         """The capture's power-domain crossing declarations, in declaration order."""
         return tuple(self._crossings)
 
-    def power_domain(self, net: Net | str, *, kind: PowerDomainKind) -> PowerDomain:
+    def power_domain(
+        self,
+        net: Net | str,
+        *,
+        kind: PowerDomainKind,
+        voltage: ValueRange | None = None,
+    ) -> PowerDomain:
         """Declare a rail net's power domain: always-on, switched, or ground.
 
         The declaration is what makes a net a rail for the power-domain
@@ -1364,15 +1375,31 @@ class Circuit:
         rail-completeness rule but contribute nothing to signatures.
         One domain per net; flattening carries the attribute onto the
         flat copies.
+
+        ``voltage`` declares the rail's operating range — a
+        dimensionless ``ValueRange`` whose nominal is the voltage a
+        generator sizes against (``SolveContext.rail_voltage`` follows
+        instance bindings outward, so a block also sees the supply its
+        parent binds). None means undeclared, never 0 V; a GROUND rail
+        that wants to be readable declares its 0 V explicitly.
         """
         if not isinstance(kind, PowerDomainKind):
             msg = f"power domain kind must be a PowerDomainKind, got {kind!r}"
             raise DefinitionError(msg)
+        if voltage is not None:
+            from oparroy.dsl.values import ValueRange as _ValueRange  # noqa: PLC0415
+
+            if not isinstance(voltage, _ValueRange):
+                msg = f"a rail voltage must be a ValueRange, got {voltage!r}"
+                raise DefinitionError(msg)
+            if voltage.family is not None:
+                msg = f"a rail voltage is dimensionless, got family {voltage.family!r}"
+                raise DefinitionError(msg)
         resolved = self._resolve_net(net)
         if resolved.power_domain is not None:
             msg = f"net {resolved.name!r} already has a declared power domain"
             raise DefinitionError(msg)
-        domain = PowerDomain(kind)
+        domain = PowerDomain(kind, voltage=voltage)
         resolved.power_domain = domain
         return domain
 
@@ -1432,7 +1459,7 @@ class Circuit:
         spec: TypedPart | None = None,
         *,
         symbol: str | None = None,
-        value: str | ValueRange | DividerHalf | None = None,
+        value: str | ValueRange | DividerHalf | Generator | None = None,
         footprint: str | None = None,
         note: str | None = None,
     ) -> Part:
@@ -1588,7 +1615,7 @@ class Circuit:
         self,
         ref: str,
         resolved: Symbol,
-        value: str | ValueRange | DividerHalf | None,
+        value: str | ValueRange | DividerHalf | Generator | None,
         footprint: str | None,
         *,
         identity: str | None = None,
@@ -2071,6 +2098,10 @@ class Circuit:
         bindings: dict[str, Net],
         socket_bindings: dict[str, PackedSocket | StandaloneSocket],
     ) -> None:
+        from oparroy.dsl.values import (  # noqa: PLC0415 — ir ← values at import
+            Generator as _Generator,
+        )
+
         prefix = "".join(f"{level}/" for level in path)
         nets: dict[Net, Net] = {}
         for name, net in self._nets.items():
@@ -2094,13 +2125,20 @@ class Circuit:
                 created.provenance = net.provenance
                 created.power_domain = net.power_domain
                 nets[net] = created
+        authored_nets = {name: nets[net] for name, net in self._nets.items()}
         for part in self._parts.values():
             if part.symbol.is_socket:
                 continue
+            value = part.value
+            if isinstance(value, _Generator):
+                # A generator names nets in the capture it was authored
+                # in; flatten folds that capture away, so remap the
+                # names onto the flat nets it resolves to.
+                value = value.remapped(nets, authored_nets)
             placed = flat._place(
                 f"{prefix}{part.ref}",
                 part.symbol,
-                part.value,
+                value,
                 part.footprint,
                 placement=part._flattened_placement(path),  # noqa: SLF001 — same module
             )

@@ -12,14 +12,15 @@ Everything below imports from the package root — `from oparroy.dsl import ...`
 
 ## The pipeline
 
-| Stage                      | Entry point                                                               | Input → output                                           | Invoked as                                 |
-| -------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------ |
-| Capture                    | `Circuit(name, symbols)`, `Subcircuit.capture`                            | Python calls → hierarchical IR                           | your `design/*.py` module                  |
-| Transforms (CI board only) | `apply_transforms(circuit, plan)`                                         | hierarchical IR → instrumented IR, `Handles`             | between capture and check                  |
-| Footprint assignment       | `assign_footprints(circuit, overrides)`                                   | IR + overrides JSON → flat assigned IR                   | `python -m design.node --footprints F`     |
-| Validation                 | `check(circuit, footprints=...)`, `raise_on_errors`                       | IR → `list[Issue]`                                       | every `python -m design.*` main            |
-| Annotation                 | `annotate(circuit, prior=...)`, `annotation_from_pcb`, `apply_annotation` | IR ↔ refdes table (JSON)                                 | `--annotation F`, `--back-annotate B`      |
-| Emission                   | `emit_netlist`, `emit_spice`, `to_dot`, `emit_pin_header`                 | IR → KiCad `.net` / ngspice `.subckt` / dot / C++ header | module mains, `python -m design.node_pins` |
+| Stage                      | Entry point                                                               | Input → output                                             | Invoked as                                 |
+| -------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------ |
+| Capture                    | `Circuit(name, symbols)`, `Subcircuit.capture`                            | Python calls → hierarchical IR                             | your `design/*.py` module                  |
+| Transforms (CI board only) | `apply_transforms(circuit, plan)`                                         | hierarchical IR → instrumented IR, `Handles`               | between capture and check                  |
+| Value resolution           | `solve(circuit)`                                                          | IR + value specs → IR with stocked literals, `SolveReport` | every `python -m design.*` main            |
+| Footprint assignment       | `assign_footprints(circuit, overrides)`                                   | IR + overrides JSON → flat assigned IR                     | `python -m design.node --footprints F`     |
+| Validation                 | `check(circuit, footprints=...)`, `raise_on_errors`                       | IR → `list[Issue]`                                         | every `python -m design.*` main            |
+| Annotation                 | `annotate(circuit, prior=...)`, `annotation_from_pcb`, `apply_annotation` | IR ↔ refdes table (JSON)                                   | `--annotation F`, `--back-annotate B`      |
+| Emission                   | `emit_netlist`, `emit_spice`, `to_dot`, `emit_pin_header`                 | IR → KiCad `.net` / ngspice `.subckt` / dot / C++ header   | module mains, `python -m design.node_pins` |
 
 There is no installed CLI; entry points are module mains run in the nix
 dev shell (`python -m design.node [--dot|--annotation F|--footprints F|--back-annotate B]`, `python -m design.watchdog_chargepump [--dot|--spice]`, `python -m design.phy_segment [--dot|--spice]`). Tests run via `uv run pytest`; doctests in `src/`
@@ -70,9 +71,9 @@ Data types:
   `number`, `name`, `type`, `net`), `PinType` (KiCad electrical types).
 - `Part` — `ref` (current name; the refdes after annotation),
   `identity` (capture name, what tstamps key on), `path` (instance
-  path), `symbol`, `value` (a literal string, a `ValueRange`, or a
-  `DividerHalf` marker), `footprint`, `note`, `pins`; `pin(number)`,
-  `unit(n)`, integer indexing (`part[1]`).
+  path), `symbol`, `value` (a literal string, a `ValueRange`, a
+  `DividerHalf` marker, or a `Generator`), `footprint`, `note`, `pins`;
+  `pin(number)`, `unit(n)`, integer indexing (`part[1]`).
 - `Interval(low, high)` — closed interval, inclusive containment.
   `Limits(voltage, current=None)` — a port's electrical ranges;
   `current` checked only when both sides declare it.
@@ -164,15 +165,36 @@ record; `values()` enumerates it, `resolve(spec, in_use=…)` picks the
 candidate nearest the spec's nominal — ties prefer a value already
 used in the circuit (BOM consolidation), then the smaller value.
 
+A value that depends on circuit context is a `Generator` — a
+capture-declared callable wrapped as `Generator(fn)`, evaluated by
+`solve` before bin resolution. It receives a `SolveContext` (`path`,
+`part`, `circuit`, and `rail_voltage(net)`); the return value is a
+literal or a `ValueRange` that replaces the generator in place, so a
+generated spec resolves against the bin and reports its achieved error
+like an authored one. `rail_voltage` reads a rail's declared operating
+range (`Circuit.power_domain(..., voltage=…)`) and follows instance
+bindings outward first: a block sizes from the supply its parent
+actually binds, and its own declaration is the standalone fallback.
+Each evaluation lands in `SolveReport.evaluations` as a
+`GeneratorEvaluation` (path, generator, produced spec); a generator
+that raises `DefinitionError` (an undeclared rail, say) or returns
+anything else is an error issue. A generator names nets in the capture
+it was authored in; `flatten` — including the transform pass's per-tile
+flatten — remaps that name map onto the flat nets and follows instance
+bindings outward, so a generator inside a subcircuit still resolves
+after its capture folds into a parent.
+
 `solve(circuit) -> SolveReport` is the pass between capture/transforms
-and check: it walks the IR hierarchically, resolves every value spec
-(`ValueRange`, and the divider pair below) against the part's bin, and
-rewrites `Part.value` to the stocked literal in place; literal strings
-are never touched. `SolveReport` carries `issues` (a spec on a
-bin-less part, or one no stocked value meets, is an error) and
-`resolutions` — one `Resolution` per single-spec pick, and one
-`DividerResolution` per divider (below): path, spec, chosen value, and
-the achieved relative error; `str()` renders one line per resolution
+and check: it walks the IR hierarchically, evaluates every generator,
+resolves every value spec (`ValueRange`, and the divider pair below)
+against the part's bin, and rewrites `Part.value` to the stocked
+literal in place; literal strings are never touched. `SolveReport`
+carries `issues` (a spec on a bin-less part, a generator failure, or a
+spec no stocked value meets), `evaluations` (one per generator, in
+path order), and `resolutions` — one `Resolution` per single-spec pick,
+and one `DividerResolution` per divider (below): path, spec, chosen
+value, and the achieved relative error; `str()` renders one line per
+evaluation and resolution
 (`R1: 10k ±5% → 10k (achieved +0.0%)`). `check` and the netlist
 emitters reject a surviving spec, so the pipeline order is enforced.
 
@@ -202,20 +224,24 @@ emitter is rejected like a `ValueRange`.
 validation pass: flattens implicitly, checks port-range containment
 over the hierarchy *before* flattening, then part and net rules over
 the flat IR, and applies waivers last. An unresolved value spec
-(`ValueRange` or `DividerHalf`) still on a part errors — `solve` runs
-first. `Issue(severity, message, check, path)`; `Severity` = `warning` / `error` / `waived`.
+(`ValueRange`, `DividerHalf`, or `Generator`) still on a part errors —
+`solve` runs first. `Issue(severity, message, check, path)`; `Severity` = `warning` / `error` / `waived`.
 `raise_on_errors(issues)` raises `CheckError`. `RANGE_CONTAINMENT` is
 the containment check's id for waivers. `FootprintTable` is the
 `exists(footprint)` protocol (kicadlib or stubs).
 
 The power-domain audit (check id `POWER_DOMAIN_CROSSING`) runs on the
-flat IR. `circuit.power_domain(net, kind=…)` declares a rail's domain
-— `PowerDomainKind.ALWAYS`, `SWITCHED`, or `GROUND` (domain-neutral: a
-pull-down to GND is never a finding); a bound port's one-sided
-declaration rides the merged flat net, and port/parent kind agreement
-is checked over the bindings before flattening. A signal net's
-*signature* is the domains powering the parts on it plus its resistive
-reach (two-pin `Device` passives hop; a reached rail contributes its
+flat IR. `circuit.power_domain(net, kind=…, voltage=…)` declares a
+rail's domain — `PowerDomainKind.ALWAYS`, `SWITCHED`, or `GROUND`
+(domain-neutral: a pull-down to GND is never a finding); a bound port's
+one-sided declaration rides the merged flat net, and port/parent kind
+agreement is checked over the bindings before flattening. The optional
+`voltage` is a dimensionless `ValueRange` carrying the rail's operating
+range — the context a value generator's `rail_voltage(net)` reads, and
+a transform-derived switched rail inherits it from its base.
+
+A signal net's *signature* is the domains powering the parts on it plus
+its resistive reach (two-pin `Device` passives hop; a reached rail contributes its
 domain and stops the walk); a net touching ≥2 domains, one of them
 switched, is a *crossing* and must carry a declared disposition:
 `circuit.crossing(net, …)` with `DiesWith()` (verified: every
