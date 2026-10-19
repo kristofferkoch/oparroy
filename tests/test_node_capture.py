@@ -20,6 +20,8 @@ from oparroy.dsl import (
     apply_annotation,
     check,
     emit_netlist,
+    raise_on_errors,
+    solve,
 )
 
 GOLDEN = Path(__file__).parent / "golden" / "oparroy-node.net"
@@ -28,6 +30,12 @@ GOLDEN = Path(__file__).parent / "golden" / "oparroy-node.net"
 #: pads (PD5, PD6, PC4, PC5, PC6) plus PC1, freed by the §4.1 LED
 #: merge (PC7 is a spare too, but lands on the TP4 test pad).
 EXPECTED_NC_WARNINGS = {f"U1.{pin} is not connected" for pin in (2, 3, 11, 14, 15, 16)}
+
+
+def solved(circuit: Circuit) -> Circuit:
+    """Run the value-solve pass, failing the test on its errors."""
+    raise_on_errors(solve(circuit).issues)
+    return circuit
 
 
 def nets_of(circuit: Circuit) -> dict[str, set[str]]:
@@ -114,7 +122,7 @@ def test_power_loop_enters_from_both_faces(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
-    issues = check(capture(kicad_libs), footprints=kicad_libs)
+    issues = check(solved(capture(kicad_libs)), footprints=kicad_libs)
     assert [i for i in issues if i.severity is Severity.ERROR] == []
     assert {i.message for i in issues} == EXPECTED_NC_WARNINGS
 
@@ -126,14 +134,14 @@ def test_annotation_is_stable(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_netlist_matches_golden(kicad_libs: KiCadLibraries) -> None:
-    circuit = capture(kicad_libs)
+    circuit = solved(capture(kicad_libs))
     rendered = emit_netlist(apply_annotation(circuit, annotate(circuit)))
     assert rendered == GOLDEN.read_text(encoding="utf-8")
 
 
 def test_netlist_byte_identical_across_runs(kicad_libs: KiCadLibraries) -> None:
     def render() -> str:
-        circuit = capture(kicad_libs)
+        circuit = solved(capture(kicad_libs))
         return emit_netlist(apply_annotation(circuit, annotate(circuit)))
 
     assert render() == render()

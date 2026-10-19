@@ -27,6 +27,7 @@ from oparroy.dsl import (
     SpiceModel,
     Stock,
     Tier,
+    ValueBin,
 )
 from oparroy.stock import DEFAULT_CACHE_PATH, SqliteFeedCache
 
@@ -43,7 +44,11 @@ PARTS = PartsDb(
             footprint="Resistor_SMD:R_0603_1608Metric",
             tier=Tier.BASIC,
             area_mm2=1.28,
-            note="generic 0603 Basic bin; per-value LCSC resolves at quote time",
+            bin=ValueBin(kind="resistor", series=24, tolerance=0.01, lo=1.0, hi=1e6),
+            note=(
+                "generic 0603 Basic bin; per-value LCSC resolves at "
+                "quote time; the bin stocks the E24 1% grid, 1 Ω..1 MΩ"
+            ),
         ),
         PartRecord(
             name="c-0603",
@@ -52,7 +57,13 @@ PARTS = PartsDb(
             footprint="Capacitor_SMD:C_0603_1608Metric",
             tier=Tier.BASIC,
             area_mm2=1.28,
-            note="generic 0603 Basic bin; per-value LCSC resolves at quote time",
+            bin=ValueBin(
+                kind="capacitor", series=12, tolerance=0.10, lo=1e-12, hi=1e-6
+            ),
+            note=(
+                "generic 0603 Basic bin; per-value LCSC resolves at "
+                "quote time; the bin stocks the E12 grid, 1 pF..1 µF"
+            ),
         ),
         PartRecord(
             name="bat54s",

@@ -1,4 +1,4 @@
-"""Validation pass over a finished circuit IR (capture → check → emit).
+"""Validation pass over a finished circuit IR (capture → solve → check → emit).
 
 Structural invariants raise during capture (see ir.py); everything here
 is a *semantic* check over the finished IR, reported as a batch of
@@ -8,7 +8,9 @@ rules: interval containment over port limit ranges (a sink's acceptable
 range must cover the connected source's output range) and the
 power-domain crossing audit (every net touching two domains, one
 switched, must carry a declared disposition — ``Circuit.crossing``),
-with waivers as explicit, path-addressed capture data.
+with waivers as explicit, path-addressed capture data. It also guards
+the pipeline order: a ``ValueRange`` spec surviving to check is an
+error — the solve pass (``oparroy.dsl.solve``) runs first.
 """
 
 import fnmatch
@@ -33,6 +35,7 @@ from oparroy.dsl.ir import (
     natural_key,
 )
 from oparroy.dsl.kicadlib import LibraryError
+from oparroy.dsl.values import ValueRange
 
 _MIN_NET_PINS = 2
 
@@ -568,6 +571,14 @@ def _check_part(part: Part, footprints: FootprintTable | None) -> list[Issue]:
     issues: list[Issue] = []
     if part.value is None:
         issues.append(Issue(Severity.WARNING, f"{part.ref} has no value"))
+    elif isinstance(part.value, ValueRange):
+        issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{part.ref} has unresolved value spec {part.value} "
+                "(run solve before check)",
+            )
+        )
     if part.symbol.is_power or part.symbol.is_sim:
         # Schematic-only net markers and simulation-only parts (external
         # subcircuit instances): never reach the board, no footprint.

@@ -26,7 +26,7 @@ def to_dot(circuit: Circuit) -> str:
     ]
     for ref in sorted(circuit.parts, key=natural_key):
         part = circuit.parts[ref]
-        value = part.value if part.value is not None else ""
+        value = str(part.value) if part.value is not None else ""
         label = (
             f"{{{_escape_record(ref)}|"
             f"{_escape_record(value)}\\n{_escape_record(part.symbol.ref)}}}"

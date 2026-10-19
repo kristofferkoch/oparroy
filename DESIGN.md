@@ -993,13 +993,17 @@ DSL shape (from the initial design interrogation):
   pair is a single unit in KiCad's own library, which is exactly the
   `Bat54s` typed-class choice.
 - **Computed values carry slack**. A computed value (divider ratio,
-  filter corner) is a spec — target plus tolerance — not a number: the
-  emitter resolves it to a real part from a stocked
-  bin (the VDD/2 divider draws from the 10k bin), never an unsourcable
-  irrational value. Resolution runs against the parts DB's value
-  bins (§6 inventory-driven selection). `Part.value` widens from a
-  string to a value-spec type when this lands — a designed change to a
-  public constructor parameter, not a patch (KANBAN.md).
+  filter corner) is a spec — target plus tolerance — not a number:
+  `Part.value` takes a `ValueRange` next to a plain string, the parts
+  DB's records declare each bin's stocked E-series grid
+  (`PartRecord.bin`, a `ValueBin`), and the solve pass (capture →
+  solve → check → emit) resolves every spec to a stocked literal —
+  the VDD/2 divider comes out of the 10k bin, never an unsourcable
+  irrational value — reporting each pick's achieved error against the
+  spec. `check` and the emitters reject a surviving spec, so the
+  pipeline order is enforced, not conventional. Ratio specs (a divider
+  ratio met by any bin pair) and context-computed values (generators)
+  remain open work (KANBAN.md).
 - **Captures live in a new `design/` tree.** `circuits/` keeps benches
   and device models until the bench DUTs are ported and the DUT `.cir`
   files retire.
@@ -1022,7 +1026,9 @@ power symbols excluded like eeschema's own export),
 `dot.py` (Graphviz dump), `kicadlib.py` + `sexpr.py` (KiCad 10 library
 access, `extends`-aware), `parts.py` (typed jellybean parts —
 `Resistor`/`Capacitor`/`Inductor`/`Bat54s`, keyword-only pin wiring at
-construction, class-default footprints per bin). Proven by
+construction, class-default footprints per bin), `values.py` +
+`solve.py` (house-style SI literals, `ValueRange` specs, E-series
+`ValueBin`s, and the pass resolving specs to stocked literals). Proven by
 `design/watchdog_chargepump.py`:
 the §4 charge pump captured on typed parts against the
 nix-provisioned KiCad
@@ -1170,8 +1176,10 @@ a unified diff; the data-as-code file stays hand-authored and the
 script never rewrites it, and the feed never replaces a newer
 hand-verified snapshot. Stock numbers are as-of-dated
 snapshots with provenance, never live data — re-query JLCPCB before
-ordering. Full emitter-side resolution against value bins —
-the solve pass — is open work (KANBAN.md).
+ordering. Value specs (`ValueRange`) resolve against these bins in the
+solve pass between capture and check (§7); ratio specs (a divider
+ratio met by any bin pair) and context-computed values (generators)
+remain open work (KANBAN.md).
 
 Firmware pin maps: `pinmap.py` — pins are requested by function
 (`gpio.request("keepalive")`), pads bind late as

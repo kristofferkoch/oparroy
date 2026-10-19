@@ -70,7 +70,8 @@ Data types:
   `number`, `name`, `type`, `net`), `PinType` (KiCad electrical types).
 - `Part` — `ref` (current name; the refdes after annotation),
   `identity` (capture name, what tstamps key on), `path` (instance
-  path), `symbol`, `value`, `footprint`, `note`, `pins`; `pin(number)`,
+  path), `symbol`, `value` (a literal string or a `ValueRange` spec),
+  `footprint`, `note`, `pins`; `pin(number)`,
   `unit(n)`, integer indexing (`part[1]`).
 - `Interval(low, high)` — closed interval, inclusive containment.
   `Limits(voltage, current=None)` — a port's electrical ranges;
@@ -96,7 +97,8 @@ pin number or tuple), `default_value`, `default_footprint`,
 unwired). Pin keywords are keyword-only; construction carries the
 wiring; a missing or misspelled pin is a `TypeError` at the call site.
 
-Concrete classes: `Resistor`, `Capacitor` (value positional, pins
+Concrete classes: `Resistor`, `Capacitor` (value positional — a
+literal string or a `ValueRange` spec — pins
 `a`/`b`), `Diode` (`anode`/`cathode`), `Led`, `TvsDiode`, `Bat54s`
 (series pair: `anode`/`cathode`/`com`), all keyword-only.
 `MultiUnitPart` (classvar `unit_pins`) places a unit subset and wires
@@ -110,11 +112,13 @@ Classes accrete as captures need them — no speculative zoo.
 ## Parts DB (`parts_db.py`)
 
 `PartRecord` — one purchasable part: identity, symbol/footprint, stock
-(`Stock`, `Tier`), `SpiceModel`, residuals. `PartFilter` — conjunctive
+(`Stock`, `Tier`), `SpiceModel`, residuals, `bin` (the stocked
+`ValueBin` grid the solve pass resolves against). `PartFilter` — conjunctive
 search knobs. `PartsDb` — `find(key)`, `select(filter)`,
 `resolve(filter)` (exactly-one), `bind(key, base, class_name=...)`
-→ a typed part class carrying the record's symbol/value/footprint and
-residuals (how `design/parts_db.py` produces `R0603`/`C0603`),
+→ a typed part class carrying the record's symbol/value/footprint,
+residuals, and value bin (as `value_bin`)
+(how `design/parts_db.py` produces `R0603`/`C0603`),
 `check_stock()`. `PartsDbError`. `check_stock(cache=...)` takes a
 `FeedCache` — the read view over the feed overlay cache (`FeedRow`,
 `tier_from_library_type`; `Preferred` maps to Extended) — and audits
@@ -143,12 +147,40 @@ newer than the feed is flagged, never replaced.
 `OPARROY_PROJECT_FOOTPRINT_DIR`). Raises `LibraryError` outside the
 shell. `split_ref` (module-level) splits `"Lib:Name"`.
 
+## Value specs and resolution (`values.py`, `solve.py`)
+
+A computed value is a spec, never an unsourcable number
+([DESIGN.md §7](../DESIGN.md#7-design-capture-dsl)): `ValueRange`
+(`lo`/`hi` base units plus a `nominal` to aim for;
+`ValueRange.around(target, tol, *, family=…)` takes floats or
+house-style SI strings). `parse_value`/`format_value` are the
+family-aware SI literal pair — resistors `R`/`k`/`M` with the letter
+as the decimal point (`R082`, `0R`, `4k7`, `10k`), capacitors
+`p`/`n`/`u` (`15p`, `100n`, `4u7`); the `family=` argument is
+required, a bare number is base units. `ValueBin` declares a stocked
+grid (`kind`, E-`series`, `tolerance`, `lo`/`hi` bounds) on a parts-DB
+record; `values()` enumerates it, `resolve(spec, in_use=…)` picks the
+candidate nearest the spec's nominal — ties prefer a value already
+used in the circuit (BOM consolidation), then the smaller value.
+
+`solve(circuit) -> SolveReport` is the pass between capture/transforms
+and check: it walks the IR hierarchically, resolves every `ValueRange`
+against the part's bin, and rewrites `Part.value` to the stocked
+literal in place; literal strings are never touched. `SolveReport`
+carries `issues` (a spec on a bin-less part, or one no stocked value
+meets, is an error) and `resolutions` — one `Resolution` per pick:
+path, spec, chosen value, and the achieved relative error; `str()`
+renders one line per resolution
+(`T0/PHY1/Rth1: 10k ±5% → 10k (achieved +0.0%)`). `check` and the
+emitters reject a surviving spec, so the pipeline order is enforced.
+
 ## Validation (`check.py`)
 
 `check(circuit, *, footprints=None) -> list[Issue]` — the one
 validation pass: flattens implicitly, checks port-range containment
 over the hierarchy *before* flattening, then part and net rules over
-the flat IR, and applies waivers last. `Issue(severity, message, check, path)`; `Severity` = `warning` / `error` / `waived`.
+the flat IR, and applies waivers last. A `ValueRange` still on a part
+errors — `solve` runs first. `Issue(severity, message, check, path)`; `Severity` = `warning` / `error` / `waived`.
 `raise_on_errors(issues)` raises `CheckError`. `RANGE_CONTAINMENT` is
 the containment check's id for waivers. `FootprintTable` is the
 `exists(footprint)` protocol (kicadlib or stubs).

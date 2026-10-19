@@ -525,6 +525,15 @@ def _extra_residual(  # noqa: PLR0913 — the enumeration context threaded throu
             )
         )
         return
+    if not isinstance(placed.value, str):
+        issues.append(
+            _issue(
+                f"{placed.ref} loads {base_net!r} but carries an unresolved "
+                "value spec — run solve before the equivalence proof",
+                placed.ref,
+            )
+        )
+        return
     residuals.append(
         Residual(base_net, EXTRA_LOADING, placed.value, budgets.get(EXTRA_LOADING))
     )

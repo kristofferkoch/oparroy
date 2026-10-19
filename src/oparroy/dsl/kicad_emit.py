@@ -96,6 +96,12 @@ def emit_netlist(circuit: Circuit) -> str:
 def _emit_part(circuit: Circuit, part: Part, identities: dict[str, str]) -> list[str]:
     lines = [f'    (comp (ref "{_quote(part.ref)}")']
     if part.value is not None:
+        if not isinstance(part.value, str):
+            msg = (
+                f"{part.ref} has an unresolved value spec {part.value} — "
+                "run solve() before emit"
+            )
+            raise DefinitionError(msg)
         lines.append(f'      (value "{_quote(part.value)}")')
     if part.footprint is not None:
         lines.append(f'      (footprint "{_quote(part.footprint)}")')

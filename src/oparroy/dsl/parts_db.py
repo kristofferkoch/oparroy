@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from oparroy.dsl.parts import TypedPart
+    from oparroy.dsl.values import ValueBin
 
 #: How old a stock snapshot may get before the freshness check flags it.
 STOCK_MAX_AGE_DAYS = 90
@@ -165,7 +166,10 @@ class PartRecord:
     ``partial_power_down`` records the datasheet's partial-power-down
     (Ioff) support: None is no data — never a finding — and False is
     a cited absence, consumed by the power-domain crossing check's
-    ``AlwaysPowered`` rule.
+    ``AlwaysPowered`` rule. ``bin`` declares the stocked value grid
+    (``oparroy.dsl.values.ValueBin``) the solve pass resolves
+    ``ValueRange`` specs against; None means the part carries literal
+    values only.
     """
 
     name: str
@@ -181,6 +185,7 @@ class PartRecord:
     datasheet: str | None = None
     residuals: Residuals | None = None
     partial_power_down: bool | None = None
+    bin: ValueBin | None = None
     note: str = ""
 
     def __post_init__(self) -> None:
@@ -313,7 +318,8 @@ class PartsDb:
         carries its symbol, default value, and default footprint —
         including Nones, which clear a base-class default — plus the
         electrical residual magnitudes (``residuals``), the equivalence
-        proof's per-part data. Binding is
+        proof's per-part data, and the stocked value grid
+        (``value_bin``), the solve pass's per-part data. Binding is
         unconditional: stock status constrains *selection*, and stale
         or missing stock is the freshness audit's job, so a moving
         stock number never breaks a capture at import.
@@ -329,6 +335,7 @@ class PartsDb:
             "default_footprint": record.footprint,
             "residuals": record.residuals,
             "partial_power_down": record.partial_power_down,
+            "value_bin": record.bin,
         }
         return cast(
             "type[_TypedPartT]",

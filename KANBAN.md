@@ -57,21 +57,17 @@ ______________________________________________________________________
   Fabs **first**, ahead of the standalone node board: its eight tiles
   are the first bench articles for the §2/§4 claims.
   **Blocked by:** — · **Unblocks:** T12, T15
-- **T23 — DSL parametric value resolution.** Computed component values
-  carry slack (DESIGN.md §7): the capture states a spec — target plus
-  tolerance — and the emitter resolves it to real parts from the parts
-  DB's stocked bins: the VDD/2 divider comes out of the 10k bin, never
-  an irrational computed number. Includes ratio specs (a divider ratio
-  met by any pair from a bin) and reporting the achieved error of the
-  chosen values against the spec. Widens `Part.value` from `str` to a
-  value-spec type (DESIGN.md §7). Generalizes to **ranges as the
-  universal value spec** and **generators** (PolymorphicBlocks
-  steal): a solve pass between capture and check (capture → solve
-  → check → emit) where a subcircuit computes its own part values from
-  context — the LED sizes its resistor from the actual rail voltage.
-  Solving stays a pass over the finished IR, never tangled into
-  construction: plain-Python capture semantics hold (PB's `IntLike`
-  interleaving is the anti-pattern). **Blocked by:** — ·
+- **T23 — DSL parametric value resolution: ratio specs and
+  generators.** The core slice landed (DESIGN.md §7): `ValueRange`
+  specs on `Part.value`, E-series `ValueBin`s on parts-DB records, and
+  the solve pass between capture and check with achieved-error
+  reporting. Remaining: **ratio specs** — a divider ratio met by any
+  pair from a bin — and **generators** (PolymorphicBlocks steal): a
+  subcircuit computes its own part values from context — the LED sizes
+  its resistor from the actual rail voltage. Solving stays a pass over
+  the finished IR, never tangled into construction: plain-Python
+  capture semantics hold (PB's `IntLike` interleaving is the
+  anti-pattern). **Blocked by:** — ·
   **Unblocks:** —
 - **T22b — Node board fab.** *Shape: chore — needs a human.* Split
   from T22: everything past the settled design. BAT54S verified

@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from oparroy.dsl.parts import MultiUnitPart, TypedPart
+    from oparroy.dsl.values import ValueBin, ValueRange
 
 type NetBinding = Net | str | Sequence[Net | str] | Mapping[str, Net | str]
 type Connection = NetBinding | UnitHandle | type[TypedPart]
@@ -645,7 +646,10 @@ class Part:
     ``partial_power_down`` is the parts DB's partial-power-down (Ioff)
     datum, threaded the same way: None means no data, False means the
     datasheet specifies none (the power-domain crossing check's
-    ``AlwaysPowered`` rule consumes it). ``note``
+    ``AlwaysPowered`` rule consumes it). ``value_bin`` is the parts
+    DB's stocked value grid (``oparroy.dsl.values.ValueBin``), threaded
+    the same way: None means no bin, and a ``ValueRange`` spec on
+    ``value`` then fails the solve pass. ``note``
     is an optional human note for the layout author (``Circuit.part``'s
     ``note=``), emitted as the netlist comp's Comment field; ``{ref}``
     placeholders naming sibling parts resolve to the annotated refdes
@@ -656,7 +660,7 @@ class Part:
         self,
         ref: str,
         symbol: Symbol,
-        value: str | None,
+        value: str | ValueRange | None,
         footprint: str | None,
         *,
         identity: str | None = None,
@@ -669,6 +673,7 @@ class Part:
         self.provenance: Provenance | None = None
         self.residuals: Residuals | None = None
         self.partial_power_down: bool | None = None
+        self.value_bin: ValueBin | None = None
         self.note: str | None = None
         self._identity = ref if identity is None else identity
         base = Placement() if placement is None else placement
@@ -1426,7 +1431,7 @@ class Circuit:
         spec: TypedPart | None = None,
         *,
         symbol: str | None = None,
-        value: str | None = None,
+        value: str | ValueRange | None = None,
         footprint: str | None = None,
         note: str | None = None,
     ) -> Part:
@@ -1486,6 +1491,7 @@ class Circuit:
             placed = self._place_multi(ref, spec, footprint, resolved)
             placed.residuals = spec.residuals
             placed.partial_power_down = spec.partial_power_down
+            placed.value_bin = spec.value_bin
             return placed
         symbol_pins = {pin.number for pin in resolved.pins}
         targets = [
@@ -1523,6 +1529,7 @@ class Circuit:
                 net._attach(placed.pin(number))  # noqa: SLF001 — same module
         placed.residuals = spec.residuals
         placed.partial_power_down = spec.partial_power_down
+        placed.value_bin = spec.value_bin
         return placed
 
     def _place_multi(
@@ -1580,7 +1587,7 @@ class Circuit:
         self,
         ref: str,
         resolved: Symbol,
-        value: str | None,
+        value: str | ValueRange | None,
         footprint: str | None,
         *,
         identity: str | None = None,
@@ -2099,6 +2106,7 @@ class Circuit:
             placed.provenance = part.provenance
             placed.residuals = part.residuals
             placed.partial_power_down = part.partial_power_down
+            placed.value_bin = part.value_bin
             placed.note = _prefix_note_refs(part.note, self._parts, prefix)
             for pin in part.pins:
                 if pin.net is not None:
@@ -2146,6 +2154,7 @@ class Circuit:
             placed.provenance = placeholder.provenance
             placed.residuals = part_class.residuals
             placed.partial_power_down = part_class.partial_power_down
+            placed.value_bin = part_class.value_bin
             for pin in placeholder.pins:
                 if pin.net is not None:
                     for number in _pin_numbers(part_class.pin_map[pin.number]):
@@ -2185,6 +2194,7 @@ class Circuit:
             placed.provenance = part.provenance
             placed.residuals = part.residuals
             placed.partial_power_down = part.partial_power_down
+            placed.value_bin = part.value_bin
             placed.note = part.note
             for pin in part.pins:
                 if pin.net is not None:
