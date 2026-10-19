@@ -648,8 +648,9 @@ class Part:
     datasheet specifies none (the power-domain crossing check's
     ``AlwaysPowered`` rule consumes it). ``value_bin`` is the parts
     DB's stocked value grid (``oparroy.dsl.values.ValueBin``), threaded
-    the same way: None means no bin, and a ``ValueRange`` spec on
-    ``value`` then fails the solve pass. ``note``
+    the same way: None means no bin, and an unresolved value spec
+    (``ValueRange`` or ``DividerHalf``) on ``value`` then fails the
+    solve pass. ``note``
     is an optional human note for the layout author (``Circuit.part``'s
     ``note=``), emitted as the netlist comp's Comment field; ``{ref}``
     placeholders naming sibling parts resolve to the annotated refdes

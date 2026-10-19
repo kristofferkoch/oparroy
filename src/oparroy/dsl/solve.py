@@ -11,19 +11,21 @@ never touched.
 
 Two specs resolve here. A ``ValueRange`` on a part resolves that part
 alone against its bin. A ``DividerHalf`` (``DividerSpec.top()`` /
-``.bottom()``) marks one resistor of a divider: the two halves share a
-``DividerSpec`` and resolve together, meeting its ratio, Thévenin
-output impedance, and standing-current constraints with one stocked
-pair. Dividers resolve first — their picks join the in-use set single
-specs then consolidate against.
+``.bottom()``) marks one resistor of a divider: the two sibling halves
+share a ``DividerSpec`` within one capture and resolve together,
+meeting its ratio, Thévenin output impedance, and standing-current
+constraints with one stocked pair. One spec resolves one divider, and
+scoping the group to the capture keeps a hoisted spec safe across
+instances of a reusable subcircuit. Dividers resolve first — their
+picks join the in-use set single specs then consolidate against.
 
 The walk is hierarchical and in place: ``check`` and the emitters
 flatten their own copies, so resolving a flattened copy here would
 leave the originals unsolved — instance children are mutated where
 they live, and flattening carries the solved literals downstream. A
 spec on a part with no value bin, or one no stocked value meets, is an
-error issue; a spec surviving to ``check`` or an emitter (solve never
-ran) is rejected there, so the pipeline order is enforced, not
+error issue; a spec surviving to ``check`` or a netlist emitter (solve
+never ran) is rejected there, so the pipeline order is enforced, not
 conventional.
 """
 
@@ -103,15 +105,12 @@ class DividerResolution:
 
     def __str__(self) -> str:
         family = self.spec.r_out.family
-        r_out = (
-            format_value(self.r_out, family=family)
-            if family is not None
-            else f"{self.r_out:.6g}"
-        )
+        assert family is not None  # noqa: S101 — DividerSpec requires it
+        r_out = format_value(self.r_out, family=family)
         return (
             f"{self.path}: {self.spec} → {self.r1_str}/{self.r2_str} "
             f"(ratio {self.ratio:.3f}, achieved {self.ratio_error:+.1%}; "
-            f"R∥R {r_out}; I {self.current * 1e6:.0f} µA)"
+            f"R∥R {r_out}; I {self.current * 1e6:g} µA)"
         )
 
 
@@ -126,15 +125,28 @@ class SolveReport:
         return "\n".join(str(resolution) for resolution in self.resolutions)
 
 
+def _divider_scope(path: str) -> str:
+    """Return the owning capture's hierarchical path ('' at top level).
+
+    A divider's two halves must be siblings in one capture, so the scope
+    is part of the group key: a spec hoisted to a module or class
+    constant then resolves one divider per instance instead of merging
+    like-named halves across instances.
+    """
+    return path.rpartition("/")[0]
+
+
 def solve(circuit: Circuit) -> SolveReport:
     """Resolve every value spec on the IR to a stocked literal.
 
-    Dividers resolve first (in natural path order of their top half),
-    then single ``ValueRange`` specs (in natural path order); each pick
-    joins the in-use set the consolidation tie-break consults (alongside
-    the circuit's literal values), so repeated solves are deterministic
-    and identical specs consolidate onto one stocked value. Mutates the
-    circuit in place and returns the report.
+    Dividers resolve first (grouped per capture, in natural path order
+    of their top half), then single ``ValueRange`` specs (in natural
+    path order); each pick joins the in-use set the consolidation
+    tie-break consults (alongside the circuit's literal values), so
+    repeated solves are deterministic and identical specs consolidate
+    onto one stocked value; a second solve finds no specs and returns
+    an empty report. Mutates the circuit in place and returns the
+    report.
     """
     parts: list[tuple[str, Part]] = []
     _collect_parts(circuit, (), parts, set())
@@ -143,17 +155,18 @@ def solve(circuit: Circuit) -> SolveReport:
     in_use: dict[str, set[float]] = {}
     report = SolveReport()
 
-    divider_groups: dict[int, dict[str, tuple[str, Part]]] = {}
+    divider_groups: dict[tuple[str, int], dict[str, tuple[str, Part]]] = {}
     for path, part in parts:
         if not isinstance(part.value, DividerHalf):
             continue
         half = part.value
-        group = divider_groups.setdefault(id(half.spec), {})
+        group = divider_groups.setdefault((_divider_scope(path), id(half.spec)), {})
         if half.role in group:
             report.issues.append(
                 Issue(
                     Severity.ERROR,
-                    f"{path}: duplicate divider {half.role} for {half.spec}",
+                    f"{path}: duplicate divider {half.role} for {half.spec} — "
+                    "one DividerSpec resolves one divider; build a spec per divider",
                 )
             )
             continue
@@ -162,8 +175,13 @@ def solve(circuit: Circuit) -> SolveReport:
     def group_key(
         slots: dict[str, tuple[str, Part]],
     ) -> tuple[tuple[str | int, ...], str]:
-        first = min((path for path, _ in slots.values()), key=natural_key)
-        return natural_key(first)
+        top = slots.get("top")
+        path = (
+            top[0]
+            if top is not None
+            else min((present for present, _ in slots.values()), key=natural_key)
+        )
+        return natural_key(path)
 
     for group in sorted(divider_groups.values(), key=group_key):
         _resolve_divider(group, literals, in_use, report)
@@ -206,6 +224,15 @@ def _resolve_divider(
                 Severity.ERROR,
                 f"{top_path}: divider halves need one shared value bin "
                 "(a parts-DB record's bin declares the stocked grid)",
+            )
+        )
+        return
+    if top_bin.kind != "resistor":
+        report.issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{top_path}: divider halves need a resistor bin, not "
+                f"{top_bin.kind!r} (a DividerSpec is a resistive divider)",
             )
         )
         return

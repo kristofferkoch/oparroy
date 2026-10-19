@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from conftest import StubSymbols
 
 R_BIN = ValueBin(kind="resistor", series=24, tolerance=0.01, lo=1.0, hi=1e6)
+C_BIN = ValueBin(kind="capacitor", series=12, tolerance=0.10, lo=1e-12, hi=1e-6)
 EXACT_10K = 10_000.0
 NEAREST_1K = 1_000.0
 OFF_NOMINAL = 1030.0
@@ -51,6 +52,14 @@ class RBin(Resistor):
     symbol = "Stub:R"
     default_footprint = "StubFP:R_0603"
     value_bin = R_BIN
+
+
+class CBin(Resistor):
+    """A resistor carrying a capacitor grid — the kind guard's negative control."""
+
+    symbol = "Stub:R"
+    default_footprint = "StubFP:R_0603"
+    value_bin = C_BIN
 
 
 def spec_circuit(symbols: StubSymbols, value: str | ValueRange) -> Circuit:
@@ -411,3 +420,96 @@ def test_divider_walks_instances_and_flatten_carries_the_pair(
     flat = board.flatten()
     assert flat.parts["T1/R1"].value == "10k"
     assert flat.parts["T1/R2"].value == "10k"
+
+
+HOISTED_DIVIDER = DividerSpec(
+    ratio=ValueRange.around(0.5, 0.05),
+    r_out=ValueRange.around("5k", 0.2, family="resistor"),
+    vcc=3.3,
+    i_max=330e-6,
+)
+
+
+def hoisted_divider_child(circuit: Circuit) -> None:
+    """Capture a child sharing one module-level spec across instances."""
+    vcc, out, gnd = circuit.net("vcc"), circuit.net("out"), circuit.net("gnd")
+    circuit.part("R1", RBin(HOISTED_DIVIDER.top(), a=vcc, b=out))
+    circuit.part("R2", RBin(HOISTED_DIVIDER.bottom(), a=out, b=gnd))
+
+
+def test_hoisted_spec_resolves_each_instance_separately(
+    symbols: StubSymbols,
+) -> None:
+    # Grouping is per capture, so a spec hoisted to a module/class constant
+    # resolves one divider per instance instead of colliding on the second.
+    board = Circuit("board", symbols)
+    board.instance("T1", hoisted_divider_child)
+    board.instance("T2", hoisted_divider_child)
+    report = solve(board)
+    assert report.issues == []
+    assert [resolution.path for resolution in report.resolutions] == ["T1/R1", "T2/R1"]
+    flat = board.flatten()
+    for ref in ("T1/R1", "T1/R2", "T2/R1", "T2/R2"):
+        assert flat.parts[ref].value == "10k"
+
+
+def test_divider_rejects_a_non_resistor_bin(symbols: StubSymbols) -> None:
+    # A capacitor grid and a capacitor-scale spec satisfy the arithmetic
+    # (a pair resolves), so only the bin-kind guard rejects the divider.
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around(1e-9, 0.5, family="resistor"),
+        vcc=3.3,
+        i_max=1e9,
+    )
+    c = Circuit("test", symbols)
+    vcc, out, gnd = c.net("vcc"), c.net("out"), c.net("gnd")
+    c.part("C1", CBin(spec.top(), a=vcc, b=out))
+    c.part("C2", CBin(spec.bottom(), a=out, b=gnd))
+    report = solve(c)
+    (issue,) = report.issues
+    assert issue.severity is Severity.ERROR
+    assert "resistor bin" in issue.message
+
+
+def test_divider_halves_need_the_same_spec_object(symbols: StubSymbols) -> None:
+    # Grouping is by identity: an equal-but-distinct spec per half must not
+    # pair, or a same-capture divider could silently capture another's half.
+    def new_spec() -> DividerSpec:
+        return DividerSpec(
+            ratio=ValueRange.around(0.5, 0.05),
+            r_out=ValueRange.around("5k", 0.2, family="resistor"),
+            vcc=3.3,
+            i_max=330e-6,
+        )
+
+    top_spec, bottom_spec = new_spec(), new_spec()
+    assert top_spec == bottom_spec
+    c = Circuit("test", symbols)
+    vcc, out, gnd = c.net("vcc"), c.net("out"), c.net("gnd")
+    c.part("R1", RBin(top_spec.top(), a=vcc, b=out))
+    c.part("R2", RBin(bottom_spec.bottom(), a=out, b=gnd))
+    report = solve(c)
+    assert report.resolutions == []
+    messages = [issue.message for issue in report.issues]
+    assert any("missing its bottom half" in message for message in messages)
+    assert any("missing its top half" in message for message in messages)
+
+
+def test_divider_picks_seed_single_spec_consolidation(
+    symbols: StubSymbols,
+) -> None:
+    # The divider resolves first, so its 10k joins in_use and breaks the
+    # single spec's exact 9k1/10k tie toward 10k.
+    c = divider_circuit(symbols)
+    a, b = c.net("a"), c.net("b")
+    c.part("R3", RBin(ValueRange.around(9_550.0, 0.05), a=a, b=b))
+    report = solve(c)
+    assert report.issues == []
+    assert c.parts["R3"].value == "10k"
+
+
+def test_unsolved_divider_fails_netlist_emit(symbols: StubSymbols) -> None:
+    c = divider_circuit(symbols)
+    with pytest.raises(DefinitionError, match="run solve"):
+        emit_netlist(c)

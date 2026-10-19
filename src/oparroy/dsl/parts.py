@@ -66,8 +66,8 @@ class TypedPart:
     #: the datasheet specifies none.
     partial_power_down: ClassVar[bool | None] = None
     #: The stocked value grid (``ValueBin``) from the parts DB record,
-    #: threaded like ``residuals``: the solve pass resolves
-    #: ``ValueRange`` specs against it; None means no bin.
+    #: threaded like ``residuals``: the solve pass resolves value specs
+    #: against it; None means no bin.
     value_bin: ClassVar[ValueBin | None] = None
 
     def __init__(
@@ -122,7 +122,7 @@ class Capacitor(TypedPart):
 
     def __init__(
         self,
-        value: str | ValueRange | DividerHalf,
+        value: str | ValueRange,
         *,
         a: Net | str,
         b: Net | str,
