@@ -49,7 +49,9 @@ node's J2 carries — `TX_A` and `RX_B` — and the supervisor carries
 the same injector on its originator port (the supervisor→tile-0
 segment), so each of the ring's nine segments is instrumented at
 exactly one end (tile *i*'s injector faces tile *i+1*'s receiver;
-tile 7's faces the supervisor's drain). The supervisor→tile-0 segment
+tile 7's faces the supervisor's drain) — with one exception: the
+measurement tile (§12) carries no injector, and its downstream
+segment is the one uninstrumented hop. The supervisor→tile-0 segment
 is the one exception to copper: it carries the §3 connector pair, the
 demo's yankable connector and the cable-reach bench's insertion point
 (DESIGN.md §6). Per-wire circuit, three
@@ -92,10 +94,11 @@ Part selection: **SN74LVC1G3157 everywhere** — already a stocked BOM
 line in two vendors (parts DB: TI C10426, UMW C3040658), datasheet
 extracted, spice model in `circuits/lib/`, and its 7 Ω is already
 inside the §2 measured baseline (tb_decode swept the inserted-switch
-path). 48 switches for the tile-side segment wires (8 tiles × 2 wires ×
-3\) plus the supervisor port's 6; the same switch also serves the
-keep-alive cut (§4, 8), the boundary watchdog defeat (§5, 1), and the
-pot substitution muxes (§6, 4) — 67 in all on one stocked BOM line.
+path). 42 switches for the tile-side segment wires (7 tiles × 2 wires ×
+3\) — the measurement tile (§12) carries no injector — plus the
+supervisor port's 6; the same switch also serves the
+keep-alive cut (§4, 7), the boundary watchdog defeat (§5, 1), and the
+pot substitution muxes (§6, 4) — 60 in all on one stocked BOM line.
 Rejected alternatives in §11.
 
 The injector sits **between the tile PHY and the downstream
@@ -207,8 +210,9 @@ scan-chain `sel`-observe (§8) reads high, consistent.
 
 DESIGN.md §6 dual role: four **input tiles** (1, 3, 5, 7) carry a
 potentiometer and
-two buttons; four **output tiles** (0, 2, 4, 6 — the boundary tile is
-an output tile) carry a buzzer. Payloads bind the pin map's reserved
+two buttons; three **output tiles** (0, 2, 4 — the boundary tile is
+an output tile) carry a buzzer; the fourth output tile, 6, is the
+measurement tile (§12) and drops the payload. Payloads bind the pin map's reserved
 functions (`pot` =
 PD6/ADC_IN6, `button_a` = PC5, `button_b` = PC6, `buzzer` =
 PC4/TIM1_CH4) — payload parts are CI-board additions on those tiles,
@@ -249,8 +253,9 @@ watchdog defeat). The memo's three kinds cannot express a branch that
 is open in reset state; `add_shunt`'s reset-state reduction is "branch
 absent", its residuals are off-capacitance and leakage.
 
-**Per tile** (sheetpath-keyed, one declaration instruments all eight —
-instance `FI1`, parts prefixed at flatten time):
+**Per tile** (sheetpath-keyed, one declaration instruments the seven
+injector tiles — instance `FI1`, parts prefixed at flatten time; tile 6
+carries its own set, below):
 
 | #   | Kind          | Target (capture names)                             | Parts                           | Bit (0 = plain)          |
 | --- | ------------- | -------------------------------------------------- | ------------------------------- | ------------------------ |
@@ -283,8 +288,16 @@ four input tiles):
 | H2  | add_shunt  | PC5: button ∥ N-FET                       | FI1/QBA 2N7002 + 47 kΩ gate PD (+ button, 10 kΩ, 1 kΩ) | `BTN_A`         |
 | H3  | add_shunt  | PC6: button ∥ N-FET                       | FI1/QBB 2N7002 + 47 kΩ gate PD                         | `BTN_B`         |
 
-**Output tiles 0, 2, 4, 6** (the boundary tile is an output tile):
-buzzer payload only (PC4 → 470 Ω → piezo →
+**Measurement tile 6, in place of the per-tile set** (per-instance; the
+chain itself is §12's):
+
+| #     | Kind          | Target                                          | Parts                                                                                                                                                              | Bit / pin                |
+| ----- | ------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| F8    | insert_series | `3V3` → shunt → `3V3N` (domains per §3)         | FI1/QPW AO3401A + 47 kΩ gate PD + FI1/RSH 82 mΩ + FI1/UIM INA241A5 (REF1 → `3V3`, REF2 → GND) + 47 Ω + 1 nF RC + FI1/UAD ADCS7476 + 47 kΩ CS pull-up + bypass caps | `PWR` (0 = powered)      |
+| P1–P3 | add_tap       | `F8_sclk`/`F8_cs`/`F8_sdata` → RP2040 GPIO2/1/0 | wire                                                                                                                                                               | SPI0 / PIO burst capture |
+
+**Output tiles 0, 2, 4** (the boundary tile is an output tile; tile 6
+is the measurement tile): buzzer payload only (PC4 → 470 Ω → piezo →
 GND) — an addition, no transform, no control bits.
 
 **Supervisor originator port** (the supervisor→tile-0 segment): the
@@ -294,7 +307,8 @@ needs none: tile 7's downstream injector covers that segment.
 **Control-line pull-downs:** every scan-plane control line carries a
 47 kΩ pull-down to GND ([docs/scan-plane.md](scan-plane.md) §4) — the
 FET-gate pull-downs in the parts columns above double as their lines';
-the 70 switch-select lines (F1–F7's selects, the supervisor port's,
+the 63 switch-select lines (F1–F7's selects on the seven injector
+tiles, the supervisor port's,
 `WD_DEFEAT`, the pot muxes, the SWIO tree) gain one each from the same
 47 kΩ / 0603 bin.
 
@@ -306,10 +320,12 @@ shared latch/capture net, per-tile control slices, the constructed-zero
 POR discipline, and the SWIO mux pick. What this doc still owns is the
 demand side the plane was sized against:
 
-- **Control: 83 bits** — 8 per tile × 8 (F1–F8) = 64, boundary
+- **Control: 76 bits** — 8 per tile × 7 (F1–F8) = 56, the measurement
+  tile's `PWR` alone = 1 (its slice's seven other outputs are spare
+  internal nets, scan-plane.md §3), boundary
   `WD_DEFEAT` = 1, input tiles 3 × 4 = 12, supervisor port = 6 — plus
   the SWIO flash-mux select on top, settled at 3 ganged bits for a
-  3157 binary tree (scan-plane.md §5): 86 bits in 11 × 74HC595 (two
+  3157 binary tree (scan-plane.md §5): 79 bits in 11 × 74HC595 (two
   spare in the last aux stage).
 - **POR invariant: bit 0 = plain-board state on every control bit.**
   The reset-state load is therefore all-zeros. The 595's storage
@@ -334,19 +350,25 @@ demand side the plane was sized against:
 Every way the reset-state CI board differs from the plain node,
 enumerated and budgeted — "almost equivalent" is exactly this set:
 
-| #   | Residual                                                                                                                       | Magnitude                                                   | Budget citation                                                                                                                                                                                                          |
-| --- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| R1  | series Ron on every segment wire (break switch, pass state; ring-A paths already carried the §4 switch)                        | +7 Ω typ, ≤ 25 Ω max                                        | §2 tb_decode swept the inserted-switch path; the 470 Ω series R dominates and margins are flat at this scale                                                                                                             |
-| R2  | switch capacitance on each segment wire: one on-port (17.3 pF) + two off-ports (2 × 5.2 pF), both typ @ 5 V (no max specified) | ≈ 28 pF                                                     | §2 tb_decode: margins flat (±3 ns) across 47 pF–1 nF segment capacitance; 28 pF sits below the swept floor                                                                                                               |
-| R3  | `ka` series Ron before `WD1/Rs`                                                                                                | +7 Ω on 220 Ω (+3 %)                                        | §4 glitch-filter timing is non-critical (100 ns rejection has orders of margin)                                                                                                                                          |
-| R4  | 47 kΩ pull-down on `ka#b` bleeds pump charge during strobes                                                                    | ≤ 70 µA ≈ 5 % of per-edge charge                            | §4 charge-pump margin vs the 2.31 V VIH floor; sim/bench-confirmed (§10)                                                                                                                                                 |
-| R5  | P-FET Ron on `3V3N`                                                                                                            | ≤ 85 mΩ → ≤ 3 mV at 30 mA                                   | §2.1 rail headroom (MCU floor 2.7 V, tens-of-mV loop drops already budgeted)                                                                                                                                             |
-| R6  | boundary taps: GPIO + stub capacitance on `opa_p` / `TX_A#b` / `opo` / `led_work`                                              | ≈ 5–10 pF each                                              | `Rar` × 10 pF = 4.7 ns pole vs §2's ≥ 70 ns worst-legal-slice margin; `TX_A#b` inside the swept segment-C range. Stub length is a geometry residual → §7 layout-checker obligation (short-stub contract, ≤ 20 mm target) |
-| R7  | pot-mux Ron in the ADC source path                                                                                             | +7 Ω on ≥ 3.5 kΩ                                            | §7 ADC source ≤ 10 kΩ budget                                                                                                                                                                                             |
-| R8  | button FET off-capacitance + on-resistance                                                                                     | ~5 pF, R DS(on) ≪ 10 kΩ pull-up                             | slow GPIO; millivolt levels                                                                                                                                                                                              |
-| R9  | defeat-shunt off-capacitance on `sel`                                                                                          | +5.2 pF on Cs = 10 nF                                       | §4 timing constants unchanged at 0.05 %                                                                                                                                                                                  |
-| R10 | per-tile §3 connectors and their TVS dropped on the eight copper segments; kept at the boundary pair                           | −0.8 pF Cj, −contact R per end                              | margin-neutral to positive: the TVS capacitance leaves the wire, and §2's margins are flat across the swept segment-C range; no ESD exposure path exists intra-board (§2)                                                |
-| R11 | switch/FET off-state leakage on the segment wires and button lines (3157 break + shunt ports, 2N7002 drains)                   | ±1 µA max per 3157 port (SCES424O §5.5), ≤ 80 nA per 2N7002 | µV-class across the 470 Ω legs and 10 kΩ pull-ups — inside the §2 swept margins the R1/R2 citations point at                                                                                                             |
+| #   | Residual                                                                                                                                    | Magnitude                                                                   | Budget citation                                                                                                                                                                                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R1  | series Ron on every instrumented segment wire (break switch, pass state; ring-A paths already carried the §4 switch)                        | +7 Ω typ, ≤ 25 Ω max                                                        | §2 tb_decode swept the inserted-switch path; the 470 Ω series R dominates and margins are flat at this scale                                                                                                             |
+| R2  | switch capacitance on each instrumented segment wire: one on-port (17.3 pF) + two off-ports (2 × 5.2 pF), both typ @ 5 V (no max specified) | ≈ 28 pF                                                                     | §2 tb_decode: margins flat (±3 ns) across 47 pF–1 nF segment capacitance; 28 pF sits below the swept floor                                                                                                               |
+| R3  | `ka` series Ron before `WD1/Rs`                                                                                                             | +7 Ω on 220 Ω (+3 %)                                                        | §4 glitch-filter timing is non-critical (100 ns rejection has orders of margin)                                                                                                                                          |
+| R4  | 47 kΩ pull-down on `ka#b` bleeds pump charge during strobes                                                                                 | ≤ 70 µA ≈ 5 % of per-edge charge                                            | §4 charge-pump margin vs the 2.31 V VIH floor; sim/bench-confirmed (§10)                                                                                                                                                 |
+| R5  | P-FET Ron on `3V3N`                                                                                                                         | ≤ 85 mΩ → ≤ 3 mV at 30 mA                                                   | §2.1 rail headroom (MCU floor 2.7 V, tens-of-mV loop drops already budgeted)                                                                                                                                             |
+| R6  | boundary taps: GPIO + stub capacitance on `opa_p` / `TX_A#b` / `opo` / `led_work`                                                           | ≈ 5–10 pF each                                                              | `Rar` × 10 pF = 4.7 ns pole vs §2's ≥ 70 ns worst-legal-slice margin; `TX_A#b` inside the swept segment-C range. Stub length is a geometry residual → §7 layout-checker obligation (short-stub contract, ≤ 20 mm target) |
+| R7  | pot-mux Ron in the ADC source path                                                                                                          | +7 Ω on ≥ 3.5 kΩ                                                            | §7 ADC source ≤ 10 kΩ budget                                                                                                                                                                                             |
+| R8  | button FET off-capacitance + on-resistance                                                                                                  | ~5 pF, R DS(on) ≪ 10 kΩ pull-up                                             | slow GPIO; millivolt levels                                                                                                                                                                                              |
+| R9  | defeat-shunt off-capacitance on `sel`                                                                                                       | +5.2 pF on Cs = 10 nF                                                       | §4 timing constants unchanged at 0.05 %                                                                                                                                                                                  |
+| R10 | per-tile §3 connectors and their TVS dropped on the eight copper segments; kept at the boundary pair                                        | −0.8 pF Cj, −contact R per end                                              | margin-neutral to positive: the TVS capacitance leaves the wire, and §2's margins are flat across the swept segment-C range; no ESD exposure path exists intra-board (§2)                                                |
+| R11 | switch/FET off-state leakage on the segment wires and button lines (3157 break + shunt ports, 2N7002 drains)                                | ±1 µA max per 3157 port (SCES424O §5.5), ≤ 80 nA per 2N7002                 | µV-class across the 470 Ω legs and 10 kΩ pull-ups — inside the §2 swept margins the R1/R2 citations point at                                                                                                             |
+| R12 | measurement tile (T6) chain: shunt in series with `3V3N`, amp/ADC input bias + quiescent on the always rail, SPI tap stubs                  | +82 mΩ; ≤ 45 µA/pin amp input bias; ~3.1 mA typ quiescent; ≈5–10 pF per tap | §12 — the shunt sits inside the F8 FET's ≤ 85 mΩ spend at every current; the amp bias is µA-class against §3's ±20 mA injection budget; the quiescent draw is noise against the §6 500 mA budget                         |
+
+R1–R4 and R11's per-tile figures scope to the seven injector tiles and
+the supervisor port: the measurement tile (§12) carries only the
+extended F8 (row R12), and its downstream segment is the one
+uninstrumented segment (§2).
 
 The phantom-power clamp loading on the bypass route (§3) is not a
 reset-state residual — it exists only in the injected power-cut state —
@@ -367,6 +389,11 @@ it gets a dedicated bench item.
   re-power; rail dip on `3V3` at P-FET turn-on into 10 µF (if
   disruptive, slow the gate with a series R + cap — the footprint
   decision lands at capture).
+- Measurement chain (T6, §12): the first ADCS7476 read against a known
+  voltage settles the Linux-driver shift discrepancy
+  ([quirks](../datasheets/ADCS7476/notes/quirks.md)); then boot,
+  flash-programming, and per-frame signatures, plus the cut-state clamp
+  back-feed as a measured number against §3's ≈5.7 mA bound.
 - Keep-alive cut: bypass engage ~0.5 ms, per node, via `sel`-observe.
 - Watchdog defeat: SWIO-halted node stays in the ring; single-stepped
   execution observed on the taps.
@@ -412,7 +439,9 @@ it gets a dedicated bench item.
 
 ## 12. Tile power measurement chain
 
-One ring tile trades its human-I/O role additions for a current
+Tile **T6** — the output tile nearest the supervisor (SUP–T7–T6, the
+shortest SPI run on board copper) — trades its human-I/O role additions
+and its injector/keep-alive transforms for a current
 measurement chain: a shunt in series with the tile's `3V3` feed at the
 F8 power-cut switch (§3), a high-side shunt amp, and a fast SPI ADC —
 amp and ADC powered from the **always-on `3V3` domain**, so the chain
@@ -431,8 +460,9 @@ and
   [quirks](../datasheets/INA241/notes/quirks.md)) resolve the 1.25 µs
   bit cells of 800 kbit/s line activity. Supply 2.7–20 V runs off `3V3`
   always; CM range −5…110 V covers the rail with decades of margin;
-  the REF pair supports bidirectional sensing if the capture wants the
-  cut-state reverse flow read.
+  the REF pair straps mid-rail (REF1 → `3V3`, REF2 → GND — no extra
+  parts) for the bidirectional read: the cut-state reverse flow
+  registers as a negative current (below).
 - **ADC: TI ADCS7476** (12-bit, 1 MSPS), SOT-23-6. VDD-as-reference —
   0…3.3 V input straight off the rail, no reference part; 16-SCLK
   frames (4 leading zeros + 12 bits, SPI mode 0) stream conversions
@@ -466,11 +496,22 @@ continuously, so the supervisor burst-captures to SRAM: 264 kB at
 draws ~3.1 mA typ (amp 2.5 + ADC 0.6) on the always-on rail — noise
 against the §6 500 mA budget.
 
-**Deferred to the capture:** shunt placement upstream vs downstream of
-the F8 switch (downstream reads the tile alone and — with the REF pins
-biased mid-rail — the cut-state clamp back-feed of §3 as a negative
-current, turning the ≈5.7 mA analytic bound into a measured number);
-the amp→ADC charge-bucket RC against the amp's 1 nF max capacitive
-load (quirks); the first bench read against a known voltage to settle
-the Linux-driver shift discrepancy
-([ADCS7476 quirks](../datasheets/ADCS7476/notes/quirks.md)).
+**Settled at the capture.** The shunt sits **downstream of the F8 FET**
+(`3V3` → QPW → shunt → `3V3N`): only the downstream placement reads the
+cut-state clamp back-feed, turning §3's ≈5.7 mA analytic bound into a
+measured number. With the REF pair strapped mid-rail, zero current
+reads 1.65 V, the 50 mA tile ceiling reads 2.47 V (inside the VS−0.2 V
+ceiling), and the −5.7 mA back-feed reads ≈1.56 V — ≈116 LSB below
+mid-scale at 49 µA/LSB. The amp→ADC charge-bucket RC is **47 Ω +
+1 nF**: τ = 47 ns recovers the ADC's 26 pF sampling kick to 12 bits
+inside the 400 ns track window, and 1 nF sits at the amp's max
+capacitive load (quirks) behind the isolating series R, ≥ 20× the
+sampling cap. The SPI nets escape on taps **P1–P3** (§7) to supervisor
+**GPIO0/1/2** (`adc_sdata`/`adc_cs`/`adc_sclk` — all SPI0-capable pads,
+so the hardware-SPI fallback stays open though PIO burst capture is the
+plan); a 47 kΩ CS pull-up holds the ADC deselected through the POR Hi-Z
+window (scan-plane.md §4's discipline). Still deferred — to the bench,
+not the capture: the first ADCS7476 read against a known voltage, to
+settle the Linux-driver shift discrepancy
+([ADCS7476 quirks](../datasheets/ADCS7476/notes/quirks.md)); it lands on
+§10's list.

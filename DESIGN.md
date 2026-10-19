@@ -583,7 +583,10 @@ real human-facing I/O from the §5
 complement: **all eight tiles, four input alternating with four output
 around the ring** — a potentiometer and two buttons on input tiles,
 LEDs and a buzzer on output tiles, the boundary tile an output tile —
-so test traffic
+with one exception: tile 6 trades its output payload for the
+power-measurement chain
+([instrumented-ci.md §12](docs/instrumented-ci.md#12-tile-power-measurement-chain))
+— so test traffic
 *is* application traffic (§5). Properties this exploits for demos: the
 §4.1 status LEDs already narrate ring health visually, and the §2
 vsync latch makes multi-node LED/buzzer patterns tear-free — a fault
@@ -713,9 +716,10 @@ CI control plane ([docs/scan-plane.md](docs/scan-plane.md) — settled
 design: topology, bit maps, POR discipline, SWIO mux pick): **all slow
 control and observe on the CI board is one daisy-chained shift
 register with a global latch/capture clock** — 11 × 74HC595 control
-stages (one per-tile slice, three supervisor-side aux stages; 86 bits:
+stages (one per-tile slice, three supervisor-side aux stages; 79 bits:
 mux selects, per-node power switches, fault-injection switches,
-human-I/O overrides, the SWIO tree select) plus 2 × 74HC165 observe
+human-I/O overrides, the SWIO tree select — the measurement tile's
+slice drives only its power-cut bit, seven outputs spare) plus 2 × 74HC165 observe
 stages (per-tile `sel` and `3V3N`). Five RP2040 pins (clock, data out,
 data in, commit, /OE) drive the whole board; chain length scales with
 the fault-injection complement instead of consuming GPIO, and every
@@ -734,7 +738,10 @@ injector — pass / open / short-to-GND / short-to-3V3 — built from
 three SN74LVC1G3157 SPDTs (one series break, two 470 Ω-legged
 shunts; every latched bit pattern is electrically safe, no
 interlocks), placed once per segment on the intra-board copper at each
-tile's downstream boundary, plus the same on the supervisor's
+tile's downstream boundary — the measurement tile
+([instrumented-ci.md §12](docs/instrumented-ci.md#12-tile-power-measurement-chain))
+excepted: it carries no injector, leaving its downstream segment the
+ring's one uninstrumented segment — plus the same on the supervisor's
 originator port. Inter-tile segments are board copper, not cable —
 the one exception is the supervisor→tile-0 segment (the boundary
 node's RX segment), which carries a §3 connector pair: the demo's

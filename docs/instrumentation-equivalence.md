@@ -58,7 +58,7 @@ declared transform list. Two consequences:
 
 Decided (§4 Q1): transforms are expressed against the
 **hierarchical** IR — per-tile, sheetpath-keyed, one declaration
-instruments all eight node tiles — and the proof runs on the
+instruments every tile of a role — and the proof runs on the
 flattened result.
 
 ## 2. The equivalence proof
@@ -128,10 +128,11 @@ already exist for the exceptional case.
 Decided (four calls taken before the card was re-blocked):
 
 - **Q1 — Transform level: hierarchical, per-tile.** One transform
-  declaration keyed on sheetpath metadata instruments all eight node
-  tiles; the proof runs on the flattened result. Tiles that
-  diverge (the instrumented boundary node, §6) carry their own
-  per-instance declarations on top.
+  declaration keyed on sheetpath metadata instruments every tile of a
+  role; the proof runs on the flattened result. Tiles that
+  diverge (the instrumented boundary node §6, the measurement tile
+  [instrumented-ci.md §12](instrumented-ci.md#12-tile-power-measurement-chain))
+  carry their own per-instance declarations on top.
 - **Q2 — Reset-state source of truth: the scan plane's constructed
   zero state.** Control-line reset levels come from the scan-plane
   POR discipline, not from declarations on the transform or the switch
