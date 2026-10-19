@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from oparroy.dsl import DefinitionError, ValueBin, ValueRange
+from oparroy.dsl import DefinitionError, DividerHalf, DividerSpec, ValueBin, ValueRange
 from oparroy.dsl.values import E12, E24, E96, format_value, parse_value
 
 #: Every ``R0603``/``C0603`` literal in ``design/`` (DNP markers
@@ -195,3 +195,71 @@ def test_resolve_tie_prefers_in_use_then_ascending() -> None:
     spec = ValueRange.around(4900.0, 0.05)
     assert R_0603_BIN.resolve(spec) == pytest.approx(4700.0)
     assert R_0603_BIN.resolve(spec, in_use=frozenset({5100.0})) == pytest.approx(5100.0)
+
+
+HALF_DIVIDER = DividerSpec(
+    ratio=ValueRange.around(0.5, 0.05),
+    r_out=ValueRange.around("5k", 0.2, family="resistor"),
+    vcc=3.3,
+    i_max=330e-6,
+)
+
+
+def test_divider_spec_validates() -> None:
+    with pytest.raises(DefinitionError, match="ratio"):
+        DividerSpec(ValueRange(0.0, 0.5), ValueRange(1.0, 2.0), 3.3, 1e-3)
+    with pytest.raises(DefinitionError, match="ratio"):
+        DividerSpec(ValueRange(0.5, 1.0), ValueRange(1.0, 2.0), 3.3, 1e-3)
+    with pytest.raises(DefinitionError, match="vcc"):
+        DividerSpec(ValueRange(0.4, 0.6), ValueRange(1.0, 2.0), 0.0, 1e-3)
+    with pytest.raises(DefinitionError, match="i_max"):
+        DividerSpec(ValueRange(0.4, 0.6), ValueRange(1.0, 2.0), 3.3, 0.0)
+
+
+def test_divider_half_validates_role() -> None:
+    with pytest.raises(DefinitionError, match="role"):
+        DividerHalf(HALF_DIVIDER, "middle")
+
+
+def test_resolve_divider_half_ratio_resolves_to_the_bench_pair() -> None:
+    assert R_0603_BIN.resolve_divider(HALF_DIVIDER) == pytest.approx(
+        (10_000.0, 10_000.0)
+    )
+
+
+def test_resolve_divider_hits_a_nonhalf_ratio() -> None:
+    # ratio 1/3 (Vout = VDD/3): R2 = R1/2, and the 10k impedance aim
+    # pins the pair to 30k/15k (R∥R = 10k exactly).
+    spec = DividerSpec(
+        ratio=ValueRange.around(1 / 3, 0.01),
+        r_out=ValueRange.around("10k", 0.1, family="resistor"),
+        vcc=3.3,
+        i_max=1e-3,
+    )
+    assert R_0603_BIN.resolve_divider(spec) == pytest.approx((30_000.0, 15_000.0))
+
+
+def test_resolve_divider_none_when_no_pair_meets() -> None:
+    # R∥R ≥ 990k needs a bin value near 2M — above the 1M bin ceiling.
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.01),
+        r_out=ValueRange.around("1M", 0.01, family="resistor"),
+        vcc=3.3,
+        i_max=1e-3,
+    )
+    assert R_0603_BIN.resolve_divider(spec) is None
+
+
+def test_resolve_divider_tie_prefers_in_use_then_ascending() -> None:
+    # r_out nominal 5250 splits the adjacent equal pairs 10k/10k and
+    # 11k/11k into an exact relative-error tie; in_use breaks it.
+    spec = DividerSpec(
+        ratio=ValueRange.around(0.5, 0.05),
+        r_out=ValueRange.around(5250.0, 0.2),
+        vcc=3.3,
+        i_max=330e-6,
+    )
+    assert R_0603_BIN.resolve_divider(spec) == pytest.approx((10_000.0, 10_000.0))
+    assert R_0603_BIN.resolve_divider(spec, in_use=frozenset({11_000.0})) == (
+        pytest.approx((11_000.0, 11_000.0))
+    )

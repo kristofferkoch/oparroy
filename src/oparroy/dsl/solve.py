@@ -9,6 +9,14 @@ IR against the part's stocked ``ValueBin`` (the parts DB's
 literal, reporting each pick's achieved error. Literal strings are
 never touched.
 
+Two specs resolve here. A ``ValueRange`` on a part resolves that part
+alone against its bin. A ``DividerHalf`` (``DividerSpec.top()`` /
+``.bottom()``) marks one resistor of a divider: the two halves share a
+``DividerSpec`` and resolve together, meeting its ratio, Thévenin
+output impedance, and standing-current constraints with one stocked
+pair. Dividers resolve first — their picks join the in-use set single
+specs then consolidate against.
+
 The walk is hierarchical and in place: ``check`` and the emitters
 flatten their own copies, so resolving a flattened copy here would
 leave the originals unsolved — instance children are mutated where
@@ -25,7 +33,13 @@ from dataclasses import dataclass, field
 
 from oparroy.dsl.check import Issue, Severity
 from oparroy.dsl.ir import Circuit, DefinitionError, Part, natural_key
-from oparroy.dsl.values import ValueRange, format_value, parse_value
+from oparroy.dsl.values import (
+    DividerHalf,
+    DividerSpec,
+    ValueRange,
+    format_value,
+    parse_value,
+)
 
 
 @dataclass(frozen=True)
@@ -49,24 +63,77 @@ class Resolution:
         )
 
 
+@dataclass(frozen=True)
+class DividerResolution:
+    """One resolved divider: the spec, the picked pair, the achieved figures.
+
+    ``r1`` is the VCC-side (top) resistor, ``r2`` the GND-side
+    (bottom); ``ratio_error`` is signed relative error of the achieved
+    ratio against the spec's nominal ratio.
+    """
+
+    path: str
+    spec: DividerSpec
+    r1: float
+    r2: float
+    r1_str: str
+    r2_str: str
+
+    @property
+    def ratio(self) -> float:
+        """The achieved ratio R2/(R1+R2)."""
+        return self.r2 / (self.r1 + self.r2)
+
+    @property
+    def ratio_error(self) -> float:
+        """Signed relative error of the achieved ratio vs its nominal."""
+        nominal = self.spec.ratio.nominal
+        assert nominal is not None  # noqa: S101 — __post_init__ fills it
+        return (self.ratio - nominal) / nominal if nominal > 0 else 0.0
+
+    @property
+    def r_out(self) -> float:
+        """The achieved Thévenin output impedance R1‖R2."""
+        return self.r1 * self.r2 / (self.r1 + self.r2)
+
+    @property
+    def current(self) -> float:
+        """The achieved standing current vcc/(R1+R2)."""
+        return self.spec.vcc / (self.r1 + self.r2)
+
+    def __str__(self) -> str:
+        family = self.spec.r_out.family
+        r_out = (
+            format_value(self.r_out, family=family)
+            if family is not None
+            else f"{self.r_out:.6g}"
+        )
+        return (
+            f"{self.path}: {self.spec} → {self.r1_str}/{self.r2_str} "
+            f"(ratio {self.ratio:.3f}, achieved {self.ratio_error:+.1%}; "
+            f"R∥R {r_out}; I {self.current * 1e6:.0f} µA)"
+        )
+
+
 @dataclass
 class SolveReport:
-    """``solve``'s result: the error issues and the per-part resolutions."""
+    """``solve``'s result: the error issues and the per-spec resolutions."""
 
     issues: list[Issue] = field(default_factory=list)
-    resolutions: list[Resolution] = field(default_factory=list)
+    resolutions: list[Resolution | DividerResolution] = field(default_factory=list)
 
     def __str__(self) -> str:
         return "\n".join(str(resolution) for resolution in self.resolutions)
 
 
 def solve(circuit: Circuit) -> SolveReport:
-    """Resolve every ``ValueRange`` on the IR to a stocked literal.
+    """Resolve every value spec on the IR to a stocked literal.
 
-    Parts are visited in natural path order, and each pick joins the
-    in-use set the consolidation tie-break consults (alongside the
-    circuit's literal values), so repeated solves are deterministic and
-    identical specs consolidate onto one stocked value. Mutates the
+    Dividers resolve first (in natural path order of their top half),
+    then single ``ValueRange`` specs (in natural path order); each pick
+    joins the in-use set the consolidation tie-break consults (alongside
+    the circuit's literal values), so repeated solves are deterministic
+    and identical specs consolidate onto one stocked value. Mutates the
     circuit in place and returns the report.
     """
     parts: list[tuple[str, Part]] = []
@@ -75,43 +142,137 @@ def solve(circuit: Circuit) -> SolveReport:
     literals = [part.value for _, part in parts if isinstance(part.value, str)]
     in_use: dict[str, set[float]] = {}
     report = SolveReport()
+
+    divider_groups: dict[int, dict[str, tuple[str, Part]]] = {}
+    for path, part in parts:
+        if not isinstance(part.value, DividerHalf):
+            continue
+        half = part.value
+        group = divider_groups.setdefault(id(half.spec), {})
+        if half.role in group:
+            report.issues.append(
+                Issue(
+                    Severity.ERROR,
+                    f"{path}: duplicate divider {half.role} for {half.spec}",
+                )
+            )
+            continue
+        group[half.role] = (path, part)
+
+    def group_key(
+        slots: dict[str, tuple[str, Part]],
+    ) -> tuple[tuple[str | int, ...], str]:
+        first = min((path for path, _ in slots.values()), key=natural_key)
+        return natural_key(first)
+
+    for group in sorted(divider_groups.values(), key=group_key):
+        _resolve_divider(group, literals, in_use, report)
+
     for path, part in parts:
         if not isinstance(part.value, ValueRange):
             continue
-        spec = part.value
-        value_bin = part.value_bin
-        if value_bin is None:
-            report.issues.append(
-                Issue(
-                    Severity.ERROR,
-                    f"{path}: value spec {spec} but the part has no value bin "
-                    "(a parts-DB record's bin declares the stocked grid)",
-                )
-            )
-            continue
-        used = in_use.setdefault(
-            value_bin.kind, _parse_literals(literals, value_bin.kind)
-        )
-        chosen = value_bin.resolve(spec, in_use=frozenset(used))
-        if chosen is None:
-            report.issues.append(
-                Issue(
-                    Severity.ERROR,
-                    f"{path}: no value in the {value_bin.kind} bin "
-                    f"(E{value_bin.series}, "
-                    f"{format_value(value_bin.lo, family=value_bin.kind)}.."
-                    f"{format_value(value_bin.hi, family=value_bin.kind)}) "
-                    f"meets {spec}",
-                )
-            )
-            continue
-        chosen_str = format_value(chosen, family=value_bin.kind)
-        part.value = chosen_str
-        used.add(chosen)
-        assert spec.nominal is not None  # noqa: S101 — ValueRange fills it
-        rel_error = (chosen - spec.nominal) / spec.nominal if spec.nominal > 0 else 0.0
-        report.resolutions.append(Resolution(path, spec, chosen, chosen_str, rel_error))
+        _resolve_single(path, part, literals, in_use, report)
+
     return report
+
+
+def _resolve_divider(
+    group: dict[str, tuple[str, Part]],
+    literals: list[str],
+    in_use: dict[str, set[float]],
+    report: SolveReport,
+) -> None:
+    """Resolve one divider group: one top and one bottom half, one pair."""
+    top = group.get("top")
+    bottom = group.get("bottom")
+    if top is None or bottom is None:
+        missing = "top" if top is None else "bottom"
+        present = bottom if top is None else top
+        assert present is not None  # noqa: S101 — a group holds at least one half
+        path, _ = present
+        report.issues.append(
+            Issue(Severity.ERROR, f"{path}: divider missing its {missing} half")
+        )
+        return
+    top_path, top_part = top
+    bottom_part = bottom[1]
+    half = top_part.value
+    assert isinstance(half, DividerHalf)  # noqa: S101 — grouped from halves
+    spec = half.spec
+    top_bin = top_part.value_bin
+    if top_bin is None or top_bin != bottom_part.value_bin:
+        report.issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{top_path}: divider halves need one shared value bin "
+                "(a parts-DB record's bin declares the stocked grid)",
+            )
+        )
+        return
+    used = in_use.setdefault(top_bin.kind, _parse_literals(literals, top_bin.kind))
+    pair = top_bin.resolve_divider(spec, in_use=frozenset(used))
+    if pair is None:
+        report.issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{top_path}: no pair in the {top_bin.kind} bin "
+                f"(E{top_bin.series}, "
+                f"{format_value(top_bin.lo, family=top_bin.kind)}.."
+                f"{format_value(top_bin.hi, family=top_bin.kind)}) "
+                f"meets {spec}",
+            )
+        )
+        return
+    r1, r2 = pair
+    r1_str = format_value(r1, family=top_bin.kind)
+    r2_str = format_value(r2, family=top_bin.kind)
+    top_part.value = r1_str
+    bottom_part.value = r2_str
+    used.add(r1)
+    used.add(r2)
+    report.resolutions.append(DividerResolution(top_path, spec, r1, r2, r1_str, r2_str))
+
+
+def _resolve_single(
+    path: str,
+    part: Part,
+    literals: list[str],
+    in_use: dict[str, set[float]],
+    report: SolveReport,
+) -> None:
+    """Resolve one ``ValueRange`` spec on a part against its bin."""
+    spec = part.value
+    assert isinstance(spec, ValueRange)  # noqa: S101 — caller filters
+    value_bin = part.value_bin
+    if value_bin is None:
+        report.issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{path}: value spec {spec} but the part has no value bin "
+                "(a parts-DB record's bin declares the stocked grid)",
+            )
+        )
+        return
+    used = in_use.setdefault(value_bin.kind, _parse_literals(literals, value_bin.kind))
+    chosen = value_bin.resolve(spec, in_use=frozenset(used))
+    if chosen is None:
+        report.issues.append(
+            Issue(
+                Severity.ERROR,
+                f"{path}: no value in the {value_bin.kind} bin "
+                f"(E{value_bin.series}, "
+                f"{format_value(value_bin.lo, family=value_bin.kind)}.."
+                f"{format_value(value_bin.hi, family=value_bin.kind)}) "
+                f"meets {spec}",
+            )
+        )
+        return
+    chosen_str = format_value(chosen, family=value_bin.kind)
+    part.value = chosen_str
+    used.add(chosen)
+    assert spec.nominal is not None  # noqa: S101 — ValueRange fills it
+    rel_error = (chosen - spec.nominal) / spec.nominal if spec.nominal > 0 else 0.0
+    report.resolutions.append(Resolution(path, spec, chosen, chosen_str, rel_error))
 
 
 def _collect_parts(

@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from oparroy.dsl.parts import MultiUnitPart, TypedPart
-    from oparroy.dsl.values import ValueBin, ValueRange
+    from oparroy.dsl.values import DividerHalf, ValueBin, ValueRange
 
 type NetBinding = Net | str | Sequence[Net | str] | Mapping[str, Net | str]
 type Connection = NetBinding | UnitHandle | type[TypedPart]
@@ -660,7 +660,7 @@ class Part:
         self,
         ref: str,
         symbol: Symbol,
-        value: str | ValueRange | None,
+        value: str | ValueRange | DividerHalf | None,
         footprint: str | None,
         *,
         identity: str | None = None,
@@ -1431,7 +1431,7 @@ class Circuit:
         spec: TypedPart | None = None,
         *,
         symbol: str | None = None,
-        value: str | ValueRange | None = None,
+        value: str | ValueRange | DividerHalf | None = None,
         footprint: str | None = None,
         note: str | None = None,
     ) -> Part:
@@ -1587,7 +1587,7 @@ class Circuit:
         self,
         ref: str,
         resolved: Symbol,
-        value: str | ValueRange | None,
+        value: str | ValueRange | DividerHalf | None,
         footprint: str | None,
         *,
         identity: str | None = None,

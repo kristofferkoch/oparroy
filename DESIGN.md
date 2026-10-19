@@ -1000,10 +1000,14 @@ DSL shape (from the initial design interrogation):
   solve → check → emit) resolves every spec to a stocked literal —
   the VDD/2 divider comes out of the 10k bin, never an unsourcable
   irrational value — reporting each pick's achieved error against the
-  spec. `check` and the emitters reject a surviving spec, so the
-  pipeline order is enforced, not conventional. Ratio specs (a divider
-  ratio met by any bin pair) and context-computed values (generators)
-  remain open work (KANBAN.md).
+  spec. A divider whose *ratio* is the spec, not any one resistor, is
+  a `DividerSpec` placed as two sibling `DividerHalf` markers
+  (`spec.top()`/`spec.bottom()`): the solve pass resolves the pair
+  jointly, meeting the ratio, Thévenin output-impedance, and
+  standing-current constraints with one bin pair and reporting all
+  three achieved figures. `check` and the emitters reject a surviving
+  spec, so the pipeline order is enforced, not conventional.
+  Context-computed values (generators) remain open work (KANBAN.md).
 - **Captures live in a new `design/` tree.** `circuits/` keeps benches
   and device models until the bench DUTs are ported and the DUT `.cir`
   files retire.

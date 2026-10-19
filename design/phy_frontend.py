@@ -10,8 +10,10 @@ MCU pins):
   driver. ``sel`` low relaxes the switch into the bypass state; the
   node's RX tap sits on the B1 side, so a bypassed (dead) node keeps
   listening. Facts: ``datasheets/SN74LVC1G3157/notes/facts.md``.
-- **RX threshold** (§2): the VDD/2 divider — two 10k from the stocked
-  bin — on the OPA negative input.
+- **RX threshold** (§2): the VDD/2 divider — a `DividerSpec` ratio
+  spec (0.5, 5k source impedance, bounded current) the solve pass
+  resolves to two 10k from the stocked bin — on the OPA negative
+  input.
 - **Ring B** (§3): no switch — the dual ring demotes the bypass to
   second layer; ring B is plain protected RX/TX.
 - **Terminal protection** (§7 checklist): 470 Ω series R plus a TVS
@@ -39,7 +41,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from design.bins import R0603, TvsSod323
-from oparroy.dsl import Circuit, Subcircuit, SymbolTable, TypedPart, ValueRange
+from oparroy.dsl import (
+    Circuit,
+    DividerSpec,
+    Subcircuit,
+    SymbolTable,
+    TypedPart,
+    ValueRange,
+)
 
 if TYPE_CHECKING:
     from oparroy.dsl import Net
@@ -177,19 +186,18 @@ class PhyFrontEnd(Subcircuit):
         if "upstream" in self._tvs_faces:
             circuit.part("Dbt", TvsSod323(a=tx_b, b=gnd))
 
-        # RX threshold: VDD/2 from the 10k bin (§2; the phy-segment
-        # bench values) — the solve pass resolves the specs to the
-        # stocked 10k literal.
-        circuit.part(
-            "Rth1",
-            R0603(
-                ValueRange.around("10k", 0.05, family="resistor"), a=v3v3, b=mcu_vdd2
-            ),
+        # RX threshold: VDD/2, source impedance the phy-segment bench
+        # settled on (10k∥10k = 5k), standing current bounded (§2). The
+        # solve pass picks the stocked bin pair meeting all three —
+        # ratio 0.5 with the 5k impedance aim resolves to 10k/10k.
+        rxth = DividerSpec(
+            ratio=ValueRange.around(0.5, 0.05),
+            r_out=ValueRange.around("5k", 0.2, family="resistor"),
+            vcc=3.3,
+            i_max=330e-6,
         )
-        circuit.part(
-            "Rth2",
-            R0603(ValueRange.around("10k", 0.05, family="resistor"), a=mcu_vdd2, b=gnd),
-        )
+        circuit.part("Rth1", R0603(rxth.top(), a=v3v3, b=mcu_vdd2))
+        circuit.part("Rth2", R0603(rxth.bottom(), a=mcu_vdd2, b=gnd))
 
         # Hysteresis fallback (§2): OPO -> OPP feedback, unpopulated.
         circuit.part("Rfb", R0603("DNP", a=mcu_opo, b=mcu_rx_a))

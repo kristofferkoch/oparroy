@@ -36,7 +36,7 @@ from oparroy.dsl.ir import Bundle, DefinitionError, Residuals, SocketSpec
 
 if TYPE_CHECKING:
     from oparroy.dsl.ir import Net
-    from oparroy.dsl.values import ValueBin, ValueRange
+    from oparroy.dsl.values import DividerHalf, ValueBin, ValueRange
 
 
 class TypedPart:
@@ -72,7 +72,7 @@ class TypedPart:
 
     def __init__(
         self,
-        value: str | ValueRange | None,
+        value: str | ValueRange | DividerHalf | None,
         footprint: str | None,
         nets: dict[str, Net | str],
     ) -> None:
@@ -105,7 +105,7 @@ class Resistor(TypedPart):
 
     def __init__(
         self,
-        value: str | ValueRange,
+        value: str | ValueRange | DividerHalf,
         *,
         a: Net | str,
         b: Net | str,
@@ -122,7 +122,7 @@ class Capacitor(TypedPart):
 
     def __init__(
         self,
-        value: str | ValueRange,
+        value: str | ValueRange | DividerHalf,
         *,
         a: Net | str,
         b: Net | str,

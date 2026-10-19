@@ -174,7 +174,7 @@ from oparroy.dsl.pinmap import (
     emit_pin_module,
 )
 from oparroy.dsl.sim import SimSymbols
-from oparroy.dsl.solve import Resolution, SolveReport, solve
+from oparroy.dsl.solve import DividerResolution, Resolution, SolveReport, solve
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 from oparroy.dsl.transform import (
@@ -189,7 +189,14 @@ from oparroy.dsl.transform import (
     TransformPart,
     apply_transforms,
 )
-from oparroy.dsl.values import ValueBin, ValueRange, format_value, parse_value
+from oparroy.dsl.values import (
+    DividerHalf,
+    DividerSpec,
+    ValueBin,
+    ValueRange,
+    format_value,
+    parse_value,
+)
 
 __all__ = [
     "CH32V003F4P6",
@@ -223,6 +230,9 @@ __all__ = [
     "DiesWith",
     "Diode",
     "DiodeSocket",
+    "DividerHalf",
+    "DividerResolution",
+    "DividerSpec",
     "Edge",
     "EdgeKind",
     "EquivalenceReport",

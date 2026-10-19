@@ -174,6 +174,21 @@ renders one line per resolution
 (`T0/PHY1/Rth1: 10k ±5% → 10k (achieved +0.0%)`). `check` and the
 emitters reject a surviving spec, so the pipeline order is enforced.
 
+A resistive divider whose *ratio* is the spec (not any one resistor) is
+a `DividerSpec` — `ratio` (R2/(R1+R2), dimensionless), `r_out` (the
+Thévenin R1‖R2), and `vcc`/`i_max` (the standing-current bound
+R1+R2 ≥ vcc/i_max), each a `ValueRange` with a nominal to aim at.
+`spec.top()`/`spec.bottom()` build the two `DividerHalf` markers the
+capture places on the sibling resistors (`R0603(spec.top(), a=vcc, b=out)` — R1 is the VCC side, R2 the GND side). `solve` groups the two
+halves by their shared spec and resolves them with
+`ValueBin.resolve_divider(spec, in_use=…)` — the pair meeting all three
+constraints, ranked by ratio error, then R‖R error, then BOM
+consolidation, then size. The pick lands in `SolveReport.resolutions`
+as a `DividerResolution` (the pair plus the achieved ratio, R‖R, and
+current); a missing or duplicate half, a bin-less pair, or no meeting
+pair is an error issue, and a `DividerHalf` surviving to `check` or an
+emitter is rejected like a `ValueRange`.
+
 ## Validation (`check.py`)
 
 `check(circuit, *, footprints=None) -> list[Issue]` — the one
