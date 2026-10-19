@@ -101,6 +101,7 @@ from oparroy.dsl import (
     check,
     emit_netlist,
     raise_on_errors,
+    solve,
     to_dot,
 )
 
@@ -417,6 +418,10 @@ def main() -> None:
     args = parser.parse_args()
     libs = KiCadLibraries.from_env()
     circuit = capture(libs)
+    report = solve(circuit)
+    if resolutions := str(report):
+        sys.stderr.write(f"{resolutions}\n")
+    raise_on_errors(report.issues)
     issues = check(circuit, footprints=libs)
     for issue in issues:
         sys.stderr.write(f"{issue}\n")

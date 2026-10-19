@@ -4,7 +4,9 @@ Single source of truth for schematic capture: a separable IR
 (:mod:`oparroy.dsl.ir`) behind a plain function-call capture API —
 including subcircuit composition with ports and a flattening pass
 (:mod:`oparroy.dsl.subcircuit`) — a validation pass
-(:mod:`oparroy.dsl.check`), instrumentation transforms with provenance
+(:mod:`oparroy.dsl.check`), value-spec resolution against stocked
+bins (:mod:`oparroy.dsl.values` and the solve pass
+:mod:`oparroy.dsl.solve`), instrumentation transforms with provenance
 tags (:mod:`oparroy.dsl.transform`) and the reset-state equivalence
 proof over them (:mod:`oparroy.dsl.equivalence`), the stages between
 capture and
@@ -172,6 +174,7 @@ from oparroy.dsl.pinmap import (
     emit_pin_module,
 )
 from oparroy.dsl.sim import SimSymbols
+from oparroy.dsl.solve import Resolution, SolveReport, solve
 from oparroy.dsl.spice_emit import emit_spice
 from oparroy.dsl.subcircuit import Subcircuit
 from oparroy.dsl.transform import (
@@ -186,6 +189,7 @@ from oparroy.dsl.transform import (
     TransformPart,
     apply_transforms,
 )
+from oparroy.dsl.values import ValueBin, ValueRange, format_value, parse_value
 
 __all__ = [
     "CH32V003F4P6",
@@ -271,12 +275,14 @@ __all__ = [
     "Residual",
     "Residuals",
     "Resistor",
+    "Resolution",
     "Scope",
     "Segment",
     "Severity",
     "SheetPartsRule",
     "SimSymbols",
     "SocketSpec",
+    "SolveReport",
     "SpiceModel",
     "StackupLayer",
     "Stock",
@@ -296,6 +302,8 @@ __all__ = [
     "TypedPart",
     "UnitHandle",
     "UnknownSymbolError",
+    "ValueBin",
+    "ValueRange",
     "Via",
     "Waiver",
     "Zone",
@@ -316,12 +324,15 @@ __all__ = [
     "emit_project",
     "emit_spice",
     "footprint_map",
+    "format_value",
     "overrides_from_json",
     "overrides_to_json",
     "parse_board",
     "parse_project",
+    "parse_value",
     "raise_on_errors",
     "sheet_parts_rules",
+    "solve",
     "terminal_protection_rules",
     "tier_from_library_type",
     "to_dot",

@@ -41,6 +41,7 @@ from oparroy.dsl import (
     check,
     check_equivalent,
     raise_on_errors,
+    solve,
 )
 from oparroy.dsl.equivalence import (
     EXTRA_LOADING,
@@ -357,6 +358,7 @@ def test_supervisor_port_injector(kicad_libs: KiCadLibraries) -> None:
 def test_instrumented_fixture_passes_check(kicad_libs: KiCadLibraries) -> None:
     board = two_tile_board(kicad_libs)
     apply_transforms(board, ci_transform_plan())
+    raise_on_errors(solve(board).issues)
     raise_on_errors(check(board, footprints=kicad_libs))
 
 

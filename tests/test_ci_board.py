@@ -28,6 +28,8 @@ from oparroy.dsl import (
     check,
     check_equivalent,
     emit_netlist,
+    raise_on_errors,
+    solve,
 )
 from oparroy.dsl.equivalence import (
     EXTRA_LOADING,
@@ -49,6 +51,12 @@ GOLDEN = Path(__file__).parent / "golden" / "oparroy-ci.net"
 #: the break switches' B2 legs, the shunts' signal-side legs. The
 #: supervisor's injector is the same block; the tiles add the ka-cut.
 INJECTOR_NC_PINS = ("SWAB.1", "SWAG.3", "SWAV.3", "SWBB.1", "SWBG.3", "SWBV.3")
+
+
+def solved(circuit: Circuit) -> Circuit:
+    """Run the value-solve pass, failing the test on its errors."""
+    raise_on_errors(solve(circuit).issues)
+    return circuit
 
 
 def expected_warnings() -> frozenset[str]:
@@ -168,13 +176,15 @@ def test_control_plane_binds_the_handles(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
-    issues = check(capture(kicad_libs), footprints=kicad_libs)
+    issues = check(solved(capture(kicad_libs)), footprints=kicad_libs)
     assert [i for i in issues if i.severity is Severity.ERROR] == []
     assert {i.message for i in issues} == expected_warnings()
 
 
 def test_base_capture_checks_clean(kicad_libs: KiCadLibraries) -> None:
-    issues = check(capture(kicad_libs, instrumented=False), footprints=kicad_libs)
+    issues = check(
+        solved(capture(kicad_libs, instrumented=False)), footprints=kicad_libs
+    )
     assert [i for i in issues if i.severity is Severity.ERROR] == []
 
 
@@ -353,14 +363,14 @@ def test_annotation_is_stable(kicad_libs: KiCadLibraries) -> None:
 
 
 def test_netlist_matches_golden(kicad_libs: KiCadLibraries) -> None:
-    circuit = capture(kicad_libs)
+    circuit = solved(capture(kicad_libs))
     rendered = emit_netlist(apply_annotation(circuit, annotate(circuit)))
     assert rendered == GOLDEN.read_text(encoding="utf-8")
 
 
 def test_netlist_byte_identical_across_runs(kicad_libs: KiCadLibraries) -> None:
     def render() -> str:
-        circuit = capture(kicad_libs)
+        circuit = solved(capture(kicad_libs))
         return emit_netlist(apply_annotation(circuit, annotate(circuit)))
 
     assert render() == render()

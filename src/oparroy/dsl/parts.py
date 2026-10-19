@@ -36,6 +36,7 @@ from oparroy.dsl.ir import Bundle, DefinitionError, Residuals, SocketSpec
 
 if TYPE_CHECKING:
     from oparroy.dsl.ir import Net
+    from oparroy.dsl.values import ValueBin, ValueRange
 
 
 class TypedPart:
@@ -64,10 +65,14 @@ class TypedPart:
     #: threaded like ``residuals``: None means no data, False means
     #: the datasheet specifies none.
     partial_power_down: ClassVar[bool | None] = None
+    #: The stocked value grid (``ValueBin``) from the parts DB record,
+    #: threaded like ``residuals``: the solve pass resolves
+    #: ``ValueRange`` specs against it; None means no bin.
+    value_bin: ClassVar[ValueBin | None] = None
 
     def __init__(
         self,
-        value: str | None,
+        value: str | ValueRange | None,
         footprint: str | None,
         nets: dict[str, Net | str],
     ) -> None:
@@ -100,7 +105,7 @@ class Resistor(TypedPart):
 
     def __init__(
         self,
-        value: str,
+        value: str | ValueRange,
         *,
         a: Net | str,
         b: Net | str,
@@ -117,7 +122,7 @@ class Capacitor(TypedPart):
 
     def __init__(
         self,
-        value: str,
+        value: str | ValueRange,
         *,
         a: Net | str,
         b: Net | str,

@@ -1,0 +1,248 @@
+"""Solve-pass tests: resolution, reporting, and the pipeline-order guards.
+
+The guard tests are the negative controls (konnect-lessons.md §5): a
+spec no bin can meet, a spec on a bin-less part, and a spec reaching
+``check`` or an emitter unsolved must each fail loudly.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pytest
+
+from oparroy.dsl import (
+    Circuit,
+    DefinitionError,
+    InsertSeries,
+    PartRecord,
+    PartsDb,
+    PerInstance,
+    Resistor,
+    Severity,
+    TransformPart,
+    ValueBin,
+    ValueRange,
+    apply_transforms,
+    check,
+    emit_netlist,
+    emit_spice,
+    solve,
+)
+
+if TYPE_CHECKING:
+    from conftest import StubSymbols
+
+R_BIN = ValueBin(kind="resistor", series=24, tolerance=0.01, lo=1.0, hi=1e6)
+EXACT_10K = 10_000.0
+NEAREST_1K = 1_000.0
+OFF_NOMINAL = 1030.0
+TIE_TARGET = 4900.0
+TIE_LOW = 4_700.0
+TIE_HIGH = 5_100.0
+
+
+class RBin(Resistor):
+    """A stub bin class carrying a stocked value grid (``Stub:R``)."""
+
+    symbol = "Stub:R"
+    default_footprint = "StubFP:R_0603"
+    value_bin = R_BIN
+
+
+def spec_circuit(symbols: StubSymbols, value: str | ValueRange) -> Circuit:
+    """Build a one-part circuit: R1 between nets a/b, from the bin."""
+    c = Circuit("test", symbols)
+    a, b = c.net("a"), c.net("b")
+    c.part("R1", RBin(value, a=a, b=b))
+    return c
+
+
+def errors(messages: list[str]) -> list[str]:
+    return [message for message in messages if "error" in message]
+
+
+def test_spec_resolves_and_mutates_the_part(symbols: StubSymbols) -> None:
+    c = spec_circuit(symbols, ValueRange.around("10k", 0.05, family="resistor"))
+    report = solve(c)
+    assert report.issues == []
+    assert c.parts["R1"].value == "10k"
+    (resolution,) = report.resolutions
+    assert resolution.path == "R1"
+    assert resolution.chosen == pytest.approx(EXACT_10K)
+    assert resolution.chosen_str == "10k"
+    assert resolution.rel_error == pytest.approx(0.0)
+    assert str(report) == "R1: 10k ±5% → 10k (achieved +0.0%)"
+
+
+def test_resolution_reports_the_achieved_error(symbols: StubSymbols) -> None:
+    c = spec_circuit(symbols, ValueRange.around(OFF_NOMINAL, 0.05, family="resistor"))
+    report = solve(c)
+    (resolution,) = report.resolutions
+    assert resolution.chosen == pytest.approx(NEAREST_1K)
+    assert resolution.rel_error == pytest.approx(-30 / 1030, rel=1e-6)
+    assert "(achieved -2.9%)" in str(report)
+
+
+def test_literal_values_are_never_touched(symbols: StubSymbols) -> None:
+    c = spec_circuit(symbols, "470")
+    report = solve(c)
+    assert c.parts["R1"].value == "470"
+    assert report.resolutions == []
+    assert str(report) == ""
+
+
+def test_identical_specs_consolidate(symbols: StubSymbols) -> None:
+    c = Circuit("test", symbols)
+    a, b = c.net("a"), c.net("b")
+    c.part("R1", RBin(ValueRange.around(TIE_TARGET, 0.05), a=a, b=b))
+    c.part("R2", RBin("5k1", a=a, b=b))
+    report = solve(c)
+    # The spec's exact tie (4k7 vs 5k1) breaks toward the in-use 5k1.
+    assert c.parts["R1"].value == "5k1"
+    (resolution,) = report.resolutions
+    assert resolution.chosen == pytest.approx(TIE_HIGH)
+    assert resolution.chosen != TIE_LOW
+
+
+def test_unresolvable_spec_is_an_error(symbols: StubSymbols) -> None:
+    c = spec_circuit(symbols, ValueRange.around("10M", 0.05, family="resistor"))
+    report = solve(c)
+    (issue,) = report.issues
+    assert issue.severity is Severity.ERROR
+    assert "no value in the resistor bin" in issue.message
+    assert report.resolutions == []
+
+
+def test_spec_on_a_binless_part_is_an_error(symbols: StubSymbols) -> None:
+    c = Circuit("test", symbols)
+    a, b = c.net("a"), c.net("b")
+    spec = ValueRange.around("10k", 0.05, family="resistor")
+    part = c.part("R1", symbol="Stub:R", value=spec, footprint="StubFP:R_0603")
+    c.connect(a, part[1])
+    c.connect(b, part[2])
+    report = solve(c)
+    (issue,) = report.issues
+    assert issue.severity is Severity.ERROR
+    assert "no value bin" in issue.message
+
+
+def test_unsolved_spec_fails_check(symbols: StubSymbols) -> None:
+    c = spec_circuit(symbols, ValueRange.around("10k", 0.05, family="resistor"))
+    messages = [issue.message for issue in check(c) if issue.severity is Severity.ERROR]
+    (message,) = [m for m in messages if "unresolved value spec" in m]
+    assert "run solve before check" in message
+
+
+def test_unsolved_spec_fails_netlist_emit(symbols: StubSymbols) -> None:
+    c = spec_circuit(symbols, ValueRange.around("10k", 0.05, family="resistor"))
+    with pytest.raises(DefinitionError, match="run solve"):
+        emit_netlist(c)
+
+
+def test_unsolved_spec_fails_spice_emit(symbols: StubSymbols) -> None:
+    c = Circuit("test", symbols)
+    a, b = c.net("a"), c.net("b")
+    spec = ValueRange.around("10k", 0.05, family="resistor")
+    part = c.part("R1", symbol="Device:R", value=spec, footprint="StubFP:R_0603")
+    c.connect(a, part[1])
+    c.connect(b, part[2])
+    with pytest.raises(DefinitionError, match="run solve"):
+        emit_spice(c)
+
+
+def test_bind_threads_the_bin(symbols: StubSymbols) -> None:
+    db = PartsDb(
+        [
+            PartRecord(
+                name="r-stub",
+                kind="resistor",
+                symbol="Stub:R",
+                footprint="StubFP:R_0603",
+                bin=R_BIN,
+            )
+        ]
+    )
+    bound = db.bind("r-stub", Resistor, class_name="RStub")
+    assert bound.value_bin is R_BIN
+    c = Circuit("test", symbols)
+    a, b = c.net("a"), c.net("b")
+    placed = c.part(
+        "R1", bound(ValueRange.around("10k", 0.05, family="resistor"), a=a, b=b)
+    )
+    assert placed.value_bin is R_BIN
+
+
+def child_capture(circuit: Circuit) -> None:
+    """Capture a child holding a value spec, for the hierarchy tests."""
+    a, b = circuit.net("a"), circuit.net("b")
+    spec = ValueRange.around("10k", 0.05, family="resistor")
+    circuit.part("R1", RBin(spec, a=a, b=b))
+
+
+def test_solve_walks_instances_and_flatten_carries_the_pick(
+    symbols: StubSymbols,
+) -> None:
+    board = Circuit("board", symbols)
+    board.instance("T1", child_capture)
+    report = solve(board)
+    (resolution,) = report.resolutions
+    assert resolution.path == "T1/R1"
+    flat = board.flatten()
+    assert flat.parts["T1/R1"].value == "10k"
+    # The solved flat IR passes check with no unresolved-spec error.
+    messages = [
+        issue.message for issue in check(board) if issue.severity is Severity.ERROR
+    ]
+    assert not [m for m in messages if "unresolved value spec" in m]
+
+
+def test_unsolved_spec_fails_check_hierarchically(symbols: StubSymbols) -> None:
+    board = Circuit("board", symbols)
+    board.instance("T1", child_capture)
+    messages = [
+        issue.message for issue in check(board) if issue.severity is Severity.ERROR
+    ]
+    (message,) = [m for m in messages if "unresolved value spec" in m]
+    assert message.startswith("T1/R1")
+
+
+def transform_child(circuit: Circuit) -> None:
+    """Capture a child a series-insert transform can cut across."""
+    x, gnd = circuit.net("x"), circuit.net("gnd")
+    circuit.part("R1", RBin("470", a=x, b=gnd))
+    circuit.part("R2", RBin("470", a=x, b=gnd))
+
+
+def test_transform_placed_parts_carry_the_bin(symbols: StubSymbols) -> None:
+    board = Circuit("board", symbols)
+    board.instance("T1", transform_child)
+    apply_transforms(
+        board,
+        [
+            PerInstance(
+                ("T1",),
+                (
+                    InsertSeries(
+                        label="X1",
+                        net="x",
+                        pins=("R1.1",),
+                        part=TransformPart(
+                            "FI1/RS",
+                            RBin(
+                                ValueRange.around("10k", 0.05, family="resistor"),
+                                a="@a",
+                                b="@b",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        ],
+    )
+    placed = board.instances["T1"].circuit.parts["FI1/RS"]
+    assert placed.value_bin is R_BIN
+    report = solve(board)
+    assert placed.value == "10k"
+    (resolution,) = report.resolutions
+    assert resolution.path == "T1/FI1/RS"

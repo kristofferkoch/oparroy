@@ -39,7 +39,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from design.bins import R0603, TvsSod323
-from oparroy.dsl import Circuit, Subcircuit, SymbolTable, TypedPart
+from oparroy.dsl import Circuit, Subcircuit, SymbolTable, TypedPart, ValueRange
 
 if TYPE_CHECKING:
     from oparroy.dsl import Net
@@ -178,9 +178,18 @@ class PhyFrontEnd(Subcircuit):
             circuit.part("Dbt", TvsSod323(a=tx_b, b=gnd))
 
         # RX threshold: VDD/2 from the 10k bin (§2; the phy-segment
-        # bench values).
-        circuit.part("Rth1", R0603("10k", a=v3v3, b=mcu_vdd2))
-        circuit.part("Rth2", R0603("10k", a=mcu_vdd2, b=gnd))
+        # bench values) — the solve pass resolves the specs to the
+        # stocked 10k literal.
+        circuit.part(
+            "Rth1",
+            R0603(
+                ValueRange.around("10k", 0.05, family="resistor"), a=v3v3, b=mcu_vdd2
+            ),
+        )
+        circuit.part(
+            "Rth2",
+            R0603(ValueRange.around("10k", 0.05, family="resistor"), a=mcu_vdd2, b=gnd),
+        )
 
         # Hysteresis fallback (§2): OPO -> OPP feedback, unpopulated.
         circuit.part("Rfb", R0603("DNP", a=mcu_opo, b=mcu_rx_a))

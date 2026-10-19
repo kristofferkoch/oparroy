@@ -60,6 +60,7 @@ from oparroy.dsl import (
     emit_netlist,
     overrides_from_json,
     raise_on_errors,
+    solve,
     to_dot,
 )
 
@@ -255,6 +256,10 @@ def main() -> None:
     if args.footprints is not None:
         overrides = overrides_from_json(args.footprints.read_text(encoding="utf-8"))
         circuit = assign_footprints(circuit, overrides)
+    report = solve(circuit)
+    if resolutions := str(report):
+        sys.stderr.write(f"{resolutions}\n")
+    raise_on_errors(report.issues)
     issues = check(circuit, footprints=libs)
     for issue in issues:
         sys.stderr.write(f"{issue}\n")

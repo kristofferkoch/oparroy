@@ -202,6 +202,12 @@ def _require_value(part: Part) -> str:
             f"{part.ref} ({part.symbol.ref}) has no value — the spice emitter needs one"
         )
         raise DefinitionError(msg)
+    if not isinstance(part.value, str):
+        msg = (
+            f"{part.ref} ({part.symbol.ref}) has an unresolved value spec "
+            f"{part.value} — run solve() before emit"
+        )
+        raise DefinitionError(msg)
     return part.value
 
 
