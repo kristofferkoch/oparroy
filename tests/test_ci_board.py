@@ -13,8 +13,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from design import ci_tiles
 from design.ci_board import INPUT_TILES, TILE_COUNT, capture, ci_board_plan
 from design.ci_instrumentation import BUDGETS, reset_levels
+from design.ci_tiles import MEASUREMENT_TILE
 from oparroy.dsl import (
     POWER_DOMAIN_CROSSING,
     Circuit,
@@ -36,6 +38,7 @@ from oparroy.dsl.equivalence import (
     TAP_CAPACITANCE,
 )
 from oparroy.dsl.ir import hierarchical_crossings
+from oparroy.dsl.transform import AddTap
 
 if TYPE_CHECKING:
     import pytest
@@ -66,26 +69,37 @@ def expected_warnings() -> frozenset[str]:
         # driver (5V ends at the regulator, GND crosses the cable).
         "net '5V' has power inputs but no driver (power output or power symbol)",
         "net 'GND' has power inputs but no driver (power output or power symbol)",
-        # The supervisor's spare GPIOs (GPIO0..3, GPIO23..29) and the
-        # SWCLK/SWDIO pads are deliberate NCs.
-        *(
-            f"SUP/U1.{pin} is not connected"
-            for pin in (2, 3, 4, 5, 24, 25, *range(35, 42))
-        ),
+        # The supervisor's spare GPIOs (GPIO3, GPIO23..29) and the
+        # SWCLK/SWDIO pads are deliberate NCs; GPIO0..2 drive the §12
+        # measurement tile's ADC SPI.
+        *(f"SUP/U1.{pin} is not connected" for pin in (5, 24, 25, *range(35, 42))),
         # The supervisor injector's reset-open throws.
         *(f"SUP/FI1/{sw} is not connected" for sw in INJECTOR_NC_PINS),
         # The boundary tile's watchdog-defeat shunt parks its open leg.
         "T0/FI1/SWWD.3 is not connected",
+        # The measurement tile's 595 slice drives only PWR (§12); the
+        # other seven outputs are spares, like AUX2's pair.
+        *(
+            f"net 'PLANE/t6_spare{index}' has a single pin (PLANE/T6/U1.{index})"
+            for index in range(1, 8)
+        ),
     }
     for tile in range(TILE_COUNT):
-        warnings.update(
-            f"T{tile}/FI1/{sw} is not connected" for sw in (*INJECTOR_NC_PINS, "SWKA.1")
-        )
+        # The measurement tile carries no injector switches (§12) — no
+        # reset-open throws to report.
+        if tile != MEASUREMENT_TILE:
+            warnings.update(
+                f"T{tile}/FI1/{sw} is not connected"
+                for sw in (*INJECTOR_NC_PINS, "SWKA.1")
+            )
         # PC1 (pin 11) is every tile's spare pad; each variant leaves
-        # the other variant's payload pads unwired — the output tiles
+        # the other variants' payload pads unwired — the output tiles
         # the pot/button pads (PD6/PC5/PC6), the input tiles the
-        # buzzer pad (PC4).
-        pads = (3, 15, 16) if tile not in INPUT_TILES else (14,)
+        # buzzer pad (PC4), the measurement tile all four.
+        if tile == MEASUREMENT_TILE:
+            pads = (3, 14, 15, 16)
+        else:
+            pads = (3, 15, 16) if tile not in INPUT_TILES else (14,)
         warnings.update(f"T{tile}/U1.{pad} is not connected" for pad in (*pads, 11))
         # The switched rail sits behind the F8 P-FET: power inputs,
         # no driver.
@@ -175,12 +189,24 @@ def test_crossing_dispositions(kicad_libs: KiCadLibraries) -> None:
     # Every tile: the ring wires' bounded back-feed, the always-powered
     # mux/select/driver group (design/ci_tiles.py).
     for tile in range(TILE_COUNT):
-        for net in ("opa_p", "opo", "opa_p_b", "RX_B#a", "txb_drv"):
+        measurement = tile == MEASUREMENT_TILE
+        # The measurement tile drops F1-F7 (§12): the F4-created RX_B#a
+        # stub never exists, and without F1's break the tile's TX_A
+        # drive reaches T7's gated rail — declared itself.
+        back_feed = ("opa_p", "opo", "opa_p_b", "txb_drv") + (
+            ("PHY1/txa_sw",) if measurement else ("RX_B#a",)
+        )
+        for net in back_feed:
             assert declared[f"T{tile}/{net}"] == ["BackFeed"]
-        for net in ("swio", "debug_tx", "sel", "PHY1/sel_sw", "ka#a", "txa_drv"):
+        always = ("swio", "debug_tx", "sel", "PHY1/sel_sw", "txa_drv") + (
+            () if measurement else ("ka#a",)
+        )
+        for net in always:
             if tile == 0 and net == "sel":
                 continue  # asserted below
             assert declared[f"T{tile}/{net}"] == ["AlwaysPowered"]
+    # The measurement chain's sense net dies with the tile's rail (§12).
+    assert declared[f"T{MEASUREMENT_TILE}/F8_sns"] == ["DiesWith"]
     # T0/sel adds the board-level BackFeed bounding B5's defeat leg
     # (instrumented-ci.md §3/§5) on top of the tile's AlwaysPowered.
     assert sorted(declared["T0/sel"]) == ["AlwaysPowered", "BackFeed"]
@@ -211,14 +237,37 @@ def test_dropped_segment_declaration_fails(
     }
 
 
+def test_dropped_measurement_declaration_fails(
+    kicad_libs: KiCadLibraries, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Negative control: drop the F8_sns declaration and the audit names it."""
+    real = ci_tiles._declare_measurement_crossings  # noqa: SLF001
+
+    def without_sns(circuit: Circuit) -> None:
+        real(circuit)
+        circuit._crossings = [  # noqa: SLF001 — the neutralization itself
+            c for c in circuit.crossings if c.path != "F8_sns"
+        ]
+
+    monkeypatch.setattr(ci_tiles, "_declare_measurement_crossings", without_sns)
+    issues = check(capture(kicad_libs), footprints=kicad_libs)
+    undeclared = {
+        i.path
+        for i in issues
+        if i.check == POWER_DOMAIN_CROSSING and i.severity is Severity.ERROR
+    }
+    assert undeclared == {f"T{MEASUREMENT_TILE}/F8_sns"}
+
+
 def test_reset_levels_all_zero(kicad_libs: KiCadLibraries) -> None:
     """The §8 invariant over the full board: the reset load is all-zeros."""
     instrumented = capture(kicad_libs)
     levels = reset_levels(instrumented, ci_board_plan())
     assert set(levels.values()) == {0}
-    # 8 bits per tile + the boundary defeat + 3 overrides per input
-    # tile + the supervisor injector's 6.
-    assert len(levels) == 8 * TILE_COUNT + 1 + 3 * len(INPUT_TILES) + 6
+    # 8 bits per injector tile + the measurement tile's lone PWR + the
+    # boundary defeat + 3 overrides per input tile + the supervisor
+    # injector's 6.
+    assert len(levels) == 8 * (TILE_COUNT - 1) + 1 + 1 + 3 * len(INPUT_TILES) + 6
 
 
 def test_reset_state_equivalence(kicad_libs: KiCadLibraries) -> None:
@@ -236,15 +285,19 @@ def test_reset_state_equivalence(kicad_libs: KiCadLibraries) -> None:
     assert list(report.issues) == []
     assert all(r.citation is not None for r in report.residuals)
     kinds = [r.kind for r in report.residuals]
-    # T0 (boundary output tile): F1-F8 + B1-B5; T2/4/6: F1-F8;
-    # T1/3/5/7 (input): F1-F8 + H1-H3; the supervisor injector: F1-F6.
-    assert kinds.count(SERIES_ON_RESISTANCE) == 4 + 3 * 4 + 4 * 5 + 2
-    assert kinds.count(SWITCH_CAPACITANCE) == 3 + 3 * 3 + 4 * 4 + 2
-    assert kinds.count(LEAKAGE) == 8 + 3 * 7 + 4 * 10 + 6
-    assert kinds.count(SHUNT_OFF_CAPACITANCE) == 5 + 3 * 4 + 4 * 6 + 4
-    assert kinds.count(EXTRA_LOADING) == 7 + 3 * 6 + 4 * 10 + 4  # T0: + RWD
-    # O1/O2 + M1/M2 per tile, B1-B4 on the boundary tile.
-    assert kinds.count(TAP_CAPACITANCE) == TILE_COUNT * 4 + 4
+    # T0 (boundary output tile): F1-F8 + B1-B5; T2/4: F1-F8; T6
+    # (measurement): the extended F8 alone + P1-P3; T1/3/5/7 (input):
+    # F1-F8 + H1-H3; the supervisor injector: F1-F6.
+    assert kinds.count(SERIES_ON_RESISTANCE) == 4 + 2 * 4 + 1 + 4 * 5 + 2
+    assert kinds.count(SWITCH_CAPACITANCE) == 3 + 2 * 3 + 4 * 4 + 2
+    assert kinds.count(LEAKAGE) == 8 + 2 * 7 + 4 * 10 + 6
+    assert kinds.count(SHUNT_OFF_CAPACITANCE) == 5 + 2 * 4 + 4 * 6 + 4
+    # T6's extras: the gate pull-down, the shunt, the amp, the RC pair,
+    # the ADC, the CS pull-up, three bypass caps.
+    assert kinds.count(EXTRA_LOADING) == 7 + 2 * 6 + 10 + 4 * 10 + 4  # T0: + RWD
+    # O1/O2 + M1/M2 per tile, B1-B4 on the boundary tile, P1-P3 on the
+    # measurement tile (resolving onto 3V3 by provenance, like O2).
+    assert kinds.count(TAP_CAPACITANCE) == TILE_COUNT * 4 + 4 + 3
     taps = [r for r in report.residuals if r.kind == TAP_CAPACITANCE]
     assert all(r.layout_obligation for r in taps)
     assert {r.net for r in taps} == {
@@ -261,6 +314,36 @@ def test_reset_state_equivalence(kicad_libs: KiCadLibraries) -> None:
             for net in ("sel", "swio", "debug_tx")
         ),
     }
+
+
+def test_unjustified_measurement_taps_fail(
+    kicad_libs: KiCadLibraries, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Negative control: strip P1-P3's non-input-consumers citation."""
+    monkeypatch.setattr(
+        "design.ci_instrumentation.measurement_taps",
+        lambda: (
+            AddTap(label="P1", net="F8_sclk"),
+            AddTap(label="P2", net="F8_cs"),
+            AddTap(label="P3", net="F8_sdata"),
+        ),
+    )
+    plan = ci_board_plan()
+    base = capture(kicad_libs, instrumented=False)
+    instrumented = capture(kicad_libs)
+    report = check_equivalent(
+        base,
+        instrumented,
+        plan,
+        reset_levels=reset_levels(instrumented, plan),
+        budgets=BUDGETS,
+    )
+    assert [i.message for i in report.issues if i.severity is Severity.ERROR] == [
+        f"SUP/U1.{pin} rides the declared tap on '3V3' but is bidirectional — "
+        "a tap feeding non-input-class pins needs the tap's "
+        "non-input-consumers justification (memo Q2)"
+        for pin in (2, 3, 4)
+    ]
 
 
 def test_annotation_is_stable(kicad_libs: KiCadLibraries) -> None:

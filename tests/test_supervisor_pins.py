@@ -28,12 +28,14 @@ GOLDEN_PY = Path(__file__).parent / "golden" / "supervisor-pins.py"
 FIRMWARE_HPP = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.hpp"
 FIRMWARE_PY = Path(__file__).parent.parent / "firmware" / "supervisor" / "pins.py"
 
-# 19 function requests, no reservations = 19 of 30 GPIO spent;
-# GPIO0..3 and GPIO23..29 (11 of 30) are the spares — the tail of the
+# 22 function requests, no reservations = 22 of 30 GPIO spent;
+# GPIO3 and GPIO23..29 (8 of 30) are the spares — the tail of the
 # reclaimed debug-transport reservation (settled, DESIGN.md §6: one
 # tree-root GPIO instead of eight dedicated RX) and the top block.
-REQUEST_COUNT = 19
-USED_COUNT = 19
+# GPIO0..2 left the spare set for the measurement chain's SPI
+# (instrumented-ci.md §12).
+REQUEST_COUNT = 22
+USED_COUNT = 22
 GPIO_COUNT = 30
 
 
@@ -51,7 +53,7 @@ def test_capture_checks_clean() -> None:
     assert check_pin_map(capture()) == []
 
 
-def test_budget_lands_at_19_of_30() -> None:
+def test_budget_lands_at_22_of_30() -> None:
     pin_map = capture()
     assert len(pin_map.requests) == REQUEST_COUNT
     used = len(pin_map.requests) + len(pin_map.reservations)
@@ -64,9 +66,6 @@ def test_budget_lands_at_19_of_30() -> None:
         if pad.name not in bound and pad.name not in pin_map.reservations
     }
     assert spare == {
-        "GPIO0",
-        "GPIO1",
-        "GPIO2",
         "GPIO3",
         "GPIO23",
         "GPIO24",
@@ -106,6 +105,11 @@ def test_peripheral_forced_bindings() -> None:
     assert pads["pot_pwm3"] == "GPIO15"
     assert pads["pot_pwm5"] == "GPIO16"
     assert pads["pot_pwm7"] == "GPIO17"
+    # The measurement chain's SPI (instrumented-ci.md §12) takes the
+    # other SPI0-capable pads, keeping the hardware-SPI option open.
+    assert pads["adc_sdata"] == "GPIO0"  # SPI0 RX
+    assert pads["adc_cs"] == "GPIO1"  # SPI0 CSn
+    assert pads["adc_sclk"] == "GPIO2"  # SPI0 SCK
 
 
 def test_hpp_matches_golden() -> None:
