@@ -41,6 +41,7 @@ from oparroy.dsl import (
     Generator,
     Interval,
     KiCadLibraries,
+    Led,
     Limits,
     PowerDomainKind,
     SolveContext,
@@ -63,6 +64,36 @@ SPICE_MODELS = {
     "XL-3216SYGC-FB": "d(is=1e-19 n=2.0 rs=10)",
     "XL-3216UYC-FB": "d(is=1e-19 n=2.0 rs=10)",
 }
+
+
+@dataclass(frozen=True)
+class StatusLedSet:
+    """The block's per-role LED parts: the bin plus the three values.
+
+    ``power``/``working``/``link`` are the part values for the §4.1
+    roles (red power, yellow working, yellow-green antiparallel link
+    pair). The node board and the CI tiles run different deliveries of
+    the same block — reverse-mount over routed holes where the viewer
+    is connector-side, top-emitting where the viewer stands over the
+    component side — so the set is a constructor parameter, not a
+    hard-coded bin.
+    """
+
+    bin: type[Led]
+    power: str
+    working: str
+    link: str
+
+
+#: The node board's set (DESIGN.md §4.1): reverse-mount 1206 emitting
+#: through routed holes to the connector side. Also the standalone
+#: capture's set — the sim bench's SPICE_MODELS key on these values.
+NODE_STATUS_LEDS = StatusLedSet(
+    bin=LedRev1206,
+    power="XL-3216SURC-FB",
+    working="XL-3216UYC-FB",
+    link="XL-3216SYGC-FB",
+)
 
 
 @dataclass(frozen=True)
@@ -112,7 +143,16 @@ def _series_resistor(rail: str, forward_v: float, current: float) -> Generator:
 
 
 class StatusLeds(Subcircuit):
-    """The §4.1 status-LED block: power, working, antiparallel link pair."""
+    """The §4.1 status-LED block: power, working, antiparallel link pair.
+
+    ``leds`` picks the per-role parts; the default is the node board's
+    reverse-mount set. The CI tiles pass their forward-mount set
+    (``design/ci_tiles.py`` — the bench board's viewer is on the
+    component side).
+    """
+
+    def __init__(self, *, leds: StatusLedSet = NODE_STATUS_LEDS) -> None:
+        self._leds = leds
 
     def capture(self, circuit: Circuit) -> None:
         """Build the block: ports v3v3/gnd/led_work/led_seg."""
@@ -140,7 +180,7 @@ class StatusLeds(Subcircuit):
         )
         circuit.part(
             "Dp",
-            LedRev1206(anode=pwr_led, cathode=gnd, value="XL-3216SURC-FB"),
+            self._leds.bin(anode=pwr_led, cathode=gnd, value=self._leds.power),
             note="power LED",
         )
         circuit.part(
@@ -150,7 +190,7 @@ class StatusLeds(Subcircuit):
         )
         circuit.part(
             "Dw",
-            LedRev1206(anode=ledw_a, cathode=gnd, value="XL-3216UYC-FB"),
+            self._leds.bin(anode=ledw_a, cathode=gnd, value=self._leds.working),
             note="working heartbeat LED",
         )
         circuit.part(
@@ -160,12 +200,12 @@ class StatusLeds(Subcircuit):
         )
         circuit.part(
             "Du",
-            LedRev1206(anode=led_x, cathode=gnd, value="XL-3216SYGC-FB"),
+            self._leds.bin(anode=led_x, cathode=gnd, value=self._leds.link),
             note="upstream link LED, antiparallel with {Dd}",
         )
         circuit.part(
             "Dd",
-            LedRev1206(anode=v3v3, cathode=led_x, value="XL-3216SYGC-FB"),
+            self._leds.bin(anode=v3v3, cathode=led_x, value=self._leds.link),
             note="downstream link LED, antiparallel with {Du}",
         )
 

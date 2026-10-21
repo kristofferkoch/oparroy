@@ -153,6 +153,27 @@ def test_inter_tile_segments_are_bare_copper(kicad_libs: KiCadLibraries) -> None
     assert nets["SEG4_B"] == {"T3/PHY1/Rbr.1", "T4/PHY1/Rbt.2"}
 
 
+def test_tiles_carry_forward_mount_status_leds(kicad_libs: KiCadLibraries) -> None:
+    """The bench board's viewer is component-side: top-emitting LEDs.
+
+    Pins the DESIGN.md §4.1 split — the CI tiles carry the top-emitting
+    XL-3216 siblings on the stock 1206 land pattern, never the node
+    board's reverse-mount light-pipe parts (design/ci_tiles.py).
+    """
+    flat = capture(kicad_libs, instrumented=False).flatten()
+    expected = {
+        "Dp": "XL-3216SURC",
+        "Dw": "XL-3216UYC",
+        "Du": "XL-3216SYGC",
+        "Dd": "XL-3216SYGC",
+    }
+    for tile in range(TILE_COUNT):
+        for role, value in expected.items():
+            part = flat.parts[f"T{tile}/SL1/{role}"]
+            assert part.value == value
+            assert part.footprint == "LED_SMD:LED_1206_3216Metric"
+
+
 def test_control_plane_binds_the_handles(kicad_libs: KiCadLibraries) -> None:
     nets = nets_of(capture(kicad_libs))
     # The scan plane drives the escaped controls through its stages:
