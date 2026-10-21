@@ -474,18 +474,23 @@ count feeds the MCU requirements in §5 and the test board in §6 — on
 the board these LEDs double as test observability, but they are a
 product feature, not board-only debug.
 
-Status-LED delivery: the four status LEDs are **reverse-mount 1206
-parts on the front** (XINGLIGHT XL-3216-FB series — parts DB),
-emitting through routed holes in the PCB to the **back — the
-connector side, where a viewer stands**. The LED pads stay on the
-front, so single-sided assembly and the flat enclosure-wall face are
-untouched, and the back's copper set stays exactly the two segment
-connectors (§7 checklist). One series covers all four positions; the
-per-connector link pair is the 570 nm yellow-green (the series' 525 nm
-true green has Vf 3.4 V, undrivable from a 3.3 V GPIO), and the
-working LED is the 588 nm yellow so the roles stay visually distinct —
-red = power, yellow = working, green = link. Layout-checkable (§7):
-each status LED sits over its routed hole.
+Status-LED delivery on the node board: the four status LEDs are
+**reverse-mount 1206 parts on the front** (XINGLIGHT XL-3216-FB series
+— parts DB), emitting through routed holes in the PCB to the
+**back — the connector side, where a viewer stands**. The LED pads
+stay on the front, so single-sided assembly and the flat
+enclosure-wall face are untouched, and the back's copper set stays
+exactly the two segment connectors (§7 checklist). One series covers
+all four positions; the per-connector link pair is the 570 nm
+yellow-green (the series' 525 nm true green has Vf 3.4 V, undrivable
+from a 3.3 V GPIO), and the working LED is the 588 nm yellow so the
+roles stay visually distinct — red = power, yellow = working, green =
+link. Layout-checkable (§7): each status LED sits over its routed
+hole. The CI board's tiles carry the same roles in the series'
+top-emitting siblings (parts DB `led-1206-*`) on the plain 1206 land
+pattern: the bench board's viewer stands over the component side, so
+light-pipe holes would shine the wrong way (`design/ci_tiles.py`,
+datasheets/XL-3216).
 
 Per-connector LED drive: **firmware-driven**, confirmed against the
 hardware-activity ideal above — the watchdog plus working LED already
