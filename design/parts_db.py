@@ -356,6 +356,75 @@ PARTS = PartsDb(
             ),
         ),
         PartRecord(
+            name="led-1206-red",
+            kind="led",
+            lcsc="C965822",
+            symbol="Device:LED",
+            footprint="LED_SMD:LED_1206_3216Metric",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                376_161,
+                date(2026, 10, 18),
+                "kicad-jlcpcb-tools feed snapshot 2026-10-18",
+            ),
+            value="XL-3216SURC",
+            area_mm2=5.12,
+            datasheet="datasheets/XL-3216",
+            note=(
+                "XINGLIGHT top-emitting 1206, red 615-630 nm / 80-240 mcd "
+                "@ 20 mA — the CI tiles' §4.1 power LED. The forward-mount "
+                "sibling of the node board's XL-3216SURC-FB: the CI board's "
+                "viewer stands over the component side, so no light-pipe "
+                "holes; Vf 1.9-2.2 V @ 20 mA "
+                "(datasheets/XL-3216/notes/facts.md)"
+            ),
+        ),
+        PartRecord(
+            name="led-1206-yellowgreen",
+            kind="led",
+            lcsc="C965826",
+            symbol="Device:LED",
+            footprint="LED_SMD:LED_1206_3216Metric",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                50_981,
+                date(2026, 10, 18),
+                "kicad-jlcpcb-tools feed snapshot 2026-10-18",
+            ),
+            value="XL-3216SYGC",
+            area_mm2=5.12,
+            datasheet="datasheets/XL-3216",
+            note=(
+                "XINGLIGHT top-emitting 1206, yellow-green 565-575 nm / "
+                "50-100 mcd @ 20 mA — the CI tiles' §4.1 link pair, one "
+                "antiparallel pair on a single GPIO; Vf 1.9-2.4 V @ 20 mA, "
+                "again the series' only 3.3 V-drivable green "
+                "(datasheets/XL-3216/notes/facts.md)"
+            ),
+        ),
+        PartRecord(
+            name="led-1206-yellow",
+            kind="led",
+            lcsc="C965824",
+            symbol="Device:LED",
+            footprint="LED_SMD:LED_1206_3216Metric",
+            tier=Tier.EXTENDED,
+            stock=Stock(
+                69_207,
+                date(2026, 10, 18),
+                "kicad-jlcpcb-tools feed snapshot 2026-10-18",
+            ),
+            value="XL-3216UYC",
+            area_mm2=5.12,
+            datasheet="datasheets/XL-3216",
+            note=(
+                "XINGLIGHT top-emitting 1206, yellow 585-595 nm / 80-240 "
+                "mcd @ 20 mA — the CI tiles' §4.1 working LED (the "
+                "red/yellow/green role coding matches the node board); "
+                "Vf 1.8-2.4 V @ 20 mA (datasheets/XL-3216/notes/facts.md)"
+            ),
+        ),
+        PartRecord(
             name="usb-c-receptacle-16p",
             kind="connector",
             lcsc="C2894897",
