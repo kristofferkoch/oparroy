@@ -43,7 +43,7 @@ from design.ch32v003 import Ch32v003f4p6
 from design.node_pins import capture as capture_pin_map
 from design.phy_frontend import PhyFrontEnd
 from design.segment import SegmentConnector, segment_ports
-from design.status_leds import StatusLeds
+from design.status_leds import NODE_STATUS_LEDS, StatusLeds, StatusLedSet
 from design.watchdog_chargepump import WatchdogChargePump
 from oparroy.dsl import (
     Annotation,
@@ -87,12 +87,22 @@ class Node(Subcircuit):
     both on the eight copper-internal segments and keeps the boundary
     tile's upstream face — the supervisor→tile-0 cable's far end
     (docs/instrumented-ci.md §9 R10). The plain node board keeps both.
+
+    ``status_leds`` selects the §4.1 block's per-role LED parts
+    (`design/status_leds.py`). The default is the node board's
+    reverse-mount set; the CI tiles pass their forward-mount set —
+    the bench board's viewer stands over the component side
+    (`design/ci_tiles.py`).
     """
 
     def __init__(
-        self, *, connector_faces: tuple[str, ...] = ("upstream", "downstream")
+        self,
+        *,
+        connector_faces: tuple[str, ...] = ("upstream", "downstream"),
+        status_leds: StatusLedSet = NODE_STATUS_LEDS,
     ) -> None:
         self._connector_faces = connector_faces
+        self._status_leds = status_leds
 
     def capture(self, circuit: Circuit) -> None:
         """Build the node; the interface is the §3 segment pinout."""
@@ -187,7 +197,7 @@ class Node(Subcircuit):
         # is sim-asserted in circuits/status-leds/tb_status_leds.cir.
         circuit.instance(
             "SL1",
-            StatusLeds(),
+            StatusLeds(leds=self._status_leds),
             v3v3=v3v3,
             gnd=gnd,
             led_work=led_work,

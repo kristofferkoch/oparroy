@@ -12,7 +12,20 @@ the LED and TVS bins reference their DB records but stay local
 from design.parts_db import C0603, R0603
 from oparroy.dsl import Led, TvsDiode
 
-__all__ = ["C0603", "R0603", "LedRev1206", "TvsSod323"]
+__all__ = ["C0603", "R0603", "Led1206", "LedRev1206", "TvsSod323"]
+
+
+class Led1206(Led):
+    """The CI-tile status-LED bin: top-emitting 1206, no routed hole.
+
+    The CI board is a flat bench board — the viewer stands over the
+    component side, so the node board's reverse-mount light-pipe trick
+    (``LedRev1206``) would shine the tile LEDs into the board's back.
+    Stock KiCad land pattern; the per-color records live in the parts
+    DB next to their reverse-mount siblings.
+    """
+
+    default_footprint = "LED_SMD:LED_1206_3216Metric"
 
 
 class LedRev1206(Led):

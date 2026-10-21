@@ -31,20 +31,25 @@ die with the MCU rail — instrumented-ci.md §3/§6).
 
 All three variants also wire the PD5 ``debug_tx`` pad (unwired on the
 plain node) — the §5 debug tree's leaves land on it
-(docs/scan-plane.md §5) — and inherit ``Node``'s ``connector_faces``:
-the CI board keeps only the boundary tile's upstream face and drops
-the rest with their TVS pairs (instrumented-ci.md §9 R10).
+(docs/scan-plane.md §5) — and share the `_CiTile` base: ``Node``'s
+``connector_faces`` (the CI board keeps only the boundary tile's
+upstream face and drops the rest with their TVS pairs,
+instrumented-ci.md §9 R10) plus the forward-mount status-LED set —
+on the flat bench board the viewer stands over the component side, so
+the node board's reverse-mount light-pipe LEDs (DESIGN.md §4.1) give
+way to their top-emitting siblings (``CI_STATUS_LEDS``).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from design.bins import R0603
+from design.bins import R0603, Led1206
 from design.ch32v003 import Ch32v003f4p6
 from design.ci_parts import Pklcs1212e, Rk09k, Ts1187a
 from design.node import Node
 from design.node_pins import capture as capture_pin_map
+from design.status_leds import StatusLedSet
 from oparroy.dsl import AlwaysPowered, BackFeed, DiesWith
 
 if TYPE_CHECKING:
@@ -66,6 +71,18 @@ MEASUREMENT_TILE = 6
 #: ≈ 5.7 mA per driven dead pin, against the CH32V003's Σ ±20 mA
 #: injection budget (instrumented-ci.md §3, CH32V003 facts T3-1).
 _CLAMP_PIN_MA = 5.7
+
+#: The CI tiles' status-LED set: top-emitting 1206 (the `Led1206`
+#: bin). The CI board is a flat bench board — the viewer stands over
+#: the component side, so the node board's reverse-mount light-pipe
+#: parts (DESIGN.md §4.1) would shine the LEDs into the board's back.
+#: Same XINGLIGHT series, same role colors (datasheets/XL-3216).
+CI_STATUS_LEDS = StatusLedSet(
+    bin=Led1206,
+    power="XL-3216SURC",
+    working="XL-3216UYC",
+    link="XL-3216SYGC",
+)
 
 
 def ring_back_feed(drivers: str, pins: int, resistor: str) -> BackFeed:
@@ -209,7 +226,23 @@ def _wire_debug_tx(circuit: Circuit) -> None:
     circuit.connect(circuit.net("debug_tx"), _payload_pin(u1, "debug_tx"))
 
 
-class InputNode(Node):
+class _CiTile(Node):
+    """Shared CI-tile base: the forward-mount status-LED set.
+
+    Every tile variant is a bench-board tile, so the LED delivery is a
+    property of the variant, not of each composition site — captures
+    that instance a variant directly (tests, benches) get the same
+    parts as the composed board. ``connector_faces`` keeps ``Node``'s
+    default; the board composition narrows it per tile.
+    """
+
+    def __init__(
+        self, *, connector_faces: tuple[str, ...] = ("upstream", "downstream")
+    ) -> None:
+        super().__init__(connector_faces=connector_faces, status_leds=CI_STATUS_LEDS)
+
+
+class InputNode(_CiTile):
     """An input tile (1/3/5/7): the Node plus the pot and button payload."""
 
     def capture(self, circuit: Circuit) -> None:
@@ -255,7 +288,7 @@ class InputNode(Node):
             circuit.connect(pin_net, _payload_pin(u1, function))
 
 
-class OutputNode(Node):
+class OutputNode(_CiTile):
     """An output tile (0/2/4): the Node plus the buzzer payload."""
 
     def capture(self, circuit: Circuit) -> None:
@@ -272,7 +305,7 @@ class OutputNode(Node):
         circuit.connect(buzzer, _payload_pin(u1, "buzzer"))
 
 
-class MeasurementNode(Node):
+class MeasurementNode(_CiTile):
     """The measurement tile (T6): the plain Node behind the §12 power chain.
 
     No human-I/O payload — the buzzer or pot+buttons would dominate the

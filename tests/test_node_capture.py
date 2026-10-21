@@ -98,6 +98,27 @@ def test_connector_leds_share_one_antiparallel_gpio(kicad_libs: KiCadLibraries) 
     assert "SL1/Dd.2" in nets["3V3"]
 
 
+def test_status_leds_stay_reverse_mount(kicad_libs: KiCadLibraries) -> None:
+    """The node board keeps the §4.1 light-pipe delivery.
+
+    The other half of the split pinned in
+    test_ci_board.py::test_tiles_carry_forward_mount_status_leds.
+    """
+    flat = capture(kicad_libs).flatten()
+    expected = {
+        "Dp": "XL-3216SURC-FB",
+        "Dw": "XL-3216UYC-FB",
+        "Du": "XL-3216SYGC-FB",
+        "Dd": "XL-3216SYGC-FB",
+    }
+    for role, value in expected.items():
+        part = flat.parts[f"SL1/{role}"]
+        assert part.value == value
+        assert (
+            part.footprint == "Oparroy:LED_1206_3216Metric_ReverseMount_Hole1.5x2.4mm"
+        )
+
+
 def test_pc7_spare_lands_on_a_test_pad(kicad_libs: KiCadLibraries) -> None:
     # The PC7 spare is a bare test pad, not a floating pin.
     nets = nets_of(capture(kicad_libs))
