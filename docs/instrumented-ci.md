@@ -16,6 +16,12 @@ split naming follows the equivalence memo. The node capture reference
 for every cited net: `design/phy_frontend.py`, `design/node.py`,
 `design/node_pins.py`.
 
+One capture-level deviation from the node board: the tiles' DESIGN.md
+§4.1 status LEDs are the top-emitting XINGLIGHT XL-3216 siblings
+(parts DB `led-1206-*`, `design/ci_tiles.py`), not the reverse-mount
+light-pipe parts — this is a flat bench board, and its viewer stands
+over the component side.
+
 ## 1. Fault space → injector coverage
 
 Every §3 failure mode, and how the CI board reproduces it:
