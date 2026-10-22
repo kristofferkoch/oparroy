@@ -86,10 +86,14 @@ class TransformPart:
     engine places grouped parts with hierarchical references, like
     flattening's own prefixed copies. The spec wires placeholder nets
     (the module docstring's ``@``-names), resolved at application.
+    ``note`` is ``Circuit.part``'s layout-author note (ir.py
+    ``_flatten_note``): ``{ref}`` placeholders name siblings by their
+    transform refs (``{FI1/UIM}``), resolved to refdes at emission.
     """
 
     ref: str
     spec: TypedPart
+    note: str | None = None
 
     def __post_init__(self) -> None:
         if not self.ref:
@@ -535,6 +539,7 @@ class _TileTransforms:
             placed = self._tile._place_typed(  # noqa: SLF001 — pass over IR internals
                 transform_part.ref, spec, None
             )
+            placed.note = transform_part.note
             placed.provenance = Provenance(label, base)
 
     def _spec_net(

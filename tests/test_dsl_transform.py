@@ -37,7 +37,7 @@ from oparroy.dsl import (
     check,
     raise_on_errors,
 )
-from oparroy.dsl.ir import hierarchical_waivers
+from oparroy.dsl.ir import hierarchical_waivers, resolve_note_refs
 
 if TYPE_CHECKING:
     from conftest import StubFootprints, StubSymbols
@@ -421,6 +421,36 @@ def test_provenance_survives_flattening(symbols: StubSymbols) -> None:
     # And annotation's renamed pass keeps the tags.
     renamed = flat.renamed({})
     assert renamed.parts["T0/FI1/SWAB"].provenance == Provenance("F1", "TX_A")
+
+
+def test_transform_part_note_flattens_and_resolves(symbols: StubSymbols) -> None:
+    """A transform part's note gains the tile path at flatten, {ref} included."""
+    board = build_board(symbols)
+    noted_leg = AddShunt(
+        label="F2",
+        net="TX_A#b",
+        rail="GND",
+        part=TransformPart("FI1/SWAG", StubSwitch(a="@net", b1="@leg", s="@control")),
+        control="SHG_A",
+        extra=(
+            TransformPart(
+                "FI1/RSG",
+                Resistor("470", a="@leg", b="GND", footprint="StubFP:R_0603"),
+                note="gate resistor for {FI1/SWAG}",
+            ),
+        ),
+    )
+    apply_transforms(board, [PerTile(Tile, (f1(), noted_leg))])
+    # Pre-flatten: the note reads as captured.
+    tile0 = board.instances["T0"].circuit
+    assert tile0.parts["FI1/RSG"].note == "gate resistor for {FI1/SWAG}"
+    # Flatten prefixes text and placeholder alike; emission's
+    # resolve_note_refs then maps the placeholder to the part's refdes.
+    flat = board.flatten()
+    note = flat.parts["T0/FI1/RSG"].note
+    assert note == "T0: gate resistor for {T0/FI1/SWAG}"
+    identities = {part.identity: part.ref for part in flat.parts.values()}
+    assert resolve_note_refs(note, identities) == "T0: gate resistor for T0/FI1/SWAG"
 
 
 def test_series_control_net_merges_into_the_board_at_flatten(
