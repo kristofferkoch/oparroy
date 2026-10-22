@@ -145,7 +145,7 @@ class Hc595Stage(Subcircuit):
                 gnd=gnd,
             ),
         )
-        circuit.part("C1", C0603("100n", a=v3v3, b=gnd), note="stage decoupling")
+        circuit.part("C1", C0603("100n", a=v3v3, b=gnd), note="decoupling for {U1}")
 
 
 class Hc165Stage(Subcircuit):
@@ -180,7 +180,7 @@ class Hc165Stage(Subcircuit):
                 gnd=gnd,
             ),
         )
-        circuit.part("C1", C0603("100n", a=v3v3, b=gnd), note="stage decoupling")
+        circuit.part("C1", C0603("100n", a=v3v3, b=gnd), note="decoupling for {U1}")
 
 
 class ScanPlane(Subcircuit):

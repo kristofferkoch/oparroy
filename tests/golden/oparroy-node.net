@@ -14,7 +14,7 @@
       (value "10u")
       (footprint "Capacitor_SMD:C_0603_1608Metric")
       (fields
-        (field (name "Comment") "bulk decoupling, one node"))
+        (field (name "Comment") "bulk decoupling for the node's 3V3 rail"))
       (sheetpath (names "/") (tstamps "/"))
       (tstamps "160a7f41-0868-52db-a948-c646fbc43805"))
     (comp (ref "C3")

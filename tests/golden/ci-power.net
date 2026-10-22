@@ -6,11 +6,15 @@
     (comp (ref "Cin")
       (value "10u")
       (footprint "Capacitor_SMD:C_0603_1608Metric")
+      (fields
+        (field (name "Comment") "input cap for U1"))
       (sheetpath (names "/") (tstamps "/"))
       (tstamps "aa01d249-c733-56a7-875a-bea6f25c954e"))
     (comp (ref "Cout")
       (value "22u")
       (footprint "Capacitor_SMD:C_0603_1608Metric")
+      (fields
+        (field (name "Comment") "output cap for U1"))
       (sheetpath (names "/") (tstamps "/"))
       (tstamps "d1c52ada-4b5f-5e7c-a9c5-316429ba90bc"))
     (comp (ref "J1")

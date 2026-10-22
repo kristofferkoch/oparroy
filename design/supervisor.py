@@ -374,29 +374,37 @@ class Supervisor(Subcircuit):
             circuit.part(
                 f"C_io{pin}",
                 C0603("100n", a=v3v3, b=gnd),
-                note=f"at U1 pin {pin} (IOVDD)",
+                note=f"decoupling for {{U1}} pin {pin} (IOVDD)",
             )
         circuit.part(
-            "C_usb", C0603("100n", a=v3v3, b=gnd), note="at U1 pin 48 (USB_VDD)"
+            "C_usb",
+            C0603("100n", a=v3v3, b=gnd),
+            note="decoupling for {U1} pin 48 (USB_VDD)",
         )
         circuit.part(
-            "C_adc", C0603("100n", a=v3v3, b=gnd), note="at U1 pin 43 (ADC_AVDD)"
+            "C_adc",
+            C0603("100n", a=v3v3, b=gnd),
+            note="decoupling for {U1} pin 43 (ADC_AVDD)",
         )
         circuit.part(
-            "C_dvdd23", C0603("100n", a=dvdd, b=gnd), note="at U1 pin 23 (DVDD)"
+            "C_dvdd23",
+            C0603("100n", a=dvdd, b=gnd),
+            note="decoupling for {U1} pin 23 (DVDD)",
         )
         circuit.part(
-            "C_dvdd50", C0603("100n", a=dvdd, b=gnd), note="at U1 pin 50 (DVDD)"
+            "C_dvdd50",
+            C0603("100n", a=dvdd, b=gnd),
+            note="decoupling for {U1} pin 50 (DVDD)",
         )
         circuit.part(
             "C_vreg_in",
             C0603("1u", a=v3v3, b=gnd),
-            note="at U1 pin 44 (VREG_IN)",
+            note="decoupling for {U1} pin 44 (VREG_IN)",
         )
         circuit.part(
             "C_vreg_out",
             C0603("1u", a=dvdd, b=gnd),
-            note="at U1 pin 45 (VREG_OUT)",
+            note="decoupling for {U1} pin 45 (VREG_OUT)",
         )
 
 
