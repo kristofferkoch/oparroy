@@ -3,9 +3,11 @@
 The golden netlist at tests/golden/oparroy-ci.net is what pcbnew
 ingests — the post-annotation emission of the instrumented side (the
 plain reference side exists for the reset-state equivalence proof
-only); regenerate it from the dev shell with:
+only); regenerate it, and the placement map the pcbnew grouping helper
+(boards/ci/group-by-tile.py) reads, from the dev shell with:
 
-    python -m design.ci_board > tests/golden/oparroy-ci.net
+    python -m design.ci_board --placement-map boards/ci/placement-map.json \
+        > tests/golden/oparroy-ci.net
 """
 
 from __future__ import annotations
@@ -14,7 +16,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from design import ci_tiles
-from design.ci_board import INPUT_TILES, TILE_COUNT, capture, ci_board_plan
+from design.ci_board import (
+    INPUT_TILES,
+    TILE_COUNT,
+    capture,
+    ci_board_plan,
+    placement_map_json,
+)
 from design.ci_instrumentation import BUDGETS, reset_levels
 from design.ci_tiles import MEASUREMENT_TILE
 from oparroy.dsl import (
@@ -46,6 +54,7 @@ if TYPE_CHECKING:
     import pytest
 
 GOLDEN = Path(__file__).parent / "golden" / "oparroy-ci.net"
+PLACEMENT_MAP = Path(__file__).parent.parent / "boards" / "ci" / "placement-map.json"
 
 #: The injector switches' reset-open throws (bit 0 = pass-through):
 #: the break switches' B2 legs, the shunts' signal-side legs. The
@@ -395,3 +404,9 @@ def test_netlist_byte_identical_across_runs(kicad_libs: KiCadLibraries) -> None:
         return emit_netlist(apply_annotation(circuit, annotate(circuit)))
 
     assert render() == render()
+
+
+def test_placement_map_matches_board_copy(kicad_libs: KiCadLibraries) -> None:
+    circuit = solved(capture(kicad_libs))
+    renamed = apply_annotation(circuit, annotate(circuit))
+    assert placement_map_json(renamed) == PLACEMENT_MAP.read_text(encoding="utf-8")

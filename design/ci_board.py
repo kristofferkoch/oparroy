@@ -40,11 +40,14 @@ Usage (in the nix dev shell):
     python -m design.ci_board --annotation FILE        # stable refdes file
     python -m design.ci_board --footprints FILE        # footprint overrides
     python -m design.ci_board --back-annotate X.kicad_pcb --annotation FILE
+    python -m design.ci_board --placement-map FILE     # refdes → capture-path
+                                                       # JSON (netlist on stdout)
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -83,6 +86,7 @@ from oparroy.dsl import (
     solve,
     to_dot,
 )
+from oparroy.dsl.ir import natural_key
 
 if TYPE_CHECKING:
     from oparroy.dsl import Net, Scope
@@ -365,6 +369,25 @@ def _plane_bindings(
     return bindings
 
 
+def placement_map_json(circuit: Circuit) -> str:
+    """Render the refdes → capture-path JSON pcbnew layout scripting reads.
+
+    pcbnew sees only the annotated refdes; the map hands each footprint
+    back its capture path (``T2/PHY1/U1``), whose first component names
+    the group the part belongs to — the tile, SUP, PLANE, or the board
+    itself (no ``/``). Power symbols never reach pcbnew, so they stay
+    out. Key order is natural (U2 before U10) to keep the file
+    diff-stable like the netlist.
+    """
+    mapping = {
+        part.ref: part.identity
+        for part in circuit.parts.values()
+        if not part.symbol.is_power
+    }
+    ordered = dict(sorted(mapping.items(), key=lambda item: natural_key(item[0])))
+    return json.dumps(ordered, indent=1) + "\n"
+
+
 def main() -> None:
     """Check the instrumented capture and emit the annotated KiCad netlist.
 
@@ -396,6 +419,11 @@ def main() -> None:
         metavar="KICAD_PCB",
         help="derive the annotation from a .kicad_pcb (needs --annotation)",
     )
+    parser.add_argument(
+        "--placement-map",
+        type=Path,
+        help="write the refdes → capture-path JSON pcbnew layout scripting reads",
+    )
     args = parser.parse_args()
     if args.back_annotate is not None and args.annotation is None:
         parser.error("--back-annotate needs --annotation")
@@ -426,7 +454,10 @@ def main() -> None:
     annotation = annotate(circuit, prior=prior)
     if args.annotation is not None:
         args.annotation.write_text(annotation.to_json(), encoding="utf-8")
-    sys.stdout.write(emit_netlist(apply_annotation(circuit, annotation)))
+    renamed = apply_annotation(circuit, annotation)
+    if args.placement_map is not None:
+        args.placement_map.write_text(placement_map_json(renamed), encoding="utf-8")
+    sys.stdout.write(emit_netlist(renamed))
 
 
 if __name__ == "__main__":
