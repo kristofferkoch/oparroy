@@ -350,9 +350,21 @@ def measurement_power_cut() -> tuple[Transform, ...]:
                     ),
                 ),
                 TransformPart("FI1/RCS", R0603("47k", a="@cs", b="3V3")),
-                TransformPart("FI1/CIM", C0603("100n", a="3V3", b="GND")),
-                TransformPart("FI1/CAD1", C0603("100n", a="3V3", b="GND")),
-                TransformPart("FI1/CAD2", C0603("1u", a="3V3", b="GND")),
+                TransformPart(
+                    "FI1/CIM",
+                    C0603("100n", a="3V3", b="GND"),
+                    note="decoupling for {FI1/UIM}",
+                ),
+                TransformPart(
+                    "FI1/CAD1",
+                    C0603("100n", a="3V3", b="GND"),
+                    note="decoupling for {FI1/UAD}",
+                ),
+                TransformPart(
+                    "FI1/CAD2",
+                    C0603("1u", a="3V3", b="GND"),
+                    note="bulk decoupling for {FI1/UAD}",
+                ),
             ),
         ),
     )

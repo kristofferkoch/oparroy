@@ -211,8 +211,8 @@ class CiPower(Subcircuit):
         circuit.part("U1", Ams1117v33(gnd=gnd, vout=v3v3, vin=v5))
         # Per the datasheet's application circuit: 10 µF in, 22 µF out —
         # ceramics against the tantalum stability spec (quirks.md).
-        circuit.part("Cin", C0603("10u", a=v5, b=gnd))
-        circuit.part("Cout", C0603("22u", a=v3v3, b=gnd))
+        circuit.part("Cin", C0603("10u", a=v5, b=gnd), note="input cap for {U1}")
+        circuit.part("Cout", C0603("22u", a=v3v3, b=gnd), note="output cap for {U1}")
 
 
 def capture(symbols: SymbolTable) -> Circuit:

@@ -189,7 +189,9 @@ class Node(Subcircuit):
         # Decoupling: 100n at the VDD pin, 10u bulk for the node.
         circuit.part("C1", C0603("100n", a=v3v3, b=gnd), note="decoupling cap for {U1}")
         circuit.part(
-            "C2", C0603("10u", a=v3v3, b=gnd), note="bulk decoupling, one node"
+            "C2",
+            C0603("10u", a=v3v3, b=gnd),
+            note="bulk decoupling for the node's 3V3 rail",
         )
 
         # §4.1 status LEDs: the StatusLeds subcircuit (power, working,
