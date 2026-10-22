@@ -67,6 +67,9 @@ ignore = [
 # pytest conventions: bare asserts, no __init__.py, no docstrings on
 # every test function.
 "tests/**" = ["D100", "D103", "INP001", "S101"]
+# pcbnew console helpers run inside KiCad's embedded interpreter: no
+# package layout, so the implicit-namespace-package rule does not apply.
+"boards/**" = ["INP001"]
 
 [tool.pytest.ini_options]
 # src/ is a testpath so --doctest-modules picks up doctests in package
