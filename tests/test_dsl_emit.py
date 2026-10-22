@@ -179,7 +179,8 @@ def test_note_ref_resolves_to_annotated_refdes(symbols: StubSymbols) -> None:
 
 def test_note_ref_prefixes_through_flatten(symbols: StubSymbols) -> None:
     # A note captured inside a subcircuit names the sibling next to it;
-    # flattening prefixes the placeholder with the instance path.
+    # flattening prefixes the placeholder with the instance path, and
+    # the note text itself gains the path as its prefix.
     def child(c: Circuit) -> None:
         u1 = c.part("u1", symbol="Stub:R", value="1k", footprint="StubFP:R_0603")
         cb = c.part(
@@ -195,9 +196,36 @@ def test_note_ref_prefixes_through_flatten(symbols: StubSymbols) -> None:
     board = Circuit("emit", symbols)
     board.instance("PHY1", child)
     flat = board.flatten()
-    assert flat.parts["PHY1/cb"].note == "decoupling cap for {PHY1/u1}"
+    assert flat.parts["PHY1/cb"].note == "PHY1: decoupling cap for {PHY1/u1}"
     rendered = emit_netlist(board)
-    assert '(field (name "Comment") "decoupling cap for PHY1/u1")' in rendered
+    assert '(field (name "Comment") "PHY1: decoupling cap for PHY1/u1")' in rendered
+
+
+def test_note_prefixes_with_instance_path(symbols: StubSymbols) -> None:
+    # Annotation renumbers refdes board-wide, so a tiled capture's
+    # identical notes would be indistinguishable in pcbnew; flattening
+    # prepends the instance path. Top-level notes pass through.
+    def child(c: Circuit) -> None:
+        c.part(
+            "u1",
+            symbol="Stub:R",
+            value="1k",
+            footprint="StubFP:R_0603",
+            note="node MCU",
+        )
+
+    board = Circuit("emit", symbols)
+    board.instance("T2", child)
+    board.part(
+        "U1",
+        symbol="Stub:R",
+        value="1k",
+        footprint="StubFP:R_0603",
+        note="supervisor MCU",
+    )
+    rendered = emit_netlist(board)
+    assert '(field (name "Comment") "T2: node MCU")' in rendered
+    assert '(field (name "Comment") "supervisor MCU")' in rendered
 
 
 def test_note_unknown_ref_raises(symbols: StubSymbols) -> None:

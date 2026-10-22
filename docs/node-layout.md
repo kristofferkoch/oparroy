@@ -17,7 +17,9 @@ Each footprint also carries its capture `note=` as a `Comment`
 property (pcbnew's netlist import copies comp fields onto footprints):
 "power LED", "decoupling cap for U3" — the `{ref}` placeholders the
 capture writes resolve to the current refdes at emission
-([dsl-reference.md](dsl-reference.md), `Circuit.part`).
+([dsl-reference.md](dsl-reference.md), `Circuit.part`), and notes
+captured inside a subcircuit carry their sheet path as a prefix
+("SL1: power LED"), the same anchor convention as above.
 
 Constraints are seeded, not hand-set: `design/node_board.py` writes the
 stackup, the Default/Bypass/Power net classes, and the board minimums
