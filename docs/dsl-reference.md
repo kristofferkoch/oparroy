@@ -37,7 +37,9 @@ are part of the suite (`--doctest-modules`).
   netlist comp's Comment field (pcbnew lands it as a footprint
   property); `{ref}` placeholders name sibling parts by capture name
   (`"decoupling cap for {U1}"`) and resolve to the annotated refdes at
-  emission.
+  emission. Flattening prepends the note's instance path
+  (`"T2: node MCU"`), so a tiled capture's copies stay distinguishable
+  after annotation renumbers refdes board-wide.
 - `net(name)` — declare an internal net.
 - `port(name, *, source=Limits|None, sink=Limits|None)` — declare an
   interface net; exempt from dangling-net checks; ranges feed the
@@ -276,7 +278,8 @@ geographic renumbering back via the content-derived tstamps.
 - `emit_netlist(circuit)` (`kicad_emit.py`) — the KiCad `.net`; power
   symbols excluded; hierarchy survives as each comp's `sheetpath`; a
   part's `note` emits as the comp's Comment field with `{ref}`
-  placeholders resolved to refdes (an unknown placeholder raises).
+  placeholders resolved to refdes (an unknown placeholder raises) —
+  subcircuit notes carry the instance-path prefix flattening gave them.
 - `emit_spice(circuit, *, name=None, models=None, includes=(), params=None)`
   (`spice_emit.py`) — the ngspice DUT `.subckt`; only symbols with a
   declared binding emit (R, C, L, LED, BAT54S); the caller passes

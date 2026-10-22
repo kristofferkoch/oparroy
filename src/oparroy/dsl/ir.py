@@ -134,6 +134,24 @@ def _prefix_note_refs(
     )
 
 
+def _flatten_note(
+    note: str | None, parts: Mapping[str, Part], path: tuple[str, ...]
+) -> str | None:
+    """Ready a captured note for its flattened placement.
+
+    Two rewrites: ``{ref}`` placeholders naming sibling parts gain the
+    instance path (``_prefix_note_refs``), and the text itself gains it
+    as a prefix — notes are the layout author's per-part landmark once
+    annotation renumbers refdes board-wide, so a tiled capture's copies
+    read ``T2/PHY1: …`` instead of eight identical strings. Top-level
+    notes pass through untouched.
+    """
+    if note is None or not path:
+        return note
+    prefix = "".join(f"{level}/" for level in path)
+    return f"{'/'.join(path)}: {_prefix_note_refs(note, parts, prefix)}"
+
+
 def resolve_note_refs(note: str, identities: Mapping[str, str]) -> str:
     """Resolve a note's ``{ref}`` placeholders against identity → refdes.
 
@@ -659,7 +677,9 @@ class Part:
     is an optional human note for the layout author (``Circuit.part``'s
     ``note=``), emitted as the netlist comp's Comment field; ``{ref}``
     placeholders naming sibling parts resolve to the annotated refdes
-    at emission.
+    at emission. Flattening prepends the note's capture location
+    (``T2/PHY1: …``), so a tiled capture's copies stay distinguishable
+    after annotation renumbers refdes board-wide.
     """
 
     def __init__(  # noqa: PLR0913 — ref/symbol/value/footprint + identity/placement
@@ -1479,7 +1499,9 @@ class Circuit:
         netlist import lands it as a footprint property. ``{ref}``
         placeholders name sibling parts by capture name
         (``"decoupling cap for {U1}"``) and resolve to the annotated
-        refdes at emission, so the note survives re-annotation.
+        refdes at emission, so the note survives re-annotation. On a
+        tiled board the note reaches the netlist prefixed with its
+        instance path (``T2: node MCU``), flattening's doing.
         """
         _reject_separator("part reference", ref)
         if isinstance(spec, str):
@@ -2146,7 +2168,7 @@ class Circuit:
             placed.residuals = part.residuals
             placed.partial_power_down = part.partial_power_down
             placed.value_bin = part.value_bin
-            placed.note = _prefix_note_refs(part.note, self._parts, prefix)
+            placed.note = _flatten_note(part.note, self._parts, path)
             for pin in part.pins:
                 if pin.net is not None:
                     nets[pin.net]._attach(placed.pin(pin.number))  # noqa: SLF001

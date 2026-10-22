@@ -12,8 +12,10 @@ Sections eeschema also emits — ``libparts``, ``libraries``, comp
 optional for pcbnew's importer (verified against the reader source).
 Comp ``fields`` are emitted only for a part's ``note`` (the Comment
 field): pcbnew's netlist updater lands comp fields as footprint
-properties, which is how the note reaches the layout author. A note's
-``{ref}`` placeholders (``Circuit.part``'s ``note=``) resolve here
+properties, which is how the note reaches the layout author. A note
+captured inside a subcircuit arrives already prefixed with its
+instance path (``T2/PHY1: …`` — flattening's doing, ``ir.py``), and
+its ``{ref}`` placeholders (``Circuit.part``'s ``note=``) resolve here
 against capture identities, so the emitted text carries board refdes.
 """
 
