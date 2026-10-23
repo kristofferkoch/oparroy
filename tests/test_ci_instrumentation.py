@@ -122,13 +122,22 @@ def ci_board(libs: KiCadLibraries, tiles: list[tuple[str, type]]) -> Circuit:
         )
         for index in range(len(tiles) + 1)
     ]
+    # Mirror the real board's boundary split (design/ci_board.py):
+    # tile 0's upstream face rides the cable side of the connector
+    # pair, so its segment wires cross as CABLE_A/CABLE_B.
+    faces[0] = board.bundle(
+        "seg0_tile",
+        **power,
+        a=board.net("CABLE_A"),
+        b=board.net("CABLE_B"),
+    )
     for (name, cls), upstream, downstream in zip(
         tiles, faces[:-1], faces[1:], strict=True
     ):
         board.instance(name, cls(), upstream=upstream, downstream=downstream)
     # The segment wires cross once the transforms land, exactly as on
-    # the real board; SEG0_B stays stale here — without the supervisor
-    # instance no always-powered part reaches it.
+    # the real board; the ring-B boundary wire stays undeclared here —
+    # without the supervisor instance no always-powered part reaches it.
     declare_segment_crossings(board, len(tiles))
     return board
 

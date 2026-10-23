@@ -60,7 +60,12 @@ measurement tile (§12) carries no injector, and its downstream
 segment is the one uninstrumented hop. The supervisor→tile-0 segment
 is the one exception to copper: it carries the §3 connector pair, the
 demo's yankable connector and the cable-reach bench's insertion point
-(DESIGN.md §6). Per-wire circuit, three
+(DESIGN.md §6). The pair splits the segment's data wires at the
+connectors — `SEG0_A`/`SEG0_B` on the supervisor side, `CABLE_A`/
+`CABLE_B` on the tile side — so the cable is the only signal bridge
+and a yank interrupts the ring; the power conductors stay shared
+rails (a yank never interrupts power — design/ci_board.py).
+Per-wire circuit, three
 SN74LVC1G3157 SPDT switches + two 470 Ω:
 
 ```
