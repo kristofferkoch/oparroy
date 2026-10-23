@@ -77,6 +77,11 @@ def expected_warnings() -> frozenset[str]:
         # USB-C SBU1/SBU2: unused on a USB 2.0 sink (design/ci_power.py).
         "PWR/J1.A8 is not connected",
         "PWR/J1.B8 is not connected",
+        # The boundary split leaves T0's txb_drv with no always-side
+        # driver on board copper (design/ci_board.py) — the shared tile
+        # declaration (design/ci_tiles.py) covers the other seven tiles
+        # and reports stale on T0.
+        "crossing declaration at 'T0/txb_drv' matched no crossing net",
         # AUX2's two spare outputs (scan-plane §1).
         "net 'PLANE/aux2_spare6' has a single pin (PLANE/AUX2/U1.6)",
         "net 'PLANE/aux2_spare7' has a single pin (PLANE/AUX2/U1.7)",
@@ -144,9 +149,13 @@ def errors(report: EquivalenceReport) -> list[str]:
 def test_ring_closes_through_the_supervisor(kicad_libs: KiCadLibraries) -> None:
     nets = nets_of(capture(kicad_libs, instrumented=False))
     # The boundary segment is the connectorized one (instrumented-ci
-    # §2): J0 at the supervisor end, T0's J1 at the tile end.
-    assert {"J0.5", "T0/J1.5", "SUP/Rat.2", "SUP/Dat.1"} <= nets["SEG0_A"]
-    assert {"J0.7", "T0/J1.7", "SUP/Rbr.1", "SUP/Dbr.1"} <= nets["SEG0_B"]
+    # §2): J0 at the supervisor end, T0's J1 at the tile end. The data
+    # wires split at the pair — the cable is the only signal bridge, so
+    # the yank demo's pull interrupts the ring (ci_board's docstring).
+    assert nets["SEG0_A"] == {"J0.5", "SUP/Rat.2", "SUP/Dat.1"}
+    assert nets["SEG0_B"] == {"J0.7", "SUP/Rbr.1", "SUP/Dbr.1"}
+    assert nets["CABLE_A"] == {"T0/J1.5", "T0/PHY1/Dar.1", "T0/PHY1/Rar.1"}
+    assert nets["CABLE_B"] == {"T0/J1.7", "T0/PHY1/Dbt.1", "T0/PHY1/Rbt.2"}
     # The drain: tile 7 hands the ring back to the supervisor.
     assert nets[f"SEG{TILE_COUNT}_A"] == {"SUP/Rar.1", "T7/PHY1/Rat.2"}
     assert nets[f"SEG{TILE_COUNT}_B"] == {"SUP/Rbt.2", "T7/PHY1/Rbr.1"}
@@ -253,8 +262,13 @@ def test_crossing_dispositions(kicad_libs: KiCadLibraries) -> None:
     # B4's observe-only tap: the RP2040 pad drive bounds the misdrive.
     assert declared["T0/led_work"] == ["BackFeed"]
     assert declared["T0/SL1/ledw_a"] == ["BackFeed"]
-    # The inter-tile segments; the drain (SEG8) never crosses.
-    for index in range(TILE_COUNT):
+    # The inter-tile segments; the drain (SEG8) never crosses. Segment
+    # 0's ring-A declaration rides the tile side of the boundary split;
+    # CABLE_B stays undeclared — no always-side driver reaches it on
+    # board copper (design/ci_board.py's declare_segment_crossings).
+    assert declared["CABLE_A"] == ["BackFeed"]
+    assert "CABLE_B" not in declared
+    for index in range(1, TILE_COUNT):
         assert declared[f"SEG{index}_A"] == ["BackFeed"]
         assert declared[f"SEG{index}_B"] == ["BackFeed"]
 
@@ -272,8 +286,8 @@ def test_dropped_segment_declaration_fails(
         for i in issues
         if i.check == POWER_DOMAIN_CROSSING and i.severity is Severity.ERROR
     }
-    assert undeclared == {
-        f"SEG{index}_{wire}" for index in range(TILE_COUNT) for wire in ("A", "B")
+    assert undeclared == {"CABLE_A"} | {
+        f"SEG{index}_{wire}" for index in range(1, TILE_COUNT) for wire in ("A", "B")
     }
 
 

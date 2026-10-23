@@ -25,13 +25,17 @@ ports bind, then wires PLANE/SWIO/DBG to the handles.
 board's one connectorized segment (instrumented-ci.md §2): J0 at the
 supervisor end, T0's J1 at the tile end — the demo's yankable pair
 and the cable-reach bench's insertion point. The §3 pinout is fixed,
-so J0 binds the full bundle: GND and 3V3 cross the cable (both ends
-land on the same board rails — a redundant parallel run; GND must
-cross to preserve the G-S-G return geometry the §2 reach model
-assumes; a yank interrupts ring signals, never power), and UNREG is a
-dead conductor (J0.1 ↔ T0/J1.1 — this board has no 5 V rail past the
-regulator input, design/ci_power.py). The eight inter-tile segments
-are board copper: no connectors, no TVS (instrumented-ci.md §9 R10).
+so both ends bind the full bundle — but the data wires split at the
+pair: ``SEG0_A``/``SEG0_B`` end at J0's pins and ``CABLE_A``/
+``CABLE_B`` start at T0/J1's, so the cable is the only signal bridge
+(a yank interrupts ring signals; a copper bridge would make the pair
+decorative). The power members stay shared rails: GND and 3V3 cross
+the cable as a redundant parallel run (GND must cross to preserve the
+G-S-G return geometry the §2 reach model assumes; a yank interrupts
+ring signals, never power), and UNREG is a dead conductor
+(J0.1 ↔ T0/J1.1 — this board has no 5 V rail past the regulator
+input, design/ci_power.py). The eight inter-tile segments are board
+copper: no connectors, no TVS (instrumented-ci.md §9 R10).
 
 Usage (in the nix dev shell):
 
@@ -137,17 +141,25 @@ def declare_segment_crossings(board: Circuit, segments: int) -> None:
     dead-side pin on the reach (opa_p + opo on ring A, txb_drv on ring
     B). ``segments`` counts the inter-tile segments; the drain segment
     (T7→supervisor on the full board) is always↔always and never
-    crosses, so it is excluded. The plain side carries these as dormant
-    declarations — the crossings are an instrumented-side phenomenon
-    (F8's 3V3N) — so its check reports them stale, like the tile
-    captures'.
+    crosses, so it is excluded. Segment 0's ring-A declaration lands on
+    ``CABLE_A`` — the tile side of the boundary split (the supervisor
+    side is always↔always copper). Ring B declares nothing there: the
+    boundary B wire's only driver is T0 itself, so ``CABLE_B`` touches
+    no always-powered part on board copper — the originator injector's
+    shunts reach the tile's Rbt only through the mated cable, a path
+    the connector split deliberately hides from the audit (bounded by
+    the shunt leg + Rbt regardless). The plain side carries these as
+    dormant declarations — the crossings are an instrumented-side
+    phenomenon (F8's 3V3N) — so its check reports them stale, like the
+    tile captures'.
     """
     for index in range(segments):
         board.crossing(
-            f"SEG{index}_A",
+            "CABLE_A" if index == 0 else f"SEG{index}_A",
             ring_back_feed("ring traffic and the injector shunts", 2, "Rar"),
         )
-        board.crossing(f"SEG{index}_B", ring_back_feed("ring-B traffic", 1, "Rbt"))
+        if index:
+            board.crossing(f"SEG{index}_B", ring_back_feed("ring-B traffic", 1, "Rbt"))
 
 
 def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
@@ -192,6 +204,14 @@ def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
         )
         for index in range(TILE_COUNT + 1)
     ]
+    # The boundary segment's tile end (the module docstring's split):
+    # the cable is the only bridge between J0 and T0's J1.
+    seg0_tile = board.bundle(
+        "seg0_tile",
+        **rails,
+        a=board.net("CABLE_A"),
+        b=board.net("CABLE_B"),
+    )
     declare_segment_crossings(board, TILE_COUNT)
     # The boundary tile's extras (instrumented-ci.md §5), declared here
     # because they exist only once the B4/B5 transforms land on T0:
@@ -237,7 +257,7 @@ def capture(symbols: SymbolTable, *, instrumented: bool = True) -> Circuit:
         board.instance(
             f"T{index}",
             variant(connector_faces=faces),
-            upstream=segments[index],
+            upstream=seg0_tile if index == 0 else segments[index],
             downstream=segments[index + 1],
         )
 
