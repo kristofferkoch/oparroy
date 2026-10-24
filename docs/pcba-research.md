@@ -40,6 +40,38 @@ lines, TSSOP CH32V003 + QFN RP2040): ~$10 fixed + ~$25–30 Extended fees
 - ~$5–10 parts + ~$3 X-ray + ~$2 fab → **~$55–80 before shipping**
   (~$10–25 shipping to Norway, unverified at checkout).
 
+## CI board size and cost snapshot
+
+Fees checked against [JLCPCB's assembly price
+page](https://jlcpcb.com/help/article/pcb-assembly-price) on 2026-10-24. The
+current placement sketch has 570 footprints, approximately **522 populated
+placements** after DNP parts and test points, **1,865 populated solder
+joints**, and **48 unique value/footprint combinations**.
+
+- Ordinary SMT assembly at **$0.0016/joint** is only **$2.98/board**. The
+  published pre-reflow soldering rate is **$0.016/joint** ($29.84/board if it
+  applies to the whole chain); the checkout quote determines its applicability.
+- The current **240 × 180 mm** sketch occupies **432 cm²**, below the **650 cm²**
+  PCBA large-board threshold. The earlier 320 × 240 mm sketch occupied 768 cm²
+  and incurred the published **$57.46 large-size charge**.
+- Four-layer area and finish drive bare-board cost; components, unique
+  BOM/feeder lines, setup, and inspection dominate assembly before ordinary
+  SMT joint count does. ENIG commonly costs 20–40% more than HASL
+  ([JLCPCB pricing overview](https://jlcpcb.com/blog/pcb-pricing-breakdown)).
+
+Planning estimate for the earlier large outline, not a checkout quote: five
+4-layer, 1.6 mm, ENIG boards with single-side assembly and standard lead time
+budget at **$70–130 bare** or **$450–700 assembled**, including approximately
+**$25–45/board in components** and **$100–190/order in assembly setup, feeders,
+inspection, and large-board fees**. Shipping, VAT treatment at checkout, rush
+service, and sourcing/MOQ surprises are excluded.
+
+The [240 × 180 mm sketch](ci-layout.md#board-size-and-enclosure-target) cuts
+area by 44% and avoids the large-board threshold. Estimated saving against that
+large-outline estimate is **$90–150 per five-board order**, mostly the
+surcharge and bare-board area; the BOM and ordinary SMT joint charge do not
+materially change. Recheck the live quote against the compact Gerbers.
+
 ## Inventory snapshot (queried 2026-09-26)
 
 Stock and tier as of today; re-check in JLCPCB's quote tool before

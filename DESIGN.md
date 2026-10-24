@@ -612,6 +612,12 @@ fault-injection muxes and per-node debug plumbing want the routing
 room, and the §1 cost driver doesn't apply to test infrastructure.
 Node-board stackup settled separately (§9): **2-layer, 0.8 mm**.
 
+Physical layout: [docs/ci-layout.md](docs/ci-layout.md) defines the deterministic
+placement sketch and its horseshoe tile order, preserves the scan chain's
+layout-driven mapping freedom, and uses a **240 × 180 mm** outline below the
+PCBA large-board threshold. The mechanical target is a nominal
+300 × 250 × 100 mm ABS enclosure, pending selection of the actual case.
+
 Prototype assembly: **JLCPCB Economic PCBA** for the first prototype
 boards. Fab order: the **CI/test board fabs first** — its eight node
 tiles are the first bench articles for the §2/§4 claims — and the
