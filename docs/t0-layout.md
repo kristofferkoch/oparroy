@@ -12,12 +12,23 @@ The electrical details remain in [instrumented-ci.md](instrumented-ci.md),
 [scan-plane.md](scan-plane.md), and the DSL capture. This page extracts the
 model needed for placement.
 
+The active-parts cast is short. `U47` is the CH32V003 MCU: it receives and
+re-emits both rings and runs the node's local functions. Most other small `U`
+packages are SN74LVC1G3157s, bidirectional analog SPDT switches used to select
+bypass or MCU drive, break a wire, or connect a test shunt. `U13` (74HC595)
+turns serial scan data into static control levels; `U11` (74HC165) samples
+status signals back into the scan chain. `Q1` is a P-channel MOSFET that cuts
+the MCU's power domain. `U45` is an optional, unpopulated Schmitt buffer, and
+`D5` is the diode pair in the watchdog charge pump. `D3`/`D4` are passive TVS
+protection diodes at the cable connector.
+
 ## 1. The mental model
 
 A healthy T0 receives ring A, decodes it, and re-emits it toward T1. It also
 receives ring B from T1 and re-emits ring B toward the supervisor. A dead or
-hung T0 must not break ring A: its watchdog relaxes `U46` into a bypass path
-around the MCU's ring-A transmitter. Ring B has no equivalent bypass switch.
+hung T0 must not break ring A: its watchdog relaxes the analog switch `U46`
+into a bypass path around the MCU's ring-A transmitter. Ring B has no
+equivalent bypass switch.
 
 The six switches at T0's downstream edge are **not** in the ordinary receive
 and transmit chain. They are test equipment built into the board: they open
