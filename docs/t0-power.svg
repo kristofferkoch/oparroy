@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 410" role="img" aria-labelledby="title desc">
+  <title id="title">T0 always-on and switched power domains</title>
+  <desc id="desc">Always-on 3V3 supplies the scan and injection hardware. Q1 creates switched 3V3N for the MCU and its local loads. PWR controls Q1 with R94 pulling its gate down.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#c62828"/></marker>
+    <style>
+      .bg{fill:#fff}.box{fill:#f8fafc;stroke:#334155;stroke-width:2}.always{fill:#fff1f2;stroke:#be123c;stroke-width:2}.switched{fill:#fff7ed;stroke:#c2410c;stroke-width:2}.power{fill:none;stroke:#c62828;stroke-width:3;marker-end:url(#arrow)}.wire{fill:none;stroke:#c62828;stroke-width:3}.control{fill:none;stroke:#7e22ce;stroke-width:2.5;stroke-dasharray:7 5}.txt{font:18px sans-serif;fill:#0f172a;text-anchor:middle}.small{font:15px sans-serif;fill:#334155;text-anchor:middle}.label{font:18px sans-serif;fill:#0f172a}.rail{font:bold 19px sans-serif;fill:#c62828}.ctl{font:15px sans-serif;fill:#7e22ce;text-anchor:middle}
+    </style>
+  </defs>
+  <rect class="bg" width="1000" height="410"/>
+  <text class="label" x="30" y="38">Power — keep test hardware alive when the MCU is cut</text>
+  <text class="rail" x="45" y="100">3V3 always</text>
+  <path class="power" d="M175 92 H560"/>
+  <rect class="always" x="560" y="50" width="390" height="115" rx="8"/>
+  <text class="txt" x="755" y="82">Always-on loads</text>
+  <text class="small" x="755" y="111">U13 · U37–U44 · U46</text>
+  <text class="small" x="755" y="140">fault-shunt and watchdog-defeat sources</text>
+  <circle cx="275" cy="92" r="5" fill="#c62828"/>
+  <path class="wire" d="M275 92 V245 H330"/>
+  <path class="power" d="M330 245 H390"/>
+  <rect class="switched" x="390" y="205" width="150" height="80" rx="8"/>
+  <text class="txt" x="465" y="237">Q1 · P-FET</text><text class="small" x="465" y="263">power cut</text>
+  <path class="power" d="M540 245 H650"/>
+  <text class="rail" x="570" y="226">3V3N</text>
+  <rect class="switched" x="650" y="195" width="300" height="115" rx="8"/>
+  <text class="txt" x="800" y="227">Switched loads</text>
+  <text class="small" x="800" y="256">U47 · C30/C31 · R102</text>
+  <text class="small" x="800" y="285">status LEDs · TP2</text>
+  <path class="control" d="M180 365 H390 V265"/>
+  <text class="ctl" x="90" y="370">PWR from U13</text>
+  <path class="control" d="M465 285 V340"/>
+  <rect class="box" x="390" y="340" width="150" height="55" rx="8"/>
+  <text class="small" x="465" y="363">R94 → GND</text><text class="small" x="465" y="384">0 = powered</text>
+</svg>

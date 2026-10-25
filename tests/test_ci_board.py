@@ -441,3 +441,20 @@ def test_t0_layout_guide_refdeses_match_placement_map() -> None:
     assert len(rows) == len(documented)
     assert mapping["U23"] == "SUP/FI1/SWAG"
     assert documented == {mapping[ref]: ref for _, ref in rows}
+
+    diagrams = sorted(guide.parent.glob("t0-*.svg"))
+    expected_diagrams = {
+        guide.with_name(f"t0-{name}.svg")
+        for name in ("placement", "power", "ring-a", "ring-b", "watchdog")
+    }
+    diagram_refs = {
+        ref
+        for diagram in diagrams
+        for ref in re.findall(
+            r"\b(?:U|R|C|D|Q|J|TP|LED|BZ)\d+\b",
+            diagram.read_text(encoding="utf-8"),
+        )
+    }
+    assert set(diagrams) == expected_diagrams
+    assert diagram_refs
+    assert diagram_refs <= mapping.keys()

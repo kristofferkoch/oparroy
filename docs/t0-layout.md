@@ -62,24 +62,7 @@ Keep five kinds of connection visually separate:
 
 ## 2. Ring A: the main left-to-right chain
 
-```text
-supervisor                                             T0
-originator                                             ring-A output to T1
-    │                                                      ▲
-    │  J3.5   R96       U46 bypass/TX mux       R97   U37  │ TX_A#b
-    └──CABLE_A──470 Ω──opa_p──B1                  470 Ω──break──┬──►
-                  │             COM──txa_sw──►                  │
-                  │             ▲                               │
-                  │             B2                              │
-                  ▼             │                               │
-             U47 PA2       U47 PD2                               │
-             OPP0 RX       TIM1_CH1 TX                           │
-                  ▲                                             │
-             R102/R103                                U38+R89 to GND
-             VDD/2 threshold                          U39+R90 to 3V3
-                  │                                      on TX_A#b
-             U47 PA1/OPN0
-```
+![T0 ring-A path from the supervisor through R96, U46, R97, and U37 to T1, with U47 receive/transmit connections, test shunts, and supervisor taps](t0-ring-a.svg)
 
 `R96` and `R97` are the two 470 Ω terminal-protection resistors. `U46` is the
 only switch in the ordinary ring-A path:
@@ -102,21 +85,7 @@ circuits and not series-resistor footprints.
 
 Read this lane from right to left during placement:
 
-```text
-T1                                              supervisor/J3.7
- │                                                  ▲
- │ RX_B#b   U40        R98       U47 PD7/OPP1       │
- └──────────break──►──470 Ω──►──opa_p_b─────────────┤
-             │                                      │
-       U41+R91 to GND                         U47 PC3/TIM1_CH3
-       U42+R92 to 3V3                              txb_drv
-             │                                      │
-             └──────── test branches on RX_B#b      │
-                                                    R99
-                                              470 Ω / TX_B
-                                                    │
-                                                   J3.7
-```
+![T0 ring-B input from T1 through U40 and R98 to U47, ring-B output through R99 to J3, and the two input test shunts](t0-ring-b.svg)
 
 `U40` is the ring-B input break. `U41`/`R91` and `U42`/`R92` are its ground and
 3.3 V shunt branches. Ring B has no local equivalent of `U46`: `U47` transmits
@@ -170,15 +139,7 @@ low-speed scan-plane output. Its analog pins belong next to the signal path.
 
 ### Watchdog and bypass
 
-```text
-U47 PD3       U43          R109/C32/D5/C33/R108       R101       U46 S
-keep-alive──►KA cut──────►edge pump and decay─────────►0 Ω──────►sel_sw
-              │                  │                         ▲
-           R93 to GND          sel                         │
-                                                        U44+R95
-                                                        to 3V3
-                                                   WD_DEFEAT shunt
-```
+![T0 watchdog loop from U47 keep-alive through U43 and the charge pump to U46 select, with keep-alive cut and watchdog-defeat branches](t0-watchdog.svg)
 
 | Condition                       | What happens to `sel`                | Result at `U46`                    |
 | ------------------------------- | ------------------------------------ | ---------------------------------- |
@@ -195,14 +156,7 @@ because they share a part type.
 
 ### Two power domains
 
-```text
-3V3 always ─────────────────────────────►U13, U37–U44, U46
-    │                                   shunt-leg sources
-    └─►Q1──►3V3N──►U47, C30/C31, R102, status LEDs, TP2
-          gate
-           │
-          R94 to GND
-```
+![T0 power split from always-on 3V3 through Q1 to switched 3V3N, with the loads and PWR gate pull-down](t0-power.svg)
 
 | Rail            | What it supplies                               | Behavior when `PWR = 1`                                        |
 | --------------- | ---------------------------------------------- | -------------------------------------------------------------- |
@@ -262,27 +216,7 @@ For either injector and either wire, the fault states are:
 Use a local left-to-right coordinate system with J3 and the supervisor on the
 left and T1 on the right. A useful first arrangement is:
 
-```text
-                 LEDs / human-visible payload, clear of the signal lanes
-
-J3 ─ R96 ───────── U46 ─ R97 ─────────────── U37 ──► T1       ring A ─►
-      │  U47 RX     ▲                         │ ├─ U38─R89─GND
-      │             U47 TX_A                  │ └─ U39─R90─3V3
-R102/R103 ──────────┘                         └────── opa_p / TX_A#b taps
-
-J3 ◄──────────────────────── R99 ─ U47 TX_B                    ◄─ ring B
-T1 ── U40 ─ R98 ─ U47 RX_B
-       │ ├─ U41─R91─GND
-       │ └─ U42─R92─3V3
-
-U47 ─ U43 ─ R109/C32/D5/C33/R108 ─ R101 ─ U46.S      local watchdog loop
-                         │                  U44─R95─3V3
-                        sel
-
-Q1/R94 + C30/C31 near U47 power pins; R104/BZ1 near the MCU buzzer pin
-U13 + R15–R21 along the inner edge; TP1–TP4 in one accessible pogo/test group
-Boundary taps leave as short, grouped stubs toward the supervisor
-```
+![T0 functional placement sketch with the supervisor and J3 on the left, T1 on the right, ring-A and ring-B lanes, and local watchdog, power, scan, LED, and tap zones](t0-placement.svg)
 
 Anneal in this order:
 
