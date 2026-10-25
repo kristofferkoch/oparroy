@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">T0 functional placement sketch</title>
+  <desc id="desc">A placement guide with supervisor and J3 on the left and T1 on the right. Ring A runs left to right above the MCU. Ring B runs right to left below it. Watchdog, power, scan control, indicators, and taps occupy local zones.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1565c0"/></marker>
+    <style>
+      .bg{fill:#fff}.tile{fill:none;stroke:#64748b;stroke-width:2;stroke-dasharray:8 6}.box{fill:#f8fafc;stroke:#334155;stroke-width:2}.mcu{fill:#eff6ff;stroke:#1d4ed8;stroke-width:2.5}.support{fill:#f5f3ff;stroke:#7e22ce;stroke-width:2}.branch{fill:#ecfeff;stroke:#0e7490;stroke-width:2}.led{fill:#fefce8;stroke:#a16207;stroke-width:2}.flow{fill:none;stroke:#1565c0;stroke-width:3;marker-end:url(#arrow)}.wire{fill:none;stroke:#1565c0;stroke-width:3}.test{fill:none;stroke:#0e7490;stroke-width:2.5}.control{fill:none;stroke:#7e22ce;stroke-width:2.5;stroke-dasharray:7 5}.observe{fill:none;stroke:#c2410c;stroke-width:2.5;stroke-dasharray:8 6}.txt{font:17px sans-serif;fill:#0f172a;text-anchor:middle}.small{font:14px sans-serif;fill:#334155;text-anchor:middle}.label{font:18px sans-serif;fill:#0f172a}.zone{font:bold 16px sans-serif;fill:#475569}.caption{font:15px sans-serif;fill:#475569}
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="660"/>
+  <rect class="tile" x="20" y="15" width="1160" height="625" rx="12"/>
+  <text class="label" x="40" y="45">T0 local placement — supervisor left, T1 right</text>
+  <rect class="led" x="270" y="55" width="660" height="42" rx="8"/>
+  <text class="txt" x="600" y="82">LED1–LED4 + R105–R107 · visible indicator zone</text>
+  <text class="zone" x="40" y="128">RING A →</text>
+  <rect class="box" x="45" y="145" width="85" height="55" rx="7"/><text class="txt" x="87" y="179">J3</text>
+  <path class="flow" d="M130 172 H170"/>
+  <rect class="box" x="170" y="145" width="90" height="55" rx="7"/><text class="txt" x="215" y="179">R96</text>
+  <path class="flow" d="M260 172 H300"/>
+  <rect class="box" x="300" y="140" width="120" height="65" rx="7"/><text class="txt" x="360" y="169">U46</text><text class="small" x="360" y="191">bypass / TX</text>
+  <path class="flow" d="M420 172 H465"/>
+  <rect class="box" x="465" y="145" width="90" height="55" rx="7"/><text class="txt" x="510" y="179">R97</text>
+  <path class="flow" d="M555 172 H650"/>
+  <rect class="box" x="650" y="140" width="120" height="65" rx="7"/><text class="txt" x="710" y="169">U37</text><text class="small" x="710" y="191">output break</text>
+  <path class="flow" d="M770 172 H1135"/>
+  <text class="label" x="1150" y="178" text-anchor="end">T1</text>
+  <path class="test" d="M790 172 H810 V225"/>
+  <rect class="branch" x="650" y="225" width="150" height="55" rx="7"/><text class="small" x="725" y="248">U38 + R89</text><text class="small" x="725" y="268">GND shunt</text>
+  <rect class="branch" x="820" y="225" width="150" height="55" rx="7"/><text class="small" x="895" y="248">U39 + R90</text><text class="small" x="895" y="268">3V3 shunt</text>
+  <path class="test" d="M810 225 H895"/>
+  <rect class="mcu" x="350" y="275" width="250" height="145" rx="10"/>
+  <text class="txt" x="475" y="309">U47 · CH32V003</text>
+  <text class="small" x="475" y="340">R102/R103 threshold nearby</text>
+  <text class="small" x="475" y="368">C30/C31 + Q1/R94 power island</text>
+  <text class="small" x="475" y="396">R104/BZ1 near buzzer pin</text>
+  <path class="flow" d="M360 205 V245 H425 V275"/>
+  <path class="flow" d="M475 275 V230 H390 V205"/>
+  <text class="zone" x="1160" y="315" text-anchor="end">← RING B INPUT</text>
+  <path class="flow" d="M1135 340 H1000"/>
+  <rect class="box" x="880" y="310" width="120" height="60" rx="7"/><text class="txt" x="940" y="337">U40</text><text class="small" x="940" y="359">input break</text>
+  <path class="flow" d="M880 340 H790"/>
+  <rect class="box" x="700" y="310" width="90" height="60" rx="7"/><text class="txt" x="745" y="348">R98</text>
+  <path class="flow" d="M700 340 H600"/>
+  <rect class="branch" x="850" y="395" width="140" height="52" rx="7"/><text class="small" x="920" y="426">U41 + R91</text>
+  <rect class="branch" x="1005" y="395" width="140" height="52" rx="7"/><text class="small" x="1075" y="426">U42 + R92</text>
+  <path class="test" d="M1030 340 V380 H920 V395 M1030 380 H1075 V395"/>
+  <text class="zone" x="40" y="465">← RING B OUTPUT TO J3</text>
+  <path class="flow" d="M350 395 H265"/>
+  <rect class="box" x="170" y="370" width="95" height="55" rx="7"/><text class="txt" x="217" y="404">R99</text>
+  <path class="flow" d="M170 397 H45"/>
+  <text class="label" x="30" y="380">J3.7</text>
+  <rect class="support" x="45" y="500" width="240" height="85" rx="8"/>
+  <text class="txt" x="165" y="531">Power + test access</text><text class="small" x="165" y="558">Q1/R94 · C30/C31 · TP1–TP4</text>
+  <rect class="support" x="335" y="500" width="400" height="85" rx="8"/>
+  <text class="txt" x="535" y="531">Local watchdog loop</text><text class="small" x="535" y="558">U43 · R109/C32/D5/C33/R108 · R101 · U44/R95</text>
+  <rect class="support" x="785" y="500" width="330" height="85" rx="8"/>
+  <text class="txt" x="950" y="531">Inner-edge scan control</text><text class="small" x="950" y="558">U13 + R15–R21 · route last</text>
+  <path class="control" d="M535 500 V455 M950 500 V455"/>
+  <path class="observe" d="M600 320 H640 V290 H1030 V205"/>
+  <text class="caption" x="1000" y="300" text-anchor="end">Short tap stubs to supervisor</text>
+  <text class="caption" x="40" y="620">Place blue signal lanes first, then purple local support, then control and observation.</text>
+</svg>

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 450" role="img" aria-labelledby="title desc">
+  <title id="title">T0 ring-B input and output chains</title>
+  <desc id="desc">Ring-B input flows right to left from T1 through U40 and R98 to U47. Ring-B output flows from U47 through R99 to J3. U41 and U42 provide test shunts.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1565c0"/></marker>
+    <style>
+      .bg{fill:#fff}.box{fill:#f8fafc;stroke:#334155;stroke-width:2}.branch{fill:#ecfeff;stroke:#0e7490;stroke-width:2}.flow{fill:none;stroke:#1565c0;stroke-width:3;marker-end:url(#arrow)}.test{fill:none;stroke:#0e7490;stroke-width:3}.txt{font:18px sans-serif;fill:#0f172a;text-anchor:middle}.small{font:15px sans-serif;fill:#334155;text-anchor:middle}.label{font:18px sans-serif;fill:#0f172a}.caption{font:16px sans-serif;fill:#475569}.net{font:italic 16px sans-serif;fill:#1565c0}
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="450"/>
+  <text class="label" x="30" y="38">Ring B — input from T1, output to supervisor</text>
+  <text class="caption" x="30" y="80">Ring-B input flows right to left</text>
+  <text class="label" x="1155" y="92" text-anchor="end">T1</text>
+  <path class="flow" d="M1130 105 H1010"/>
+  <rect class="box" x="860" y="70" width="150" height="70" rx="8"/>
+  <text class="txt" x="935" y="99">U40</text><text class="small" x="935" y="123">BRK_B break</text>
+  <path class="flow" d="M860 105 H780"/>
+  <rect class="box" x="660" y="75" width="120" height="60" rx="8"/>
+  <text class="txt" x="720" y="101">R98</text><text class="small" x="720" y="124">470 Ω</text>
+  <path class="flow" d="M660 105 H555"/>
+  <rect class="box" x="350" y="65" width="205" height="100" rx="8"/>
+  <text class="txt" x="452" y="98">U47 · CH32V003</text>
+  <text class="small" x="452" y="126">PD7 / OPP1</text><text class="small" x="452" y="149">ring-B receive</text>
+  <text class="net" x="800" y="88">RX_B#b</text>
+  <circle cx="1065" cy="105" r="5" fill="#0e7490"/>
+  <path class="test" d="M1065 105 V180 H935 V205"/>
+  <path class="test" d="M1065 180 H1115 V205"/>
+  <rect class="branch" x="835" y="205" width="200" height="65" rx="8"/>
+  <text class="txt" x="935" y="233">U41 + R91</text><text class="small" x="935" y="256">SHG_B → GND</text>
+  <rect class="branch" x="1040" y="205" width="150" height="65" rx="8"/>
+  <text class="txt" x="1115" y="233">U42 + R92</text><text class="small" x="1115" y="256">SHV_B → 3V3</text>
+  <text class="caption" x="30" y="315">Ring-B output returns to the supervisor</text>
+  <rect class="box" x="350" y="325" width="205" height="80" rx="8"/>
+  <text class="txt" x="452" y="355">U47 · PC3</text><text class="small" x="452" y="382">TIM1_CH3 · TX_B</text>
+  <path class="flow" d="M350 365 H290"/>
+  <rect class="box" x="170" y="335" width="120" height="60" rx="8"/>
+  <text class="txt" x="230" y="361">R99</text><text class="small" x="230" y="384">470 Ω</text>
+  <path class="flow" d="M170 365 H45"/>
+  <text class="label" x="30" y="350">J3.7</text>
+  <text class="caption" x="30" y="430">Blue: signal path · Teal: fault injection on the T1 side</text>
+</svg>

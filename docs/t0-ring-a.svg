@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">T0 ring-A signal chain</title>
+  <desc id="desc">Ring-A input passes through R96, the U46 bypass or MCU transmit switch, R97, and the U37 output break toward T1. U38 and U39 provide test shunts. U47 receives and transmits, with two supervisor taps.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1565c0"/></marker>
+    <style>
+      .bg{fill:#fff}.box{fill:#f8fafc;stroke:#334155;stroke-width:2}.branch{fill:#ecfeff;stroke:#0e7490;stroke-width:2}.tap{fill:#fff7ed;stroke:#c2410c;stroke-width:2}.flow{fill:none;stroke:#1565c0;stroke-width:3;marker-end:url(#arrow)}.wire{fill:none;stroke:#1565c0;stroke-width:3}.test{fill:none;stroke:#0e7490;stroke-width:3}.observe{fill:none;stroke:#c2410c;stroke-width:2.5;stroke-dasharray:8 6}.txt{font:18px sans-serif;fill:#0f172a;text-anchor:middle}.small{font:15px sans-serif;fill:#334155;text-anchor:middle}.label{font:18px sans-serif;fill:#0f172a}.caption{font:16px sans-serif;fill:#475569}.net{font:italic 16px sans-serif;fill:#1565c0}
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="520"/>
+  <text class="label" x="30" y="38">Ring A — input from supervisor, output to T1</text>
+  <text class="caption" x="30" y="94">Supervisor / J3.5</text>
+  <path class="flow" d="M160 100 H190"/>
+  <rect class="box" x="190" y="70" width="120" height="60" rx="8"/>
+  <text class="txt" x="250" y="96">R96</text><text class="small" x="250" y="119">470 Ω</text>
+  <path class="flow" d="M310 100 H400"/>
+  <rect class="box" x="400" y="55" width="180" height="150" rx="8"/>
+  <text class="txt" x="490" y="83">U46 · 3157 SPDT</text>
+  <text class="small" x="420" y="116">B1: bypass input</text>
+  <text class="small" x="490" y="143">COM → txa_sw</text>
+  <text class="small" x="490" y="178">B2: MCU TX</text>
+  <path class="flow" d="M580 100 H660"/>
+  <rect class="box" x="660" y="70" width="120" height="60" rx="8"/>
+  <text class="txt" x="720" y="96">R97</text><text class="small" x="720" y="119">470 Ω</text>
+  <path class="flow" d="M780 100 H860"/>
+  <rect class="box" x="860" y="65" width="150" height="70" rx="8"/>
+  <text class="txt" x="935" y="94">U37</text><text class="small" x="935" y="118">BRK_A break</text>
+  <path class="flow" d="M1010 100 H1150"/>
+  <text class="label" x="1150" y="82" text-anchor="end">T1</text>
+  <text class="net" x="1065" y="82">TX_A#b</text>
+  <circle cx="355" cy="100" r="5" fill="#1565c0"/>
+  <path class="flow" d="M355 100 V275"/>
+  <rect class="box" x="285" y="275" width="270" height="155" rx="8"/>
+  <text class="txt" x="420" y="305">U47 · CH32V003</text>
+  <text class="small" x="420" y="337">PA2 / OPP0</text>
+  <text class="small" x="420" y="360">ring-A receive</text>
+  <text class="small" x="420" y="394">PD2 / TIM1_CH1 · TX</text>
+  <path class="flow" d="M490 275 V235 H490 V205"/>
+  <path class="flow" d="M225 350 H285"/>
+  <rect class="box" x="35" y="305" width="190" height="90" rx="8"/>
+  <text class="txt" x="130" y="337">R102 / R103</text>
+  <text class="small" x="130" y="363">VDD/2 threshold</text>
+  <text class="small" x="130" y="385">to PA1 / OPN0</text>
+  <path class="observe" d="M355 100 H335 V210 H190"/>
+  <rect class="tap" x="35" y="180" width="155" height="55" rx="8"/>
+  <text class="small" x="112" y="203">opa_p tap</text><text class="small" x="112" y="224">to supervisor</text>
+  <circle cx="1035" cy="100" r="5" fill="#0e7490"/>
+  <path class="test" d="M1035 100 V245 H920 V270"/>
+  <path class="test" d="M1035 245 H1090 V370"/>
+  <rect class="branch" x="820" y="270" width="200" height="70" rx="8"/>
+  <text class="txt" x="920" y="299">U38 + R89</text><text class="small" x="920" y="323">SHG_A → GND</text>
+  <rect class="branch" x="990" y="370" width="200" height="70" rx="8"/>
+  <text class="txt" x="1090" y="399">U39 + R90</text><text class="small" x="1090" y="423">SHV_A → 3V3</text>
+  <path class="observe" d="M1035 100 H1145 V210"/>
+  <rect class="tap" x="1010" y="210" width="180" height="55" rx="8"/>
+  <text class="small" x="1100" y="233">TX_A#b tap</text><text class="small" x="1100" y="254">to supervisor</text>
+  <text class="caption" x="30" y="485">Blue: signal path · Teal: fault injection · Orange dashed: observation</text>
+</svg>
