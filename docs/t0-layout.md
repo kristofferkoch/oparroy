@@ -12,6 +12,11 @@ The electrical details remain in [instrumented-ci.md](instrumented-ci.md),
 [scan-plane.md](scan-plane.md), and the DSL capture. This page extracts the
 model needed for placement.
 
+**Directions are from T0's perspective, independently for each ring.** Ring
+A's input arrives from the supervisor; its output leaves toward T1. Ring B's
+input arrives from T1; its output leaves toward the supervisor. J3 is therefore
+the supervisor-side connector for both ring A input and ring B output.
+
 The active-parts cast is short. `U47` is the CH32V003 MCU: it receives and
 re-emits both rings and runs the node's local functions. Most other small `U`
 packages are SN74LVC1G3157s, bidirectional analog SPDT switches used to select
@@ -30,9 +35,9 @@ hung T0 must not break ring A: its watchdog relaxes the analog switch `U46`
 into a bypass path around the MCU's ring-A transmitter. Ring B has no
 equivalent bypass switch.
 
-The six switches at T0's downstream edge are **not** in the ordinary receive
+The six switches at T0's T1-side edge are **not** in the ordinary receive
 and transmit chain. They are test equipment built into the board: they open
-the two outgoing wires or connect them through 470 Ω to ground or 3.3 V. At
+the two T1-side wires or connect them through 470 Ω to ground or 3.3 V. At
 reset, every test control is zero and the board behaves like the plain node.
 
 Keep five kinds of connection visually separate:
@@ -40,7 +45,7 @@ Keep five kinds of connection visually separate:
 1. **Ring A:** left to right, supervisor/J3 to T1.
 1. **Ring B:** right to left, T1 to supervisor/J3.
 1. **Watchdog and bypass:** a local loop from MCU keep-alive to `U46` select.
-1. **Fault injection:** branches at the downstream edge, not extra PHY stages.
+1. **Fault injection:** branches at the T1-side edge, not extra PHY stages.
 1. **Control and observation:** low-speed fan-out to the scan plane and
    supervisor; route these after the data paths.
 
@@ -48,7 +53,7 @@ Keep five kinds of connection visually separate:
 
 ```text
 supervisor                                             T0
-originator                                             downstream to T1
+originator                                             ring-A output to T1
     │                                                      ▲
     │  J3.5   R96       U46 bypass/TX mux       R97   U37  │ TX_A#b
     └──CABLE_A──470 Ω──opa_p──B1                  470 Ω──break──┬──►
@@ -68,14 +73,15 @@ originator                                             downstream to T1
 `R96` and `R97` are the two 470 Ω terminal-protection resistors. `U46` is the
 only switch in the ordinary ring-A path:
 
-- `sel = 0`: COM connects to B1, so upstream traffic bypasses the MCU driver.
+- `sel = 0`: COM connects to B1, so ring-A input traffic bypasses the MCU
+  driver.
 - `sel = 1`: COM connects to B2, so `U47`'s ring-A transmitter drives T1.
 - The receiver at `opa_p` stays connected in either state. A bypassed node can
   still listen.
 
-`U37` is the downstream test break. Its reset state passes `R97` to T1;
+`U37` is the ring-A output test break. Its reset state passes `R97` to T1;
 `BRK_A = 1` opens that path. `U38`/`R89` and `U39`/`R90` are normally absent
-shunt branches on the **downstream** side of `U37`.
+shunt branches on the **T1 side** of `U37`.
 
 Two boundary taps belong here. `opa_p` taps the node side of `R96`; `TX_A#b`
 taps after `U37`. They are wires to supervisor GPIO, not buffered test-point
@@ -101,12 +107,12 @@ T1                                              supervisor/J3.7
                                                    J3.7
 ```
 
-`U40` is the ring-B break. `U41`/`R91` and `U42`/`R92` are its ground and 3.3 V
-shunt branches. Ring B has no local equivalent of `U46`: `U47` transmits back
-toward the supervisor through `R99` only.
+`U40` is the ring-B input break. `U41`/`R91` and `U42`/`R92` are its ground and
+3.3 V shunt branches. Ring B has no local equivalent of `U46`: `U47` transmits
+back toward the supervisor through `R99` only.
 
-The physical order is therefore **downstream connector-side injector →
-`R98` → MCU** on the returning lane. Do not accidentally place `U40`–`U42` as
+The physical order is therefore **T1-side injector → `R98` → MCU** on the
+ring-B input lane. Do not accidentally place `U40`–`U42` as
 if they belonged to ring A merely because their package and control names
 match.
 
@@ -146,8 +152,8 @@ low-speed scan-plane output. Its analog pins belong next to the signal path.
 - **`U45`, 74LVC1G17, DNP:** optional Schmitt-trigger insurance in the `sel`
   path. `R101` is the fitted 0 Ω bridge. Populating `U45` means depopulating
   `R101`; they are not two ordinary cascaded stages.
-- **`D3` and `D4`, TVS diodes:** connector-side protection on the incoming
-  cable's ring-A and ring-B wires.
+- **`D3` and `D4`, TVS diodes:** connector-side protection on the cable's
+  ring-A input and ring-B output wires.
 
 ## 5. Watchdog, power, and control are separate loops
 
@@ -201,38 +207,38 @@ The four supervisor boundary taps are `opa_p`, `TX_A#b`, `opo`, and `led_work`.
 The scan-observe pair is `sel` and `3V3N`. SWIO and debug-TX tree connections
 are additional low-speed leaves. None needs another local switch in T0.
 
-## 6. Incoming and outgoing injectors are different
+## 6. Supervisor-side and T1-side injectors are different
 
-T0 has an injector only on its **downstream** segment to T1. The incoming
-supervisor-to-T0 cable has its own injector at the supervisor end:
+T0 has an injector only on its **T1-side** segment. The supervisor-to-T0 cable
+has its own injector at the supervisor end:
 
-| Capture path   | Refdes | Function                                         |
-| -------------- | ------ | ------------------------------------------------ |
-| `SUP/FI1/SWAB` | `U22`  | Incoming cable ring-A break                      |
-| `SUP/FI1/SWAG` | `U23`  | Incoming cable ring-A short to GND through `R67` |
-| `SUP/FI1/SWAV` | `U24`  | Incoming cable ring-A short to 3V3 through `R68` |
-| `SUP/FI1/SWBB` | `U25`  | Incoming cable ring-B break                      |
-| `SUP/FI1/SWBG` | `U26`  | Incoming cable ring-B short to GND through `R69` |
-| `SUP/FI1/SWBV` | `U27`  | Incoming cable ring-B short to 3V3 through `R70` |
+| Capture path   | Refdes | Function                                                  |
+| -------------- | ------ | --------------------------------------------------------- |
+| `SUP/FI1/SWAB` | `U22`  | Ring-A input break, supervisor side                       |
+| `SUP/FI1/SWAG` | `U23`  | Ring-A input short to GND through `R67`, supervisor side  |
+| `SUP/FI1/SWAV` | `U24`  | Ring-A input short to 3V3 through `R68`, supervisor side  |
+| `SUP/FI1/SWBB` | `U25`  | Ring-B output break, supervisor side                      |
+| `SUP/FI1/SWBG` | `U26`  | Ring-B output short to GND through `R69`, supervisor side |
+| `SUP/FI1/SWBV` | `U27`  | Ring-B output short to 3V3 through `R70`, supervisor side |
 
 In particular, **`U23` is `SUP/FI1/SWAG`**, not T0's `U38`. Keep these six
 parts with the supervisor originator and J0 side of the cable; do not pull them
-into T0's downstream injector cluster.
+into T0's T1-side injector cluster.
 
 For either injector and either wire, the fault states are:
 
 | `BRK` | `SHG` | `SHV` | Wire state                                       |
 | ----- | ----- | ----- | ------------------------------------------------ |
 | 0     | 0     | 0     | Pass-through                                     |
-| 1     | 0     | 0     | Open downstream segment                          |
+| 1     | 0     | 0     | Open segment                                     |
 | x     | 1     | 0     | Short to GND through 470 Ω                       |
 | x     | 0     | 1     | Short to 3V3 through 470 Ω                       |
 | x     | 1     | 1     | Ground-to-3V3 cross-short through two 470 Ω legs |
 
 ## 7. Placement recipe
 
-Use a local left-to-right coordinate system with J3/upstream on the left and
-T1/downstream on the right. A useful first arrangement is:
+Use a local left-to-right coordinate system with J3 and the supervisor on the
+left and T1 on the right. A useful first arrangement is:
 
 ```text
                  LEDs / human-visible payload, clear of the signal lanes
@@ -260,7 +266,7 @@ Anneal in this order:
 
 1. **Lock the two ring lanes.** Place J3, `R96`, `U46`, `R97`, `U37` for ring A
    and `U40`, `R98`, `R99` for ring B. Put the shunt switches and their own
-   470 Ω resistors directly beside the corresponding downstream wire.
+   470 Ω resistors directly beside the corresponding T1-side wire.
 1. **Place the MCU and threshold.** `U47` should serve both receiver lanes
    without crossing the transmit and watchdog connections. Keep
    `R102`/`R103` short to PA1/OPN0; keep `R100` beside OPO/OPP0 if the DNP
@@ -289,12 +295,12 @@ branches, rather than a star around the MCU.
 | `T0/U1`         | `U47`  | CH32V003 node MCU                      |
 | `T0/PHY1/SW1`   | `U46`  | Ring-A bypass/node-TX analog switch    |
 | `T0/PHY1/BUF1`  | `U45`  | DNP Schmitt-buffer option on `sel`     |
-| `T0/FI1/SWAB`   | `U37`  | Outgoing ring-A break                  |
-| `T0/FI1/SWAG`   | `U38`  | Outgoing ring-A ground shunt switch    |
-| `T0/FI1/SWAV`   | `U39`  | Outgoing ring-A 3V3 shunt switch       |
-| `T0/FI1/SWBB`   | `U40`  | Outgoing ring-B break                  |
-| `T0/FI1/SWBG`   | `U41`  | Outgoing ring-B ground shunt switch    |
-| `T0/FI1/SWBV`   | `U42`  | Outgoing ring-B 3V3 shunt switch       |
+| `T0/FI1/SWAB`   | `U37`  | Ring-A output break                    |
+| `T0/FI1/SWAG`   | `U38`  | Ring-A output ground shunt switch      |
+| `T0/FI1/SWAV`   | `U39`  | Ring-A output 3V3 shunt switch         |
+| `T0/FI1/SWBB`   | `U40`  | Ring-B input break                     |
+| `T0/FI1/SWBG`   | `U41`  | Ring-B input ground shunt switch       |
+| `T0/FI1/SWBV`   | `U42`  | Ring-B input 3V3 shunt switch          |
 | `T0/FI1/SWKA`   | `U43`  | Keep-alive cut                         |
 | `T0/FI1/SWWD`   | `U44`  | Watchdog-defeat shunt switch           |
 | `T0/FI1/QPW`    | `Q1`   | `3V3` to `3V3N` power-cut P-FET        |
@@ -308,13 +314,13 @@ branches, rather than a star around the MCU.
 
 | Capture path   | Refdes | Function                            |
 | -------------- | ------ | ----------------------------------- |
-| `T0/J1`        | `J3`   | Upstream segment connector          |
-| `T0/PHY1/Dar`  | `D3`   | Incoming ring-A TVS                 |
-| `T0/PHY1/Dbt`  | `D4`   | Outgoing-to-supervisor ring-B TVS   |
-| `T0/PHY1/Rar`  | `R96`  | Ring-A receiver 470 Ω protection    |
-| `T0/PHY1/Rat`  | `R97`  | Ring-A downstream 470 Ω protection  |
-| `T0/PHY1/Rbr`  | `R98`  | Ring-B receiver 470 Ω protection    |
-| `T0/PHY1/Rbt`  | `R99`  | Ring-B upstream 470 Ω protection    |
+| `T0/J1`        | `J3`   | Supervisor-side segment connector   |
+| `T0/PHY1/Dar`  | `D3`   | Ring-A input TVS                    |
+| `T0/PHY1/Dbt`  | `D4`   | Ring-B output TVS                   |
+| `T0/PHY1/Rar`  | `R96`  | Ring-A input 470 Ω protection       |
+| `T0/PHY1/Rat`  | `R97`  | Ring-A output 470 Ω protection      |
+| `T0/PHY1/Rbr`  | `R98`  | Ring-B input 470 Ω protection       |
+| `T0/PHY1/Rbt`  | `R99`  | Ring-B output 470 Ω protection      |
 | `T0/PHY1/Rth1` | `R102` | Comparator threshold upper resistor |
 | `T0/PHY1/Rth2` | `R103` | Comparator threshold lower resistor |
 | `T0/PHY1/Rfb`  | `R100` | DNP comparator hysteresis option    |
@@ -338,29 +344,29 @@ branches, rather than a star around the MCU.
 
 ### Scan pull-downs, indicators, and test access
 
-| Capture path        | Refdes | Function                           |
-| ------------------- | ------ | ---------------------------------- |
-| `PLANE/T0/C1`       | `C6`   | T0 74HC595 decoupling              |
-| `PLANE/R_T0_BRK_A`  | `R15`  | `BRK_A` pull-down                  |
-| `PLANE/R_T0_BRK_B`  | `R16`  | `BRK_B` pull-down                  |
-| `PLANE/R_T0_KA_CUT` | `R17`  | `KA_CUT` pull-down                 |
-| `PLANE/R_T0_SHG_A`  | `R18`  | `SHG_A` pull-down                  |
-| `PLANE/R_T0_SHG_B`  | `R19`  | `SHG_B` pull-down                  |
-| `PLANE/R_T0_SHV_A`  | `R20`  | `SHV_A` pull-down                  |
-| `PLANE/R_T0_SHV_B`  | `R21`  | `SHV_B` pull-down                  |
-| `PLANE/R_WD_DEFEAT` | `R64`  | `WD_DEFEAT` pull-down              |
-| `T0/SL1/Dp`         | `LED2` | Switched-rail power LED            |
-| `T0/SL1/Dw`         | `LED4` | Working heartbeat LED              |
-| `T0/SL1/Du`         | `LED3` | Upstream link LED                  |
-| `T0/SL1/Dd`         | `LED1` | Downstream link LED                |
-| `T0/SL1/Rp`         | `R105` | Power-LED resistor                 |
-| `T0/SL1/Rs`         | `R106` | Shared link-LED resistor           |
-| `T0/SL1/Rw`         | `R107` | Working-LED resistor               |
-| `T0/TP1`            | `TP1`  | SWIO test pad                      |
-| `T0/TP2`            | `TP2`  | Switched `3V3N` test pad           |
-| `T0/TP3`            | `TP3`  | Ground test pad                    |
-| `T0/TP4`            | `TP4`  | Spare PC7 test pad                 |
-| `SUP/FI1/RAG`       | `R67`  | Incoming ring-A ground-shunt 470 Ω |
-| `SUP/FI1/RAV`       | `R68`  | Incoming ring-A 3V3-shunt 470 Ω    |
-| `SUP/FI1/RBG`       | `R69`  | Incoming ring-B ground-shunt 470 Ω |
-| `SUP/FI1/RBV`       | `R70`  | Incoming ring-B 3V3-shunt 470 Ω    |
+| Capture path        | Refdes | Function                         |
+| ------------------- | ------ | -------------------------------- |
+| `PLANE/T0/C1`       | `C6`   | T0 74HC595 decoupling            |
+| `PLANE/R_T0_BRK_A`  | `R15`  | `BRK_A` pull-down                |
+| `PLANE/R_T0_BRK_B`  | `R16`  | `BRK_B` pull-down                |
+| `PLANE/R_T0_KA_CUT` | `R17`  | `KA_CUT` pull-down               |
+| `PLANE/R_T0_SHG_A`  | `R18`  | `SHG_A` pull-down                |
+| `PLANE/R_T0_SHG_B`  | `R19`  | `SHG_B` pull-down                |
+| `PLANE/R_T0_SHV_A`  | `R20`  | `SHV_A` pull-down                |
+| `PLANE/R_T0_SHV_B`  | `R21`  | `SHV_B` pull-down                |
+| `PLANE/R_WD_DEFEAT` | `R64`  | `WD_DEFEAT` pull-down            |
+| `T0/SL1/Dp`         | `LED2` | Switched-rail power LED          |
+| `T0/SL1/Dw`         | `LED4` | Working heartbeat LED            |
+| `T0/SL1/Du`         | `LED3` | Supervisor-side link LED         |
+| `T0/SL1/Dd`         | `LED1` | T1-side link LED                 |
+| `T0/SL1/Rp`         | `R105` | Power-LED resistor               |
+| `T0/SL1/Rs`         | `R106` | Shared link-LED resistor         |
+| `T0/SL1/Rw`         | `R107` | Working-LED resistor             |
+| `T0/TP1`            | `TP1`  | SWIO test pad                    |
+| `T0/TP2`            | `TP2`  | Switched `3V3N` test pad         |
+| `T0/TP3`            | `TP3`  | Ground test pad                  |
+| `T0/TP4`            | `TP4`  | Spare PC7 test pad               |
+| `SUP/FI1/RAG`       | `R67`  | Ring-A input ground-shunt 470 Ω  |
+| `SUP/FI1/RAV`       | `R68`  | Ring-A input 3V3-shunt 470 Ω     |
+| `SUP/FI1/RBG`       | `R69`  | Ring-B output ground-shunt 470 Ω |
+| `SUP/FI1/RBV`       | `R70`  | Ring-B output 3V3-shunt 470 Ω    |
