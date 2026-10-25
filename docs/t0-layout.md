@@ -12,33 +12,44 @@ The electrical details remain in [instrumented-ci.md](instrumented-ci.md),
 [scan-plane.md](scan-plane.md), and the DSL capture. This page extracts the
 model needed for placement.
 
-**Directions are from T0's perspective, independently for each ring.** Ring
-A's input arrives from the supervisor; its output leaves toward T1. Ring B's
-input arrives from T1; its output leaves toward the supervisor. J3 is therefore
-the supervisor-side connector for both ring A input and ring B output.
+**Directions are from T0's perspective, independently for each ring.**
 
-The active-parts cast is short. `U47` is the CH32V003 MCU: it receives and
-re-emits both rings and runs the node's local functions. Most other small `U`
-packages are SN74LVC1G3157s, bidirectional analog SPDT switches used to select
-bypass or MCU drive, break a wire, or connect a test shunt. `U13` (74HC595)
-turns serial scan data into static control levels; `U11` (74HC165) samples
-status signals back into the scan chain. `Q1` is a P-channel MOSFET that cuts
-the MCU's power domain. `U45` is an optional, unpopulated Schmitt buffer, and
-`D5` is the diode pair in the watchdog charge pump. `D3`/`D4` are passive TVS
-protection diodes at the cable connector.
+| Ring | T0 input                         | T0 output                          |
+| ---- | -------------------------------- | ---------------------------------- |
+| A    | From the supervisor through J3.5 | Toward T1                          |
+| B    | From T1                          | Toward the supervisor through J3.7 |
+
+J3 is therefore the supervisor-side connector for both ring A input and ring B
+output.
+
+The active-parts cast is short:
+
+| Parts                           | Part type                          | What T0 uses it for                                          |
+| ------------------------------- | ---------------------------------- | ------------------------------------------------------------ |
+| `U47`                           | CH32V003 MCU                       | Receive and re-emit both rings; run local node functions     |
+| `U22`–`U27`, `U37`–`U44`, `U46` | SN74LVC1G3157 analog SPDT switches | Select bypass or MCU drive; break wires; connect test shunts |
+| `U13`                           | 74HC595                            | Turn serial scan data into static control levels             |
+| `U11`                           | 74HC165                            | Sample status signals back into the scan chain               |
+| `Q1`                            | P-channel MOSFET                   | Cut the MCU's power domain                                   |
+| `U45`                           | 74LVC1G17, DNP                     | Optional Schmitt buffering of `sel`                          |
+| `D5`                            | BAT54S diode pair                  | Watchdog charge pump                                         |
+| `D3`, `D4`                      | TVS diodes                         | Cable-connector protection                                   |
 
 ## 1. The mental model
 
-A healthy T0 receives ring A, decodes it, and re-emits it toward T1. It also
-receives ring B from T1 and re-emits ring B toward the supervisor. A dead or
-hung T0 must not break ring A: its watchdog relaxes the analog switch `U46`
-into a bypass path around the MCU's ring-A transmitter. Ring B has no
-equivalent bypass switch.
+| T0 state     | Ring A                                                                            | Ring B                                             |
+| ------------ | --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Healthy      | Receive, decode, and re-emit toward T1                                            | Receive, decode, and re-emit toward the supervisor |
+| Dead or hung | The watchdog relaxes analog switch `U46` into a bypass around the MCU transmitter | No equivalent bypass switch                        |
 
-The six switches at T0's T1-side edge are **not** in the ordinary receive
-and transmit chain. They are test equipment built into the board: they open
-the two T1-side wires or connect them through 470 Ω to ground or 3.3 V. At
-reset, every test control is zero and the board behaves like the plain node.
+Remember these fault-injection facts:
+
+- The six switches at T0's T1-side edge are test equipment, **not** ordinary
+  receive/transmit stages.
+- They open the two T1-side wires or connect them through 470 Ω to ground or
+  3.3 V.
+- At reset, every test control is zero and the board behaves like the plain
+  node.
 
 Keep five kinds of connection visually separate:
 
@@ -169,11 +180,14 @@ keep-alive──►KA cut──────►edge pump and decay─────
                                                    WD_DEFEAT shunt
 ```
 
-While `U47` emits keep-alive edges, the pump holds `sel` high and `U46` selects
-node TX. If the MCU hangs, `R108` discharges `sel`; low selects bypass. `U43`
-simulates that hang without cutting MCU power. `R93` parks the watchdog input
-low while the cut is active. `U44`/`R95` can force `sel` high through 470 Ω so
-a halted debug target remains in node-active mode.
+| Condition                       | What happens to `sel`                | Result at `U46`                    |
+| ------------------------------- | ------------------------------------ | ---------------------------------- |
+| `U47` emits keep-alive edges    | Charge pump holds it high            | Node TX drives ring A              |
+| MCU hangs                       | `R108` discharges it low             | Bypass                             |
+| `KA_CUT` opens `U43`            | Decays low without cutting MCU power | Bypass; simulated hang             |
+| `WD_DEFEAT` enables `U44`/`R95` | Forced high through 470 Ω            | Node-active while halted for debug |
+
+`R93` parks the watchdog input low while the keep-alive cut is active.
 
 Place this as a compact loop near `U46`'s select pin and `U47` PD3. `U44` and
 `R95` belong beside the `sel` node, not beside the segment shunts merely
@@ -190,22 +204,30 @@ because they share a part type.
           R94 to GND
 ```
 
-The always rail keeps the test and bypass hardware alive when the node is cut.
-The switched rail feeds the MCU and everything that must die with it. Keep
-`Q1`/`R94` and `C30`/`C31` close to `U47`; keep the threshold divider
-`R102`/`R103` close to the comparator pins. `TP2` is on switched `3V3N` after
-the power-cut transform.
+| Rail            | What it supplies                               | Behavior when `PWR = 1`                                        |
+| --------------- | ---------------------------------------------- | -------------------------------------------------------------- |
+| `3V3` always    | `U13`, `U37`–`U44`, `U46`, shunt-leg sources   | Remains on; test and bypass hardware stays alive               |
+| `3V3N` switched | `U47`, `C30`/`C31`, `R102`, status LEDs, `TP2` | Cut by `Q1`; everything that must die with the MCU loses power |
+
+Placement anchors:
+
+- Keep `Q1`/`R94` and `C30`/`C31` close to `U47`.
+- Keep the threshold divider `R102`/`R103` close to the comparator pins.
+- Treat `TP2` as switched `3V3N`, not the always-on rail.
 
 ### Control and observation
 
-`U13` drives the eight T0 control bits. `R15`–`R21` pull down the seven
-switch-select lines; `R94` is the `PWR` gate pull-down. `R64` pulls down the
-separate `WD_DEFEAT` line from AUX1. All-zero control means pass-through,
-shunts absent, keep-alive connected, and node powered.
+| Function                 | Signals                                                               | Hardware/path                                                                |
+| ------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| T0 control               | `BRK_A`, `SHG_A`, `SHV_A`, `BRK_B`, `SHG_B`, `SHV_B`, `KA_CUT`, `PWR` | `U13` drives the switches and `Q1`; `R15`–`R21` and `R94` provide pull-downs |
+| Watchdog defeat          | `WD_DEFEAT`                                                           | AUX1 drives `U44`; `R64` provides the pull-down                              |
+| Supervisor boundary taps | `opa_p`, `TX_A#b`, `opo`, `led_work`                                  | Direct wires to supervisor GPIO                                              |
+| Scan observation         | `sel`, `3V3N`                                                         | `U11`/OBS0 samples T0 alongside T1–T3                                        |
+| Debug leaves             | `swio`, `debug_tx`                                                    | Low-speed connections to the central mux trees                               |
 
-The four supervisor boundary taps are `opa_p`, `TX_A#b`, `opo`, and `led_work`.
-The scan-observe pair is `sel` and `3V3N`. SWIO and debug-TX tree connections
-are additional low-speed leaves. None needs another local switch in T0.
+- All-zero control means pass-through, shunts absent, keep-alive connected,
+  and node powered.
+- None of these observation or debug paths needs another local switch in T0.
 
 ## 6. Supervisor-side and T1-side injectors are different
 
