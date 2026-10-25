@@ -101,6 +101,7 @@ jobs:
               - 'boards/lib/**'
               - 'boards/node/**'
               - 'boards/ci/**'
+              - 'docs/t0-layout.md'
               - 'datasheets/**'
             firmware:
               - '.github/workflows/ci.yml'
@@ -205,6 +206,7 @@ jobs:
             boards/lib/**
             boards/node/**
             boards/ci/**
+            docs/t0-layout.md
             datasheets/**
 
       - uses: cachix/install-nix-action@v31

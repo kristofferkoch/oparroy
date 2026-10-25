@@ -9,7 +9,8 @@ stay in [scan-plane.md](scan-plane.md); assembly pricing stays in
 
 `boards/ci/grid-layout.py` generates a deterministic first placement through
 pcbnew. It is an editable starting point, not an autorouted or fabrication-
-ready layout.
+ready layout. For the boundary tile's signal-flow model, component roles, and
+refdes-linked placement order, use [t0-layout.md](t0-layout.md).
 
 - T0–T3 run left-to-right across the top; T7–T4 run left-to-right across the
   bottom, so logical ring order follows a horseshoe. Bottom tiles mirror their
