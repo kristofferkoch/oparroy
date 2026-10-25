@@ -12,6 +12,8 @@ only); regenerate it, and the placement map the pcbnew grouping helper
 
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -424,3 +426,18 @@ def test_placement_map_matches_board_copy(kicad_libs: KiCadLibraries) -> None:
     circuit = solved(capture(kicad_libs))
     renamed = apply_annotation(circuit, annotate(circuit))
     assert placement_map_json(renamed) == PLACEMENT_MAP.read_text(encoding="utf-8")
+
+
+def test_t0_layout_guide_refdeses_match_placement_map() -> None:
+    guide = PLACEMENT_MAP.parent.parent.parent / "docs" / "t0-layout.md"
+    rows = re.findall(
+        r"^\| `([^`]+)`[ \t]+\| `([A-Z]+\d+)`[ \t]+\|",
+        guide.read_text(encoding="utf-8"),
+        flags=re.MULTILINE,
+    )
+    documented = dict(rows)
+    mapping = json.loads(PLACEMENT_MAP.read_text(encoding="utf-8"))
+
+    assert len(rows) == len(documented)
+    assert mapping["U23"] == "SUP/FI1/SWAG"
+    assert documented == {mapping[ref]: ref for _, ref in rows}
